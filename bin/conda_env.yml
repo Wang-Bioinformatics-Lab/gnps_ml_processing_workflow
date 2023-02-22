@@ -1,9 +1,18 @@
 channels:
   - conda-forge
   - defaults
+  - bioconda
 dependencies:
   - python=3.8.8
   - pandas
+  - numpy
+  - pyteomics
+  - networkx
+  - requests
+  - tqdm
+  - beautifulsoup4
+  - lxml
+  - rdkit
+  - joblib
   - pip:
-    - xmltodict
-    - requests
+    - obonet
