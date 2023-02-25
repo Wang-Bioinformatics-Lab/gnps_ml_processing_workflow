@@ -55,7 +55,7 @@ def helper(process_num, scan_start, all_spectra_list):
         output_mgf.write("PEPMASS={}\n".format(spectrum["Precursor_MZ"]))
         output_mgf.write("CHARGE={}\n".format(spectrum["Charge"]))
         output_mgf.write("MSLEVEL={}\n".format(2))
-        output_mgf.write("TITLE=Scan Number: ={}\n".format(scan))
+        output_mgf.write("TITLE="+str(spectrum.get("spectrum_id")))
         output_mgf.write("SCANS={}\n".format(scan))
 
         peaks = json.loads(spectrum["peaks_json"])
@@ -255,15 +255,15 @@ def main():
     year = now.year
     month = now.month
 
-    csv_path = "./GNPS_ml_exports/ALL_GNPS_merged_{}_{}.csv".format(month, year)
-    mgf_path = "./GNPS_ml_exports/ALL_GNPS_merged_{}_{}.mgf".format(month, year)
+    final_csv_path = "./GNPS_ml_exports/ALL_GNPS_merged_{}_{}.csv".format(month, year)
+    final_mgf_path = "./GNPS_ml_exports/ALL_GNPS_merged_{}_{}.mgf".format(month, year)
     print(os.listdir())
     if not os.path.isdir('./GNPS_ml_exports'):
         os.makedirs('./GNPS_ml_exports')
     
     # We only want to generate these files monthly, so we'll check if it has already been done
-    if not os.path.isfile(csv_path):
-        if not os.path.isfile(mgf_path):
+    if not os.path.isfile(final_csv_path):
+        if not os.path.isfile(final_mgf_path):
             parser = argparse.ArgumentParser(description='Process some integers.')
             # parser.add_argument('input_libraryname', default='ALL_GNPS')
             parser.add_argument('-s', '--structures_required', help="remove entries that don't include structures", action="store_true")
