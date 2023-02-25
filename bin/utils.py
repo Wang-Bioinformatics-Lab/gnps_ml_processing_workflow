@@ -96,7 +96,7 @@ def get_splits_index_only(scans:list, similarity_table: pd.DataFrame, similarity
             if i != max_retries-1:
                 # Partition largest connected component into two distinct sets
                 subgraph = G.subgraph(connected_components[0])
-                partition = community.asyn_fluidc(subgraph, 2)
+                partition = community.asyn_fluidc(subgraph, 2, seed=42)
                 node_dict = {node: i for i, comm in enumerate(partition) for node in comm}
                 set_a = set([k for k,v in node_dict.items() if v==0])
                 set_b = set([k for k,v in node_dict.items() if v==1])
