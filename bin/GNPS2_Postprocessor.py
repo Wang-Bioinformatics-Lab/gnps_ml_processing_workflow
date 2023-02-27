@@ -104,13 +104,13 @@ def generate_fingerprints(summary):
     summary.loc[summary.Smiles != 'nan', 'mol'] = summary.loc[summary.Smiles != 'nan', 'Smiles'].apply(lambda x: Chem.MolFromSmiles(x, sanitize=True))
     smiles_parsing_success = [x is not None for x in summary.mol]
     summary.loc[smiles_parsing_success,'Morgan_2048_2'] = summary.loc[smiles_parsing_success,'mol'].apply( \
-        lambda x: AllChem.GetMorganFingerprintAsBitVect(x,2,useChirality=False,nBits=2048))
+        lambda x: list(AllChem.GetMorganFingerprintAsBitVect(x,2,useChirality=False,nBits=2048)))
     summary.loc[smiles_parsing_success,'Morgan_4096_2'] = summary.loc[smiles_parsing_success,'mol'].apply( \
-        lambda x: AllChem.GetMorganFingerprintAsBitVect(x,2,useChirality=False,nBits=4096))
+        lambda x: list(AllChem.GetMorganFingerprintAsBitVect(x,2,useChirality=False,nBits=4096)))
     summary.loc[smiles_parsing_success,'Morgan_2048_3'] = summary.loc[smiles_parsing_success,'mol'].apply( \
-        lambda x: AllChem.GetMorganFingerprintAsBitVect(x,3,useChirality=False,nBits=2048))
+        lambda x: list(AllChem.GetMorganFingerprintAsBitVect(x,3,useChirality=False,nBits=2048)))
     summary.loc[smiles_parsing_success,'Morgan_4096_3'] = summary.loc[smiles_parsing_success,'mol'].apply( \
-        lambda x: AllChem.GetMorganFingerprintAsBitVect(x,3,useChirality=False,nBits=4096))
+        lambda x: list(AllChem.GetMorganFingerprintAsBitVect(x,3,useChirality=False,nBits=4096)))
     # summary.loc[smiles_parsing_success,'RdKit_2048_5'] = summary.loc[smiles_parsing_success,'mol'].apply( \
     #     lambda x: Chem.RDKFingerprint(x,minPath=5,fpSize=2048))
     # summary.loc[smiles_parsing_success,'RdKit_4096_5'] = summary.loc[smiles_parsing_success,'mol'].apply( \
@@ -118,23 +118,51 @@ def generate_fingerprints(summary):
     summary.drop('mol', axis=1)
     return summary
 
-def postprocess_files(csv_path, mgf_path, output_csv_path, output_mgf_path):
-    file_pattern = re.compile(r'.*?(\d+).*?')
-    def get_order(file,):
-        match = file_pattern.match(Path(file).name)
-        return int(match.groups()[0])
+def generate_parquet_file(input_mgf, spectrum_ids):
+    """
+    Details on output format:
+    Columns will be [level_0, index, i, i_norm, mz, precmz]
+    Index will be spectrum_id
+    level_0 is the row index in file
+    index is the row index in the spectra
+    """
+    output = []
+    indexed_mgf = IndexedMGF(input_mgf)
+    level_0 = 0
+    for m in indexed_mgf:
+        spectrum_id = m['params']['title']
+        if spectrum_id in spectrum_ids: # Make sure that it didn't get removed during cleaning
+            mz_array = m['m/z array']
+            intensity_array = m['intensity array']
+            precursor_mz = m['params']['pepmass']
+            # charge = m['charge']
+            for index, (mz, intensity) in enumerate(zip(mz_array, intensity_array)):
+                output.append({'spectrum_id':spectrum_id, 'level_0': level_0, 'index':index, 'i':intensity, 'mz':mz, 'prec_mz':precursor_mz})
+                level_0 += 1
+                
+    output = pd.DataFrame(output)
+    output.set_index('spectrum_id')
+    return output
+            
+                       
 
-    sorted_csv_files = sorted(glob('./temp/temp_*.csv'), key=get_order)
-    sorted_mgf_files = sorted(glob('./temp/temp_*.mgf'), key=get_order)
+def postprocess_files(csv_path, mgf_path, output_csv_path, output_parquet_path):
+    if not os.path.isfile(csv_path):
+        if not os.path.isfile(mgf_path):
+            file_pattern = re.compile(r'.*?(\d+).*?')
+            def get_order(file,):
+                match = file_pattern.match(Path(file).name)
+                return int(match.groups()[0])
 
-    os.system("cat " + " ".join(sorted_csv_files) +"> " + csv_path)
-    os.system("cat " + " ".join(sorted_mgf_files) +"> " + mgf_path)
+            sorted_csv_files = sorted(glob('./temp/temp_*.csv'), key=get_order)
+            sorted_mgf_files = sorted(glob('./temp/temp_*.mgf'), key=get_order)
+
+            os.system("cat " + " ".join(sorted_csv_files) +"> " + csv_path)
+            os.system("cat " + " ".join(sorted_mgf_files) +"> " + mgf_path)
     
     # TODO: Delete temp files
 
     summary = pd.read_csv(csv_path)
-    mgf = IndexedMGF(mgf_path)
-    # merged_mgf = IndexedMGF('./ALL_GNPS_merged.mgf', index_by_scans=True)
 
     # Cleaning up files:
     summary = basic_cleaning(summary)
@@ -149,10 +177,9 @@ def postprocess_files(csv_path, mgf_path, output_csv_path, output_mgf_path):
     # Add Fingerprints
     summary = generate_fingerprints(summary)
 
-    assert all([int(mgf[i-1]['params']['scans']) == i+1 for i in summary.scan])
-    spectra = [mgf[i+1] for i in summary.scan]
-    mgf.write(spectra,mgf_path, file_mode='w')
-    summary.to_csv(csv_path, index=False)
+    parquet_as_df = generate_parquet_file(mgf_path, summary.scan)
+    parquet_as_df.to_parquet(output_parquet_path)
+    summary.to_csv(output_csv_path, index=False)
 
 def main():
     now = datetime.datetime.now()
@@ -161,15 +188,15 @@ def main():
 
     csv_path = "./GNPS_ml_exports/ALL_GNPS_merged_{}_{}.csv".format(month, year)
     mgf_path = "./GNPS_ml_exports/ALL_GNPS_merged_{}_{}.mgf".format(month, year)
-    cleaned_csv_path = "./GNPS_ml_exports/ALL_GNPS_merged_{}_{}_cleaned.csv".format(month, year)
-    cleaned_mgf_path = "./GNPS_ml_exports/ALL_GNPS_merged_{}_{}_cleaned.mgf".format(month, year)
+    cleaned_csv_path = "./GNPS_ml_exports/ALL_GNPS_cleaned_{}_{}.csv".format(month, year)
+    cleaned_parquet_path = "./GNPS_ml_exports/ALL_GNPS_cleaned_{}_{}.parquet".format(month, year)
     if not os.path.isdir('./GNPS_ml_exports/'):
         os.makedirs('./GNPS_ml_exports/')
 
 
-    if not os.path.isfile(csv_path):
-        if not os.path.isfile(mgf_path):
-            postprocess_files(csv_path, mgf_path, cleaned_csv_path, cleaned_mgf_path)
+    if not os.path.isfile(cleaned_csv_path):
+        if not os.path.isfile(cleaned_parquet_path):
+            postprocess_files(csv_path, mgf_path, cleaned_csv_path, cleaned_parquet_path)
             
 if __name__ == '__main__':
     main()
