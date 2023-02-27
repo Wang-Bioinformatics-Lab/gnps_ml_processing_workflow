@@ -253,7 +253,7 @@ def helper(process_num, scan_start, all_spectra_list):
 def main():
     now = datetime.datetime.now()
     year = now.year
-    quarter = int(now.month/12)
+    quarter = int(now.month/4) + 1
 
     final_csv_path = "./GNPS_ml_exports/ALL_GNPS_merged_{}_{}.csv".format(quarter, year)
     final_mgf_path = "./GNPS_ml_exports/ALL_GNPS_merged_{}_{}.mgf".format(quarter, year)

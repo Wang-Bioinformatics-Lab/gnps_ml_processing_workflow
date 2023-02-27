@@ -177,14 +177,14 @@ def postprocess_files(csv_path, mgf_path, output_csv_path, output_parquet_path):
     # Add Fingerprints
     summary = generate_fingerprints(summary)
 
-    parquet_as_df = generate_parquet_file(mgf_path, summary.scan)
+    parquet_as_df = generate_parquet_file(mgf_path, summary.spectrum_id)
     parquet_as_df.to_parquet(output_parquet_path)
     summary.to_csv(output_csv_path, index=False)
 
 def main():
     now = datetime.datetime.now()
     year = now.year
-    quarter = int(now.month/12)
+    quarter = int(now.month/4) + 1
 
     csv_path = "./GNPS_ml_exports/ALL_GNPS_merged_{}_{}.csv".format(quarter, year)
     mgf_path = "./GNPS_ml_exports/ALL_GNPS_merged_{}_{}.mgf".format(quarter, year)
