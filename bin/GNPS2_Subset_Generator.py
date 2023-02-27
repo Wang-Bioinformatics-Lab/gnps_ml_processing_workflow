@@ -22,7 +22,7 @@ def Bruker_Fragmentation_Prediction(summary_path:str, mgf_path:str, output_path:
     allowed_atoms = ['C', 'H', 'O', 'N', 'F', 'S', 'Cl', 'P', 'B', 'Br', 'I']
     print("Starting Size:", len(summary))
     # Remove structure-less entries. select instrument = qTof and Adduct in ['M+H','M-H']
-    reduced_df = summary[(summary['Smiles'] != 'nan') & (summary['msMassAnalyzer'] == 'qtof') & ((summary['Adduct'] == 'M+H') | (summary['Adduct'] == 'M-H'))].copy(deep=True)
+    reduced_df = summary[~ (summary['Smiles'].isna() ) & (summary['msMassAnalyzer'] == 'qtof') & ((summary['Adduct'] == 'M+H') | (summary['Adduct'] == 'M-H'))].copy(deep=True)
     print("Lost {} structures when requiring smiles, msMassAnalyzer == 'qtof', and M+H/M-H".format(len(summary) - len(reduced_df)))
     # Remove all entires with atoms not in ['C', 'H', 'O', 'N', 'F', 'S', 'Cl', 'P', 'B', 'Br', 'I']
     reduced_df['Smiles_letters_only'] = reduced_df['Smiles'].apply(lambda x: "".join(re.findall("[a-zA-Z]+", x)))
@@ -55,8 +55,8 @@ def main():
     year = now.year
     month = now.month
 
-    csv_path = "./ALL_GNPS_merged_{}_{}_cleaned.csv".format(month, year)
-    mgf_path = "./ALL_GNPS_merged_{}_{}_cleaned.mgf".format(month, year)
+    csv_path = "./GNPS_ml_exports/ALL_GNPS_cleaned_{}_{}.csv".format(month, year)
+    mgf_path = "./GNPS_ml_exports/ALL_GNPS_cleaned_{}_{}.mgf".format(month, year)
     
     output_path = './nf_output'
     if not os.path.isdir(output_path): os.makedirs(output_path)
