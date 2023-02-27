@@ -253,15 +253,15 @@ def helper(process_num, scan_start, all_spectra_list):
 def main():
     now = datetime.datetime.now()
     year = now.year
-    month = now.month
+    quarter = int(now.month/12)
 
-    final_csv_path = "./GNPS_ml_exports/ALL_GNPS_merged_{}_{}.csv".format(month, year)
-    final_mgf_path = "./GNPS_ml_exports/ALL_GNPS_merged_{}_{}.mgf".format(month, year)
+    final_csv_path = "./GNPS_ml_exports/ALL_GNPS_merged_{}_{}.csv".format(quarter, year)
+    final_mgf_path = "./GNPS_ml_exports/ALL_GNPS_merged_{}_{}.mgf".format(quarter, year)
     print(os.listdir())
     if not os.path.isdir('./GNPS_ml_exports'):
         os.makedirs('./GNPS_ml_exports')
     
-    # We only want to generate these files monthly, so we'll check if it has already been done
+    # We only want to generate these files quarter, so we'll check if it has already been done
     if not os.path.isfile(final_csv_path):
         if not os.path.isfile(final_mgf_path):
             parser = argparse.ArgumentParser(description='Process some integers.')
@@ -278,7 +278,7 @@ def main():
             save_file = '_'.join(all_library_names) + '.npy'
             
             # if not os.path.isfile(save_file):
-            for library_name in all_library_names:  # We used to want to use the cached gnpslibrary, but now that it's running monthly only this doesn't need to be cached
+            for library_name in all_library_names:  # We used to want to use the cached gnpslibrary, but now that it's running quarterly only this doesn't need to be cached
                 gnps_url = "https://gnps-external.ucsd.edu/gnpslibrary/{}.json".format(library_name)
                 temp_spectra_list = requests.get(gnps_url).json()
                 all_spectra_list += temp_spectra_list

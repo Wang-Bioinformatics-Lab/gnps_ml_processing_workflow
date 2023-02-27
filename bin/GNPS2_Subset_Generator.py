@@ -6,7 +6,7 @@ import os
 import argparse
 
 year = None
-month = None
+quarter = None
 
 def Bruker_Fragmentation_Prediction(summary_path:str, mgf_path:str, output_path:str):
     """This function follows the cleaning in 3DMolMS applied to Bruker qtof instruments.
@@ -33,11 +33,11 @@ def Bruker_Fragmentation_Prediction(summary_path:str, mgf_path:str, output_path:
     reduced_df = reduced_df[reduced_df.msManufacturer == 'Bruker Daltonics']  
     print("Ending Size:", len(reduced_df))
     
-    reduced_df.to_csv(output_path + '/Bruker_Fragmentation_Prediction_{}_{}.csv'.format(month, year), index=False)
+    reduced_df.to_csv(output_path + '/Bruker_Fragmentation_Prediction_{}_{}.csv'.format(quarter, year), index=False)
     
     assert all([int(mgf[i-1]['params']['scans']) == i+1 for i in reduced_df.scan])
     spectra = [mgf[i+1] for i in reduced_df.scan]
-    mgf.write(spectra,output_path + '/Bruker_Fragmentation_Prediction_{}_{}.mgf'.format(month, year), file_mode='w')
+    mgf.write(spectra,output_path + '/Bruker_Fragmentation_Prediction_{}_{}.mgf'.format(quarter, year), file_mode='w')
     
     
 def main():
@@ -51,12 +51,12 @@ def main():
     
     now = datetime.datetime.now()
     global year
-    global month
+    global quarter
     year = now.year
-    month = now.month
+    quarter = int(now.month/12)
 
-    csv_path = "./GNPS_ml_exports/ALL_GNPS_cleaned_{}_{}.csv".format(month, year)
-    mgf_path = "./GNPS_ml_exports/ALL_GNPS_cleaned_{}_{}.mgf".format(month, year)
+    csv_path = "./GNPS_ml_exports/ALL_GNPS_cleaned_{}_{}.csv".format(quarter, year)
+    mgf_path = "./GNPS_ml_exports/ALL_GNPS_cleaned_{}_{}.mgf".format(quarter, year)
     
     output_path = './nf_output'
     if not os.path.isdir(output_path): os.makedirs(output_path)

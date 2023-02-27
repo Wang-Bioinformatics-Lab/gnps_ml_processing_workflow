@@ -184,12 +184,12 @@ def postprocess_files(csv_path, mgf_path, output_csv_path, output_parquet_path):
 def main():
     now = datetime.datetime.now()
     year = now.year
-    month = now.month
+    quarter = int(now.month/12)
 
-    csv_path = "./GNPS_ml_exports/ALL_GNPS_merged_{}_{}.csv".format(month, year)
-    mgf_path = "./GNPS_ml_exports/ALL_GNPS_merged_{}_{}.mgf".format(month, year)
-    cleaned_csv_path = "./GNPS_ml_exports/ALL_GNPS_cleaned_{}_{}.csv".format(month, year)
-    cleaned_parquet_path = "./GNPS_ml_exports/ALL_GNPS_cleaned_{}_{}.parquet".format(month, year)
+    csv_path = "./GNPS_ml_exports/ALL_GNPS_merged_{}_{}.csv".format(quarter, year)
+    mgf_path = "./GNPS_ml_exports/ALL_GNPS_merged_{}_{}.mgf".format(quarter, year)
+    cleaned_csv_path = "./GNPS_ml_exports/ALL_GNPS_cleaned_{}_{}.csv".format(quarter, year)
+    cleaned_parquet_path = "./GNPS_ml_exports/ALL_GNPS_cleaned_{}_{}.parquet".format(quarter, year)
     if not os.path.isdir('./GNPS_ml_exports/'):
         os.makedirs('./GNPS_ml_exports/')
 
