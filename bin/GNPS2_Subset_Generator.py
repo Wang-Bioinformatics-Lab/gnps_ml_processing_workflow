@@ -8,16 +8,19 @@ import argparse
 year = None
 quarter = None
 
-def Bruker_Fragmentation_Prediction(summary_path:str, mgf_path:str, output_path:str):
+def sync_df_and_parquet(df:pd.DataFrame, parquet:pd.DataFrame):
+    return parquet.loc[[x in df.spectrum_id for x in parquet.index]]
+
+def Bruker_Fragmentation_Prediction(summary_path:str, parquet_path:str, output_path:str):
     """This function follows the cleaning in 3DMolMS applied to Bruker qtof instruments.
 
     Args:
         summary_path (str): _description_
-        mgf_path (str): _description_
+        parquet_path (str): _description_
 
     """
     summary = pd.read_csv(summary_path)
-    mgf = IndexedMGF(mgf_path, index_by_scans=True)
+    parquet_as_df = pd.read_parquet(parquet_path)
     
     allowed_atoms = ['C', 'H', 'O', 'N', 'F', 'S', 'Cl', 'P', 'B', 'Br', 'I']
     print("Starting Size:", len(summary))
@@ -34,10 +37,9 @@ def Bruker_Fragmentation_Prediction(summary_path:str, mgf_path:str, output_path:
     print("Ending Size:", len(reduced_df))
     
     reduced_df.to_csv(output_path + '/Bruker_Fragmentation_Prediction_{}_{}.csv'.format(quarter, year), index=False)
-    
-    assert all([int(mgf[i-1]['params']['scans']) == i+1 for i in reduced_df.scan])
-    spectra = [mgf[i+1] for i in reduced_df.scan]
-    mgf.write(spectra,output_path + '/Bruker_Fragmentation_Prediction_{}_{}.mgf'.format(quarter, year), file_mode='w')
+       
+    parquet_as_df = sync_df_and_parquet(reduced_df, parquet_as_df)
+    parquet_as_df.to_parquet(output_path + '/Bruker_Fragmentation_Prediction_{}_{}.mgf'.format(quarter, year))
     
     
 def main():
@@ -55,8 +57,8 @@ def main():
     year = now.year
     quarter = int(now.month/12)
 
-    csv_path = "./GNPS_ml_exports/ALL_GNPS_cleaned_{}_{}.csv".format(quarter, year)
-    mgf_path = "./GNPS_ml_exports/ALL_GNPS_cleaned_{}_{}.mgf".format(quarter, year)
+    csv_path     = "./GNPS_ml_exports/ALL_GNPS_cleaned_{}_{}.csv".format(quarter, year)
+    parquet_path = "./GNPS_ml_exports/ALL_GNPS_cleaned_{}_{}.parquet".format(quarter, year)
     
     output_path = './nf_output'
     if not os.path.isdir(output_path): os.makedirs(output_path)
@@ -65,7 +67,7 @@ def main():
         raise NotImplementedError
     
     if args.subset == 'Bruker_Fragmentation_Prediction':
-        Bruker_Fragmentation_Prediction(csv_path, mgf_path, output_path)
+        Bruker_Fragmentation_Prediction(csv_path, parquet_path, output_path)
         
             
 if __name__ == '__main__':
