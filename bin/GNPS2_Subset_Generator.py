@@ -41,9 +41,21 @@ def Bruker_Fragmentation_Prediction(summary_path:str, parquet_path:str, output_p
     parquet_as_df = sync_df_and_parquet(reduced_df, parquet_as_df)
     parquet_as_df.to_parquet(output_path + '/Bruker_Fragmentation_Prediction_{}_{}.mgf'.format(quarter, year))
     
+def MH_MNA_Translation(summary_path:str, parquet_path:str, output_path:str):
+    reduced_df = pd.read_csv(summary_path)
+    parquet_as_df = pd.read_parquet(parquet_path)
+    
+    reduced_df = reduced_df.loc[(reduced_df.Adduct == 'M+H') | (reduced_df.Adduct == 'M+NA')]
+    reduced_df.to_csv(output_path + '/Bruker_Fragmentation_Prediction_{}_{}.csv'.format(quarter, year), index=False)
+       
+    parquet_as_df = sync_df_and_parquet(reduced_df, parquet_as_df)
+    parquet_as_df.to_parquet(output_path + '/Bruker_Fragmentation_Prediction_{}_{}.mgf'.format(quarter, year))
+    
+    
+    raise NotImplementedError
     
 def main():
-    subsets = ['Bruker_Fragmentation_Prediction']
+    subsets = ['Bruker_Fragmentation_Prediction','MH_MNA_Translation']
     parser = argparse.ArgumentParser(
                     prog = 'GNPS2 Subset Generator',
                     description = 'This program generates predetermined subsets splits from GNPS2.')
@@ -55,7 +67,7 @@ def main():
     global year
     global quarter
     year = now.year
-    quarter = int(now.month/12)
+    quarter = int(now.month/4) + 1
 
     csv_path     = "./GNPS_ml_exports/ALL_GNPS_cleaned_{}_{}.csv".format(quarter, year)
     parquet_path = "./GNPS_ml_exports/ALL_GNPS_cleaned_{}_{}.parquet".format(quarter, year)
@@ -68,6 +80,8 @@ def main():
     
     if args.subset == 'Bruker_Fragmentation_Prediction':
         Bruker_Fragmentation_Prediction(csv_path, parquet_path, output_path)
+    elif args.subset == 'MH_MNA_Translation':
+        MH_MNA_Translation(csv_path, parquet_path, output_path)
         
             
 if __name__ == '__main__':
