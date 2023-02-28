@@ -1,7 +1,9 @@
 #!/usr/bin/env nextflow
 nextflow.enable.dsl=2
 
-params.subset = "Bruker_Fragmentation_Prediction"
+// params.subset = "Bruker_Fragmentation_Prediction"
+params.subset = "MH_MNA_Translation"
+
 params.parallelism = 10
 // Workflow Boiler Plate
 params.OMETALINKING_YAML = "flow_filelinking.yaml"

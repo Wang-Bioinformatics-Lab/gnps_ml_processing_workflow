@@ -116,7 +116,7 @@ def generate_fingerprints(summary):
     #     lambda x: Chem.RDKFingerprint(x,minPath=5,fpSize=2048))
     # summary.loc[smiles_parsing_success,'RdKit_4096_5'] = summary.loc[smiles_parsing_success,'mol'].apply( \
     #     lambda x: Chem.RDKFingerprint(x,minPath=5,fpSize=4096))
-    summary.drop('mol', axis=1)
+    summary.drop('mol', axis=1,inplace=True)
     return summary
 
 def generate_parquet_file(input_mgf, spectrum_ids):
