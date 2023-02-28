@@ -8,9 +8,6 @@ import argparse
 year = None
 quarter = None
 
-def sync_df_and_parquet(df:pd.DataFrame, parquet:pd.DataFrame):
-    return parquet.loc[[x in df.spectrum_id for x in parquet.index]]
-
 def Bruker_Fragmentation_Prediction(summary_path:str, parquet_path:str, output_path:str):
     """This function follows the cleaning in 3DMolMS applied to Bruker qtof instruments.
 
@@ -19,14 +16,15 @@ def Bruker_Fragmentation_Prediction(summary_path:str, parquet_path:str, output_p
         parquet_path (str): _description_
 
     """
-    summary = pd.read_csv(summary_path)
+    reduced_df = pd.read_csv(summary_path)
     parquet_as_df = pd.read_parquet(parquet_path)
     
     allowed_atoms = ['C', 'H', 'O', 'N', 'F', 'S', 'Cl', 'P', 'B', 'Br', 'I']
-    print("Starting Size:", len(summary))
+    starting_size = len(reduced_df)
+    print("Starting Size:", starting_size)
     # Remove structure-less entries. select instrument = qTof and Adduct in ['M+H','M-H']
-    reduced_df = summary[~ (summary['Smiles'].isna() ) & (summary['msMassAnalyzer'] == 'qtof') & ((summary['Adduct'] == 'M+H') | (summary['Adduct'] == 'M-H'))].copy(deep=True)
-    print("Lost {} structures when requiring smiles, msMassAnalyzer == 'qtof', and M+H/M-H".format(len(summary) - len(reduced_df)))
+    reduced_df = reduced_df[~ (reduced_df['Smiles'].isna() ) & (reduced_df['msMassAnalyzer'] == 'qtof') & ((reduced_df['Adduct'] == 'M+H') | (reduced_df['Adduct'] == 'M-H'))].copy(deep=True)
+    print("Lost {} structures when requiring smiles, msMassAnalyzer == 'qtof', and M+H/M-H".format(starting_size - len(reduced_df)))
     # Remove all entires with atoms not in ['C', 'H', 'O', 'N', 'F', 'S', 'Cl', 'P', 'B', 'Br', 'I']
     reduced_df['Smiles_letters_only'] = reduced_df['Smiles'].apply(lambda x: "".join(re.findall("[a-zA-Z]+", x)))
     reduced_df['Smiles_cleaned'] = reduced_df['Smiles_letters_only'].apply(lambda x: "".join(re.findall("^[" + "|".join(allowed_atoms) + "]+$", x)))
@@ -36,23 +34,23 @@ def Bruker_Fragmentation_Prediction(summary_path:str, parquet_path:str, output_p
     reduced_df = reduced_df[reduced_df.msManufacturer == 'Bruker Daltonics']  
     print("Ending Size:", len(reduced_df))
     
-    reduced_df.to_csv(output_path + '/Bruker_Fragmentation_Prediction_{}_{}.csv'.format(quarter, year), index=False)
+    reduced_df.to_csv(output_path + '/summary.csv', index=False)
        
-    parquet_as_df = sync_df_and_parquet(reduced_df, parquet_as_df)
-    parquet_as_df.to_parquet(output_path + '/Bruker_Fragmentation_Prediction_{}_{}.mgf'.format(quarter, year))
+    parquet_as_df = parquet_as_df.loc[[x in reduced_df.spectrum_id for x in parquet_as_df.index]]
+    parquet_as_df.to_parquet(output_path + '/spectra.parquet')
     
 def MH_MNA_Translation(summary_path:str, parquet_path:str, output_path:str):
     reduced_df = pd.read_csv(summary_path)
     parquet_as_df = pd.read_parquet(parquet_path)
-    
+    reduced_df = reduced_df.loc[reduced_df.msManufacturer == "Bruker Daltonics"]
+    reduced_df = reduced_df.loc[reduced_df.msMassAnalyzer == 'orbitrap']
+    reduced_df = reduced_df.loc[~reduced_df.Smiles.isna()]
     reduced_df = reduced_df.loc[(reduced_df.Adduct == 'M+H') | (reduced_df.Adduct == 'M+NA')]
-    reduced_df.to_csv(output_path + '/Bruker_Fragmentation_Prediction_{}_{}.csv'.format(quarter, year), index=False)
+    reduced_df.to_csv(output_path + '/summary.csv', index=False)
        
-    parquet_as_df = sync_df_and_parquet(reduced_df, parquet_as_df)
-    parquet_as_df.to_parquet(output_path + '/Bruker_Fragmentation_Prediction_{}_{}.mgf'.format(quarter, year))
-    
-    
-    raise NotImplementedError
+    parquet_as_df = parquet_as_df.loc[[x in reduced_df.spectrum_id for x in parquet_as_df.index]]
+    parquet_as_df.to_parquet(output_path + '/spectra.parquet')
+
     
 def main():
     subsets = ['Bruker_Fragmentation_Prediction','MH_MNA_Translation']
