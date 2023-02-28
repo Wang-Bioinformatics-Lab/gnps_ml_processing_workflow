@@ -8,6 +8,7 @@ from pathlib import Path
 import datetime
 from rdkit.Chem import AllChem
 from rdkit import Chem
+from tqdm import tqdm
 
 def sanity_checks(summary):
     assert len(summary[(summary.msManufacturer == 'Thermo') & (summary.msMassAnalyzer == 'qtof')]) == 0
@@ -127,14 +128,14 @@ def generate_parquet_file(input_mgf, spectrum_ids):
     index is the row index in the spectra
     """
     output = []
-    indexed_mgf = IndexedMGF(input_mgf)
+    indexed_mgf = IndexedMGF(input_mgf,index_by_scans=True)
     level_0 = 0
-    for m in indexed_mgf:
+    for m in tqdm(indexed_mgf):
         spectrum_id = m['params']['title']
-        if spectrum_id in spectrum_ids: # Make sure that it didn't get removed during cleaning
-            mz_array = m['m/z array']
-            intensity_array = m['intensity array']
-            precursor_mz = m['params']['pepmass']
+        mz_array = m['m/z array']
+        intensity_array = m['intensity array']
+        precursor_mz = m['params']['pepmass']
+        if spectrum_id in spectrum_ids.values: # Make sure that it didn't get removed during cleaning
             # charge = m['charge']
             for index, (mz, intensity) in enumerate(zip(mz_array, intensity_array)):
                 output.append({'spectrum_id':spectrum_id, 'level_0': level_0, 'index':index, 'i':intensity, 'mz':mz, 'prec_mz':precursor_mz})
@@ -177,7 +178,7 @@ def postprocess_files(csv_path, mgf_path, output_csv_path, output_parquet_path):
     # Add Fingerprints
     summary = generate_fingerprints(summary)
 
-    parquet_as_df = generate_parquet_file(mgf_path, summary.spectrum_id)
+    parquet_as_df = generate_parquet_file(mgf_path, summary.spectrum_id.astype('str'))
     parquet_as_df.to_parquet(output_parquet_path)
     summary.to_csv(output_csv_path, index=False)
 
