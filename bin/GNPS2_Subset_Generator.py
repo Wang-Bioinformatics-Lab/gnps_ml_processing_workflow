@@ -71,7 +71,6 @@ def main():
     parquet_path = "./GNPS_ml_exports/ALL_GNPS_cleaned_{}_{}.parquet".format(quarter, year)
     
     output_path = './nf_output'
-    if not os.path.isdir(output_path): os.makedirs(output_path)
     
     if args.split:
         raise NotImplementedError
