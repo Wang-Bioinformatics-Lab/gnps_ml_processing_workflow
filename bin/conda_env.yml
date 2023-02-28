@@ -14,5 +14,7 @@ dependencies:
   - lxml
   - rdkit
   - joblib
+  - pyarrow
+  - fastparquet
   - pip:
     - obonet

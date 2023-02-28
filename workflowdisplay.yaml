@@ -1,19 +1,34 @@
 name: template_nextflow_workflow
 displayname: STUFF
 Views:
--   name: Summary List
-    displayname: Summary List
+-   name: Output Subset
+    displayname: Output Subset
     viewname: summarylist
     displaytype: datatable
     parameters:
-        filename: output/summary.tsv
-        columns:
-            -   title: "View LCMS"
-                data: filename
-            -   title: "filename"
-                data: filename
-        columnDefs: '[ {"targets": 0,"data": null,"render": function ( data, type, row, meta ) {
-            return `
-            <a target="_blank" href="/dashboards/lcms?usi=mzspec:GNPS2-${task}:${encodeURIComponent(row["filename"])}">View LCMS - mzspec:GNPS2-${task}:${row["filename"]}</a>
-            `;}}]'
-            
+        filename: nf_output/summary.csv
+        error_missingfile: "No File"
+        -   title: "Spectrum ID"
+            data: spectrum_id
+        -   title: "SMILES"
+            data: SMILES
+        -   title: "Collision Energy"
+            data: collision_energy
+        -   title: "Retention Time"
+            data: retention_time
+        -   title: "Adduct"
+            data: Adduct
+        -   title: "Model"
+            data: msModel
+        -   title: "Manufacturer"
+            data: msManufacturer        
+        -   title: "Mass Analyzer"
+            data: msMassAnalyzer
+        -   title: "Ionisation Method"
+            data: msIonisation       
+        -   title: "Dissociation Method"
+            data: msDissociationMethod       
+        -   title: "InChI "
+            data: INCHI
+        -   title: "InChIKey"
+            data: InChIKey_inchi
