@@ -191,9 +191,6 @@ def main():
     mgf_path = "./GNPS_ml_exports/ALL_GNPS_merged_{}_{}.mgf".format(quarter, year)
     cleaned_csv_path = "./GNPS_ml_exports/ALL_GNPS_cleaned_{}_{}.csv".format(quarter, year)
     cleaned_parquet_path = "./GNPS_ml_exports/ALL_GNPS_cleaned_{}_{}.parquet".format(quarter, year)
-    if not os.path.isdir('./GNPS_ml_exports/'):
-        os.makedirs('./GNPS_ml_exports/')
-
 
     if not os.path.isfile(cleaned_csv_path):
         if not os.path.isfile(cleaned_parquet_path):
