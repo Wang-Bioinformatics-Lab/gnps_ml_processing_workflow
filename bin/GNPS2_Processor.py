@@ -257,9 +257,7 @@ def main():
 
     final_csv_path = "./GNPS_ml_exports/ALL_GNPS_merged_{}_{}.csv".format(quarter, year)
     final_mgf_path = "./GNPS_ml_exports/ALL_GNPS_merged_{}_{}.mgf".format(quarter, year)
-    print(os.listdir())
-    if not os.path.isdir('./GNPS_ml_exports'):
-        os.makedirs('./GNPS_ml_exports')
+
     
     # We only want to generate these files quarter, so we'll check if it has already been done
     if not os.path.isfile(final_csv_path):
