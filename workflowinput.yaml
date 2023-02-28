@@ -1,4 +1,4 @@
-workflowname: Subset Generator
+workflowname: Subset_Generator
 workflowdescription: Generate Prebuild Subsets from GNPS2
 workflowlongdescription: Generate Prebuild Subsets from GNPS2
 workflowversion: "0.1"
@@ -21,13 +21,3 @@ parameterlist:
           display: M+H M+NA Translation + Unsupervised Data
         # More options go here
 
-
-
-      # paramtype: fileselector
-      # nf_paramname: input_spectra_folder
-      # formplaceholder: Enter the path to data
-      # formvalue: ""
-      # targettaskfolder: input_spectra
-      # optional: false
-      # selectsinglefile: false
-      # folderunroll: true

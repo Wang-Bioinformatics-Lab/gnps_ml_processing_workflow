@@ -1,4 +1,4 @@
-name: template_nextflow_workflow
+name: Subset_Generator
 displayname: STUFF
 Views:
 -   name: Output Subset
@@ -8,27 +8,28 @@ Views:
     parameters:
         filename: nf_output/summary.csv
         error_missingfile: "No File"
-        -   title: "Spectrum ID"
-            data: spectrum_id
-        -   title: "SMILES"
-            data: SMILES
-        -   title: "Collision Energy"
-            data: collision_energy
-        -   title: "Retention Time"
-            data: retention_time
-        -   title: "Adduct"
-            data: Adduct
-        -   title: "Model"
-            data: msModel
-        -   title: "Manufacturer"
-            data: msManufacturer        
-        -   title: "Mass Analyzer"
-            data: msMassAnalyzer
-        -   title: "Ionisation Method"
-            data: msIonisation       
-        -   title: "Dissociation Method"
-            data: msDissociationMethod       
-        -   title: "InChI "
-            data: INCHI
-        -   title: "InChIKey"
-            data: InChIKey_inchi
+        columns:
+            -   title: "Spectrum ID"
+                data: spectrum_id
+            -   title: "SMILES"
+                data: SMILES
+            -   title: "Collision Energy"
+                data: collision_energy
+            -   title: "Retention Time"
+                data: retention_time
+            -   title: "Adduct"
+                data: Adduct
+            -   title: "Model"
+                data: msModel
+            -   title: "Manufacturer"
+                data: msManufacturer        
+            -   title: "Mass Analyzer"
+                data: msMassAnalyzer
+            -   title: "Ionisation Method"
+                data: msIonisation       
+            -   title: "Dissociation Method"
+                data: msDissociationMethod       
+            -   title: "InChI "
+                data: INCHI
+            -   title: "InChIKey"
+                data: InChIKey_inchi
