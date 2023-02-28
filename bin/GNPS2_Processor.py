@@ -246,8 +246,6 @@ def helper(process_num, scan_start, all_spectra_list):
         scan += 1
     output_mgf.close()
     output_csv.close()
-
-    print("Process {} is done!".format(process_num))
     return file_not_found_count, UnicodeDecodeError_count, mgf_file_count
 
 def main():
