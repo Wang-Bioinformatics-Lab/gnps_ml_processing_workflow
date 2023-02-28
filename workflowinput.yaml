@@ -1,6 +1,6 @@
-workflowname: Subset_Generator
-workflowdescription: Generate Prebuild Subsets from GNPS2
-workflowlongdescription: Generate Prebuild Subsets from GNPS2
+workflowname: gnps_ml_processing_workflow
+workflowdescription: Generate Prebuild Datasets from GNPS2
+workflowlongdescription: Generate Prebuild Datasets from GNPS2
 workflowversion: "0.1"
 workflowfile: nf_workflow.nf
 workflowautohide: false

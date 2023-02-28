@@ -1,4 +1,4 @@
-name: Subset_Generator
+name: gnps_ml_processing_workflow
 displayname: STUFF
 Views:
 -   name: Output Subset
