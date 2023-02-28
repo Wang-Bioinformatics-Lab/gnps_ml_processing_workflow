@@ -55,7 +55,7 @@ def helper(process_num, scan_start, all_spectra_list):
         output_mgf.write("PEPMASS={}\n".format(spectrum["Precursor_MZ"]))
         output_mgf.write("CHARGE={}\n".format(spectrum["Charge"]))
         output_mgf.write("MSLEVEL={}\n".format(2))
-        output_mgf.write("TITLE="+str(spectrum.get("spectrum_id")))
+        output_mgf.write("TITLE="+str(spectrum.get("spectrum_id")+"\n"))
         output_mgf.write("SCANS={}\n".format(scan))
 
         peaks = json.loads(spectrum["peaks_json"])
