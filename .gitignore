@@ -6,4 +6,4 @@
 .nextflow/
 nohup*
 work/
-GNPS_ml_exports/
+GNPS_ml_exports/*

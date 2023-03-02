@@ -5,10 +5,7 @@ import datetime
 import os
 import argparse
 
-year = None
-quarter = None
-
-def Bruker_Fragmentation_Prediction(summary_path:str, parquet_path:str, output_path:str):
+def Bruker_Fragmentation_Prediction(summary_path:str, parquet_path:str):
     """This function follows the cleaning in 3DMolMS applied to Bruker qtof instruments.
 
     Args:
@@ -34,10 +31,10 @@ def Bruker_Fragmentation_Prediction(summary_path:str, parquet_path:str, output_p
     reduced_df = reduced_df[reduced_df.msManufacturer == 'Bruker Daltonics']  
     print("Ending Size:", len(reduced_df))
     
-    reduced_df.to_csv(output_path + '/summary.csv', index=False)
+    reduced_df.to_csv('summary_Bruker_Fragmentation_Prediction.csv', index=False)
        
     parquet_as_df = parquet_as_df.loc[[x in reduced_df.spectrum_id for x in parquet_as_df.index]]
-    parquet_as_df.to_parquet(output_path + '/spectra.parquet')
+    parquet_as_df.to_parquet('spectra_Bruker_Fragmentation_Prediction.parquet')
     
 def MH_MNA_Translation(summary_path:str, parquet_path:str, output_path:str):
     reduced_df = pd.read_csv(summary_path)
@@ -46,10 +43,10 @@ def MH_MNA_Translation(summary_path:str, parquet_path:str, output_path:str):
     reduced_df = reduced_df.loc[reduced_df.msMassAnalyzer == 'orbitrap']
     reduced_df = reduced_df.loc[~reduced_df.Smiles.isna()]
     reduced_df = reduced_df.loc[(reduced_df.Adduct == 'M+H') | (reduced_df.Adduct == 'M+NA')]
-    reduced_df.to_csv(output_path + '/summary.csv', index=False)
+    reduced_df.to_csv('summary_MH_MNA_Translation.csv', index=False)
        
     parquet_as_df = parquet_as_df.loc[[x in reduced_df.spectrum_id for x in parquet_as_df.index]]
-    parquet_as_df.to_parquet(output_path + '/spectra.parquet')
+    parquet_as_df.to_parquet('spectra_MH_MNA_Translation.parquet')
 
     
 def main():
@@ -62,13 +59,8 @@ def main():
     args = parser.parse_args()
     
     now = datetime.datetime.now()
-    global year
-    global quarter
-    year = now.year
-    quarter = int(now.month/4) + 1
-
-    csv_path     = "./GNPS_ml_exports/ALL_GNPS_cleaned_{}_{}.csv".format(quarter, year)
-    parquet_path = "./GNPS_ml_exports/ALL_GNPS_cleaned_{}_{}.parquet".format(quarter, year)
+    csv_path     = "ALL_GNPS_cleaned.csv"
+    parquet_path = "ALL_GNPS_cleaned.parquet"
     
     output_path = './nf_output'
     

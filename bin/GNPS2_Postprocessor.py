@@ -183,14 +183,10 @@ def postprocess_files(csv_path, mgf_path, output_csv_path, output_parquet_path):
     summary.to_csv(output_csv_path, index=False)
 
 def main():
-    now = datetime.datetime.now()
-    year = now.year
-    quarter = int(now.month/4) + 1
-
-    csv_path = "./GNPS_ml_exports/ALL_GNPS_merged_{}_{}.csv".format(quarter, year)
-    mgf_path = "./GNPS_ml_exports/ALL_GNPS_merged_{}_{}.mgf".format(quarter, year)
-    cleaned_csv_path = "./GNPS_ml_exports/ALL_GNPS_cleaned_{}_{}.csv".format(quarter, year)
-    cleaned_parquet_path = "./GNPS_ml_exports/ALL_GNPS_cleaned_{}_{}.parquet".format(quarter, year)
+    csv_path = "ALL_GNPS_merged.csv"
+    mgf_path = "ALL_GNPS_merged.mgf"
+    cleaned_csv_path = "ALL_GNPS_cleaned.csv"
+    cleaned_parquet_path = "ALL_GNPS_cleaned.parquet"
 
     if not os.path.isfile(cleaned_csv_path):
         if not os.path.isfile(cleaned_parquet_path):
