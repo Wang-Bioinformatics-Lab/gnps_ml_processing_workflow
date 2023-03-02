@@ -249,60 +249,62 @@ def helper(process_num, scan_start, all_spectra_list):
     return file_not_found_count, UnicodeDecodeError_count, mgf_file_count
 
 def main():
-    now = datetime.datetime.now()
-    year = now.year
-    quarter = int(now.month/4) + 1
+    # now = datetime.datetime.now()
+    # year = now.year
+    # quarter = int(now.month/4) + 1
 
-    final_csv_path = "./GNPS_ml_exports/ALL_GNPS_merged_{}_{}.csv".format(quarter, year)
-    final_mgf_path = "./GNPS_ml_exports/ALL_GNPS_merged_{}_{}.mgf".format(quarter, year)
+    # final_csv_path = "./GNPS_ml_exports/ALL_GNPS_merged_{}_{}.csv".format(quarter, year)
+    # final_mgf_path = "./GNPS_ml_exports/ALL_GNPS_merged_{}_{}.mgf".format(quarter, year)
 
     
     # We only want to generate these files quarter, so we'll check if it has already been done
-    if not os.path.isfile(final_csv_path):
-        if not os.path.isfile(final_mgf_path):
-            parser = argparse.ArgumentParser(description='Process some integers.')
-            # parser.add_argument('input_libraryname', default='ALL_GNPS')
-            parser.add_argument('-s', '--structures_required', help="remove entries that don't include structures", action="store_true")
-            parser.add_argument('-p', type=int, help='number or processors to use', default=10)
+    # if not os.path.isfile(final_csv_path):
+    #     if not os.path.isfile(final_mgf_path):
+    parser = argparse.ArgumentParser(description='Process some integers.')
+    # parser.add_argument('input_libraryname', default='ALL_GNPS')
+    parser.add_argument('-s', '--structures_required', help="remove entries that don't include structures", action="store_true")
+    parser.add_argument('-p', type=int, help='number or processors to use', default=10)
 
-            args = parser.parse_args()
+    args = parser.parse_args()
 
-            # all_library_names = args.input_libraryname.split(";")
-            all_library_names = "ALL_GNPS".split(";")
-            all_spectra_list = []
+    # all_library_names = args.input_libraryname.split(";")
+    all_library_names = "ALL_GNPS".split(";")
+    # all_library_names = "BERKELEY-LAB".split(";")
+    
+    all_spectra_list = []
 
-            save_file = '_'.join(all_library_names) + '.npy'
-            
-            # if not os.path.isfile(save_file):
-            for library_name in all_library_names:  # We used to want to use the cached gnpslibrary, but now that it's running quarterly only this doesn't need to be cached
-                gnps_url = "https://gnps-external.ucsd.edu/gnpslibrary/{}.json".format(library_name)
-                temp_spectra_list = requests.get(gnps_url).json()
-                all_spectra_list += temp_spectra_list
-            np.save(save_file, np.array(all_spectra_list))
-            # else:
-            #     all_spectra_list = np.load(save_file, allow_pickle=True)
+    save_file = '_'.join(all_library_names) + '.npy'
+    
+    # if not os.path.isfile(save_file):
+    for library_name in all_library_names:  # We used to want to use the cached gnpslibrary, but now that it's running quarterly only this doesn't need to be cached
+        gnps_url = "https://gnps-external.ucsd.edu/gnpslibrary/{}.json".format(library_name)
+        temp_spectra_list = requests.get(gnps_url).json()
+        all_spectra_list += temp_spectra_list
+    np.save(save_file, np.array(all_spectra_list))
+    # else:
+    #     all_spectra_list = np.load(save_file, allow_pickle=True)
 
-            if not os.path.isdir('./temp'): os.makedirs('./temp')
+    if not os.path.isdir('./temp'): os.makedirs('./temp')
 
-            if args.structures_required:
-                org_len = len(all_spectra_list)
-                all_spectra_list = [spectrum for spectrum in all_spectra_list if spectrum['Smiles'] != 'n/a' and spectrum['Smiles'] != 'n\/a']
-                print("Found {} entries with structures out of {} structures: {:4.2f}%".format(len(all_spectra_list), org_len, len(all_spectra_list)/org_len*100))
-            
-            p = args.p
-            num_sections = 500
-            print("Using {} processors.".format(p))
-            indices = np.array_split(np.arange(1,len(all_spectra_list)+1), num_sections)
-            scan_start = [x[0] for x in indices]
-            splits = np.array_split(all_spectra_list, num_sections)
-            del all_spectra_list
-            
-            r = Parallel(n_jobs=p)(delayed(helper)(p_idx, scan_start[p_idx], splits[p_idx]) for p_idx in tqdm(range(num_sections)))
-            file_not_found_count, UnicodeDecodeError_count, mgf_file_count = zip(*r)
-            
-            print("Files not found:", np.sum(file_not_found_count))
-            print("Unicode Decode Errors:", np.sum(file_not_found_count))
-            print("MGF files skipped:", np.sum(mgf_file_count))
+    if args.structures_required:
+        org_len = len(all_spectra_list)
+        all_spectra_list = [spectrum for spectrum in all_spectra_list if spectrum['Smiles'] != 'n/a' and spectrum['Smiles'] != 'n\/a']
+        print("Found {} entries with structures out of {} structures: {:4.2f}%".format(len(all_spectra_list), org_len, len(all_spectra_list)/org_len*100))
+    
+    p = args.p
+    num_sections = 500
+    print("Using {} processors.".format(p))
+    indices = np.array_split(np.arange(1,len(all_spectra_list)+1), num_sections)
+    scan_start = [x[0] for x in indices]
+    splits = np.array_split(all_spectra_list, num_sections)
+    del all_spectra_list
+    
+    r = Parallel(n_jobs=p)(delayed(helper)(p_idx, scan_start[p_idx], splits[p_idx]) for p_idx in tqdm(range(num_sections)))
+    file_not_found_count, UnicodeDecodeError_count, mgf_file_count = zip(*r)
+    
+    print("Files not found:", np.sum(file_not_found_count))
+    print("Unicode Decode Errors:", np.sum(file_not_found_count))
+    print("MGF files skipped:", np.sum(mgf_file_count))
 
 if __name__ == '__main__':
     main()
