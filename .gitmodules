@@ -1,3 +1,6 @@
 [submodule "GNPS2_DeploymentTooling"]
 	path = GNPS2_DeploymentTooling
 	url = https://github.com/Wang-Bioinformatics-Lab/GNPS2_DeploymentTooling.git
+[submodule "GNPS_PureNetworking_Workflow"]
+	path = GNPS_PureNetworking_Workflow
+	url = https://github.com/mwang87/GNPS_PureNetworking_Workflow.git
