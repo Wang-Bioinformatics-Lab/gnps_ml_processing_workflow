@@ -64,13 +64,12 @@ def main():
     
     output_path = './nf_output'
     
-    if args.split:
-        raise NotImplementedError
-    
     if args.subset == 'Bruker_Fragmentation_Prediction':
         Bruker_Fragmentation_Prediction(csv_path, parquet_path, output_path)
     elif args.subset == 'MH_MNA_Translation':
         MH_MNA_Translation(csv_path, parquet_path, output_path)
+    elif args.subset == 'all':
+        raise NotImplementedError
         
             
 if __name__ == '__main__':
