@@ -110,8 +110,8 @@ process split_subsets {
   // Requires CSV, parquet, similarities
   """
   python3 $TOOL_FOLDER/GNPS2_Subset_Split.py  ${spectral_similarities}/merged_pairs.tsv \
-                                              $baseDir/nf_output/spectra_${spectral_similarities}.parquet \
-                                              $baseDir/nf_output/summary_${spectral_similarities}.csv
+                                              $baseDir/nf_output/spectra/${spectral_similarities}.parquet \
+                                              $baseDir/nf_output/summary/${spectral_similarities}.csv
   """
 }
 
