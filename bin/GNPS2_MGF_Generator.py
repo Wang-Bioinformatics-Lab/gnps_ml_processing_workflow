@@ -10,9 +10,9 @@ def generate_mgf(parquet_file):
     df = pd.read_parquet(parquet_file)
     to_mgf = []
     spectrum_ids = df.spectrum_id.unique()
-    for spectrum_id in spectrum_ids:
+    for i, spectrum_id in enumerate(spectrum_ids):
         spectra = df.loc[df.spectrum_id == spectrum_id]
-        to_mgf.append({'m/z array':list(spectra.mz), 'intensity array':list(spectra.i), 'params':{'TITLE':spectrum_id,'prec_mz':list(spectra.prec_mz.iloc[0][0])}})
+        to_mgf.append({'m/z array':list(spectra.mz), 'intensity array':list(spectra.i), 'params':{'SCAN': i, 'TITLE':spectrum_id,'prec_mz':spectra.prec_mz.iloc[0][0]}})
     pyteomics.mgf.write(to_mgf, output=name+'.mgf',write_charges=False, write_ions=False)
     
 def main():
