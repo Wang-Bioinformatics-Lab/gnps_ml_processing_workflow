@@ -13,7 +13,7 @@ parameterlist:
     - displayname: Subset Selection
       paramtype: select
       nf_paramname: subset
-      formvalue: fast
+      formvalue: GNPS_default
       options:
         - value: GNPS_default
           display: GNPS Default Subsets
@@ -23,3 +23,13 @@ parameterlist:
           display: M+H M+NA Translation + Unsupervised Data
         # More options go here
 
+
+    - displayname: Automatic Train/Test Split
+      paramtype: select
+      nf_paramname: split
+      formvalue: false
+      options:
+        - value: false
+          display: No
+        - value: true
+          display: Yes

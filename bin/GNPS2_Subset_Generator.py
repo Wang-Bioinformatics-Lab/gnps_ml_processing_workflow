@@ -31,7 +31,7 @@ def Bruker_Fragmentation_Prediction(summary_path:str, parquet_path:str):
     
     reduced_df.to_csv('./summary/Bruker_Fragmentation_Prediction.csv', index=False)
        
-    parquet_as_df = parquet_as_df.loc[[x in reduced_df.spectrum_id for x in parquet_as_df.index]]
+    parquet_as_df = parquet_as_df.loc[[x in list(reduced_df.spectrum_id) for x in parquet_as_df.spectrum_id]]
     parquet_as_df.to_parquet('./spectra/Bruker_Fragmentation_Prediction.parquet')
     
 def MH_MNA_Translation(summary_path:str, parquet_path:str):
@@ -43,7 +43,7 @@ def MH_MNA_Translation(summary_path:str, parquet_path:str):
     reduced_df = reduced_df.loc[(reduced_df.Adduct == 'M+H') | (reduced_df.Adduct == 'M+NA')]
     reduced_df.to_csv('./summary/MH_MNA_Translation.csv', index=False)
        
-    parquet_as_df = parquet_as_df.loc[[x in reduced_df.spectrum_id for x in parquet_as_df.index]]
+    parquet_as_df = parquet_as_df.loc[[x in list(reduced_df.spectrum_id )for x in parquet_as_df.spectrum_id]]
     parquet_as_df.to_parquet('./spectra/MH_MNA_Translation.parquet')
 
     
