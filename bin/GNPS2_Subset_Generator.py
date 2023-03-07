@@ -1,8 +1,5 @@
 import re
 import pandas as pd
-from pyteomics.mgf import IndexedMGF
-import datetime
-import os
 import argparse
 
 def Bruker_Fragmentation_Prediction(summary_path:str, parquet_path:str):
@@ -50,7 +47,7 @@ def MH_MNA_Translation(summary_path:str, parquet_path:str, output_path:str):
 
     
 def main():
-    subsets = ['Bruker_Fragmentation_Prediction','MH_MNA_Translation']
+    subsets = ['Bruker_Fragmentation_Prediction','MH_MNA_Translation','GNPS_default']
     parser = argparse.ArgumentParser(
                     prog = 'GNPS2 Subset Generator',
                     description = 'This program generates predetermined subsets splits from GNPS2.')
@@ -58,18 +55,18 @@ def main():
     parser.add_argument('-s', '--split', action='store_true')
     args = parser.parse_args()
     
-    now = datetime.datetime.now()
     csv_path     = "ALL_GNPS_cleaned.csv"
     parquet_path = "ALL_GNPS_cleaned.parquet"
     
     output_path = './nf_output'
     
     if args.subset == 'Bruker_Fragmentation_Prediction':
-        Bruker_Fragmentation_Prediction(csv_path, parquet_path, output_path)
+        Bruker_Fragmentation_Prediction(csv_path, parquet_path)
     elif args.subset == 'MH_MNA_Translation':
         MH_MNA_Translation(csv_path, parquet_path, output_path)
-    elif args.subset == 'all':
-        raise NotImplementedError
+    elif args.subset == 'GNPS_default':
+        Bruker_Fragmentation_Prediction(csv_path, parquet_path)
+        MH_MNA_Translation(csv_path, parquet_path, output_path)
         
             
 if __name__ == '__main__':
