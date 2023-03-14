@@ -18,3 +18,4 @@ dependencies:
   - fastparquet
   - pip:
     - obonet
+    - vaex
