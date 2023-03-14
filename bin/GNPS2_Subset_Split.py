@@ -1,13 +1,13 @@
 import sys
 import pandas as pd
 from utils import build_tanimoto_similarity_list_precomputed, get_splits_index_only
+import vaex
 
 # argv should look like ['/home/user/SourceCode/GNPS_ML_Processing_Workflow/bin/GNPS2_Subset_Split.py', 'similarity_calculations/spectra_MH_MNA_Translation/merged_pairs.tsv', '/home/user/SourceCode/GNPS_ML_Processing_Workflow/nf_output/spectra_spectra_MH_MNA_Translation.parquet', '/home/user/SourceCode/GNPS_ML_Processing_Workflow/nf_output/summary_spectra_MH_MNA_Translation.csv']
 
 def main():
     _, spectral_similarity, spectra, summary = sys.argv
     
-    spectra_df = pd.read_parquet(spectra)
     summary_df = pd.read_csv(summary)
     
     tanimoto_similarity = build_tanimoto_similarity_list_precomputed(summary_df, similarity_threshold = 0.5, output_dir=None)
@@ -34,17 +34,11 @@ def main():
     
     
     # Build new parquet files
-    training_mask    = [(x in list(training_summary.spectrum_id)) for x in spectra_df.spectrum_id]
-    testing_mask     = [(x in list(testing_summary.spectrum_id)) for x in spectra_df.spectrum_id]
-
-    print(training_mask[0:5])
-    print(len(training_mask),flush=True)
-    print(len(spectra_df),flush=True)
-    print(sum(training_mask),flush=True)
-    print(sum(testing_mask),flush=True)
-    
-    spectra_df.loc[training_mask].to_parquet(spectra[:-8]+'_train.parquet')
-    spectra_df.loc[testing_mask].to_parquet(spectra[:-8]+'_test.parquet')
+    parquet_as_df = vaex.open(spectra)
+    train_df = parquet_as_df[parquet_as_df.spectrum_id.isin(list(training_summary.spectrum_id))]
+    train_df.export_parquet(spectra[:-8]+'_train.parquet')
+    test_df = parquet_as_df[parquet_as_df.spectrum_id.isin(list(testing_summary.spectrum_id))]
+    test_df.export_parquet(spectra[:-8]+'_test.parquet')
         
 if __name__ == '__main__':
     main()
