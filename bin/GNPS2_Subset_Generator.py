@@ -16,8 +16,7 @@ def Bruker_Fragmentation_Prediction(summary_path:str, parquet_path:str):
 
     """
     reduced_df = pd.read_csv(summary_path)
-    parquet_as_df = pd.read_parquet(parquet_path)
-    
+
     allowed_atoms = ['C', 'H', 'O', 'N', 'F', 'S', 'Cl', 'P', 'B', 'Br', 'I']
 
     # Remove structure-less entries. select instrument = qTof and Adduct in ['M+H','M-H']
@@ -30,15 +29,14 @@ def Bruker_Fragmentation_Prediction(summary_path:str, parquet_path:str):
     reduced_df.drop(['Smiles_letters_only','Smiles_cleaned'], inplace=True, axis=1)
 
     reduced_df = reduced_df[reduced_df.msManufacturer == 'Bruker Daltonics']  
-
-
+    reduced_df.to_csv('./summary/Bruker_Fragmentation_Prediction.csv', index=False)
     
     id_list = list(reduced_df.spectrum_id )
     del reduced_df
     
     parquet_as_df = vaex.open(parquet_path)
     parquet_as_df = parquet_as_df[parquet_as_df.spectrum_id.isin(id_list)]
-    parquet_as_df.export_parquet('./spectra/MH_MNA_Translation.parquet')
+    parquet_as_df.export_parquet('./spectra/Bruker_Fragmentation_Prediction.parquet')
     
 def MH_MNA_Translation(summary_path:str, parquet_path:str):
 
