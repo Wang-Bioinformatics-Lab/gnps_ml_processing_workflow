@@ -12,6 +12,7 @@ from tqdm import tqdm
 
 def sanity_checks(summary):
     assert len(summary[(summary.msManufacturer == 'Thermo') & (summary.msMassAnalyzer == 'qtof')]) == 0
+    assert len((summary[(summary.msMassAnalyzer == 'orbitrap')]) & (summary[(summary.msManufacturer == 'Bruker Daltonics')]))
 
 def basic_cleaning(summary):
     # scan
@@ -69,24 +70,24 @@ def propogate_GNPS_Inst_field(summary):
 
     # Fragmentation Info (Done)
     summary.msDissociationMethod = summary.msDissociationMethod.astype(str)
-    summary.loc[[("in source cid" == x) for x in summary.GNPS_Inst] and summary.msDissociationMethod == 'nan', 'msDissociationMethod'] = "is-cid"    
-    summary.loc[[("hid" in x) for x in summary.GNPS_Inst] and summary.msDissociationMethod == 'nan', 'msDissociationMethod'] = "hid"    
-    summary.loc[[("cid" in x and not "is-cid" in x) for x in summary.GNPS_Inst] and summary.msDissociationMethod == 'nan', 'msDissociationMethod'] = "cid"    
+    summary.loc[pd.Series([("in source cid" == x) for x in summary.GNPS_Inst]) & summary.msDissociationMethod == 'nan', 'msDissociationMethod'] = "is-cid"    
+    summary.loc[pd.Series([("hid" in x) for x in summary.GNPS_Inst]) & summary.msDissociationMethod == 'nan', 'msDissociationMethod'] = "hid"    
+    summary.loc[pd.Series([("cid" in x and not "is-cid" in x) for x in summary.GNPS_Inst]) & summary.msDissociationMethod == 'nan', 'msDissociationMethod'] = "cid"    
 
     # Ionisation Info (Not Done)
-    summary.loc[["esi" in x for x in  summary.GNPS_Inst] and summary.msIonisation == 'nan', 'msIonisation'] = 'ESI'
-    summary.loc[["apci" in x for x in  summary.GNPS_Inst] and summary.msIonisation == 'nan', 'msIonisation'] = 'APCI'
-    summary.loc[[("appi" in x and not "dappi" in x) for x in summary.GNPS_Inst] and summary.msIonisation == 'nan', 'msIonisation'] = 'APPI'
-    summary.loc[["dappi" in x for x in summary.GNPS_Inst] and summary.msIonisation == 'nan', 'msIonisation'] = 'DAPPI'
+    summary.loc[pd.Series(["esi" in x for x in  summary.GNPS_Inst]) & summary.msIonisation == 'nan', 'msIonisation'] = 'ESI'
+    summary.loc[pd.Series(["apci" in x for x in  summary.GNPS_Inst]) & summary.msIonisation == 'nan', 'msIonisation'] = 'APCI'
+    summary.loc[pd.Series([("appi" in x and not "dappi" in x) for x in summary.GNPS_Inst]) & summary.msIonisation == 'nan', 'msIonisation'] = 'APPI'
+    summary.loc[pd.Series(["dappi" in x for x in summary.GNPS_Inst]) & summary.msIonisation == 'nan', 'msIonisation'] = 'DAPPI'
 
     # Mass Analyzer (Not Done)
-    summary.loc[["orbitrap" in x for x in summary.GNPS_Inst] and summary.msMassAnalyzer == 'nan',"msMassAnalyzer"] = "orbitrap"
-    summary.loc[[("quadrupole tof" in x or "qtof" in x or "q-tof" in x) and not "qq" in x for x in summary.GNPS_Inst] and summary.msMassAnalyzer == 'nan',"msMassAnalyzer"] = "qtof"
-    summary.loc[[("tof" in x) and not ("qq" in x or "qtof" in x or "q-tof" in x or "q tof" in x or "quadrupole tof" in x) for x in summary.GNPS_Inst] and summary.msMassAnalyzer == 'nan',"msMassAnalyzer"] = "tof"
+    summary.loc[pd.Series(["orbitrap" in x for x in summary.GNPS_Inst]) & summary.msMassAnalyzer == 'nan',"msMassAnalyzer"] = "orbitrap"
+    summary.loc[pd.Series([("quadrupole tof" in x or "qtof" in x or "q-tof" in x) and not "qq" in x for x in summary.GNPS_Inst]) & summary.msMassAnalyzer == 'nan',"msMassAnalyzer"] = "qtof"
+    summary.loc[pd.Series([("tof" in x) and not ("qq" in x or "qtof" in x or "q-tof" in x or "q tof" in x or "quadrupole tof" in x) for x in summary.GNPS_Inst]) & summary.msMassAnalyzer == 'nan',"msMassAnalyzer"] = "tof"
 
     # Manufacturer Info (Not Done)
-    summary.loc[["maxis" in x for x in summary.GNPS_Inst] and summary.msManufacturer == "nan","msManufacturer"] = "Bruker Daltonics"
-    summary.loc[["q exactive" in x or "q-exactive" in x for x in summary.GNPS_Inst] and summary.msManufacturer == "nan","msManufacturer"] = "Thermo"
+    summary.loc[pd.Series(["maxis" in x for x in summary.GNPS_Inst]) & summary.msManufacturer == "nan","msManufacturer"] = "Bruker Daltonics"
+    summary.loc[pd.Series(["q exactive" in x or "q-exactive" in x for x in summary.GNPS_Inst]) & summary.msManufacturer == "nan","msManufacturer"] = "Thermo"
     return summary
 
 def propogate_msModel_field(summary):
