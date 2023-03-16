@@ -42,10 +42,10 @@ def MH_MNA_Translation(summary_path:str, parquet_path:str):
 
     reduced_df = pd.read_csv(summary_path)
 
-    reduced_df = reduced_df.loc[reduced_df.msManufacturer == "Bruker Daltonics"]
     reduced_df = reduced_df.loc[reduced_df.msMassAnalyzer == 'orbitrap']
+    reduced_df = reduced_df.loc[reduced_df.GNPS_Inst == 'orbitrap']
     reduced_df = reduced_df.loc[~reduced_df.Smiles.isna()]
-    reduced_df = reduced_df.loc[(reduced_df.Adduct == 'M+H') | (reduced_df.Adduct == 'M+NA')]
+    reduced_df = reduced_df.loc[(reduced_df.Adduct == 'M+H') | (reduced_df.Adduct == 'M+Na')]
 
     reduced_df.to_csv('./summary/MH_MNA_Translation.csv', index=False)
     
