@@ -32,8 +32,11 @@ def basic_cleaning(summary):
     summary.loc[~ summary.retention_time.isna(),"retention_time"] = summary.loc[~ summary.retention_time.isna(),"retention_time"].apply(lambda x: re.search(pattern,x).group(0))
 
     # Adduct
+    summary.Adduct = summary.Adduct.apply(lambda x: str(x).strip())
     # Strip starting and ending braces if no charge is specified
-    summary.Adduct = summary.Adduct.map(lambda x: x.strip()[1:-1] if x.strip()[-1] == ']' and x.strip()[0] == '[' else x.strip())
+    summary.Adduct = summary.Adduct.map(lambda x: x[1:-1] if x.strip()[-1] == ']' and x[0] == '[' else x)
+    # Strip starting and ending braces if no charge is specified
+    summary.Adduct = summary.Adduct.map(lambda x: x[1:-2] if (x.strip()[-2:] == ']+' or x[-2:] == ']-') and x[0] == '[' else x)
 
     # Conversion of numerical columns to numerical types to protect against contamination
     summary.Precursor_MZ = summary.Precursor_MZ.astype(float)
