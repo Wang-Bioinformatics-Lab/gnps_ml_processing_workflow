@@ -276,16 +276,10 @@ def main():
     
     all_spectra_list = []
 
-    save_file = '_'.join(all_library_names) + '.npy'
-    
-    # if not os.path.isfile(save_file):
     for library_name in all_library_names:  # We used to want to use the cached gnpslibrary, but now that it's running quarterly only this doesn't need to be cached
         gnps_url = "https://gnps-external.ucsd.edu/gnpslibrary/{}.json".format(library_name)
         temp_spectra_list = requests.get(gnps_url).json()
         all_spectra_list += temp_spectra_list
-    np.save(save_file, np.array(all_spectra_list))
-    # else:
-    #     all_spectra_list = np.load(save_file, allow_pickle=True)
 
     if not os.path.isdir('./temp'): os.makedirs('./temp')
 
