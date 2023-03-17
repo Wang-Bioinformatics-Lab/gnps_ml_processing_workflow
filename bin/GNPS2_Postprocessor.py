@@ -164,8 +164,8 @@ def postprocess_files(csv_path, mgf_path, output_csv_path, output_parquet_path):
 
             os.system("cat " + " ".join(sorted_csv_files) +"> " + csv_path)
             os.system("cat " + " ".join(sorted_mgf_files) +"> " + mgf_path)
-    
-    # TODO: Delete temp files
+            os.system("rm " + " ".join(sorted_csv_files))
+            os.system("rm " + " ".join(sorted_mgf_files))
 
     summary = pd.read_csv(csv_path)
 
