@@ -171,10 +171,13 @@ def helper(process_num, scan_start, all_spectra_list):
                         if id in accessions:
                             summary_dict["msDetector"] = id_to_name[id]
                             break
+                    summary_dict['msMassAnalyzer'] = [] # we can have multiple mass analyzers for hybrid instruments
                     for id in analyzer_ids:
                         if id in accessions:
-                            summary_dict['msMassAnalyzer'] = id_to_name[id]
+                            summary_dict['msMassAnalyzer'].append(id_to_name[id])
                             break
+                    if len(summary_dict['msMassAnalyzer']) == 0:
+                        del summary_dict['msMassAnalyzer']
 
                 # The following values are stored in the spectrum config
                 accessions = {x.attrib['accession']: x.attrib.get('value') for x in xml_spectrum.findall('.//{*}cvParam')}
