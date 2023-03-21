@@ -2,7 +2,8 @@
 nextflow.enable.dsl=2
 
 // params.subset = "Bruker_Fragmentation_Prediction"
-params.subset = "MH_MNA_Translation"
+// params.subset = "MH_MNA_Translation"
+params.subset = "GNPS_default"
 params.split  = true
 
 params.spectra_parallelism = 10
@@ -19,7 +20,8 @@ process export {
     conda "$TOOL_FOLDER/conda_env.yml"
 
     output:
-    path './temp', emit: temp_path
+    path './ALL_GNPS_merged.parquet', emit: merged_parquet
+    path './ALL_GNPS_merged.csv', emit: merged_csv
 
     """
     python3 $TOOL_FOLDER/GNPS2_Processor.py -p "$params.spectra_parallelism"  
@@ -29,8 +31,11 @@ process export {
 process postprocess {
   conda "$TOOL_FOLDER/conda_env.yml"
 
+  cache true
+
   input:
-  path temp_path
+  path merged_csv
+  path merged_parquet
 
   output:
   path "ALL_GNPS_cleaned.csv", emit: cleaned_csv
@@ -45,6 +50,8 @@ process generate_subset {
   publishDir "./nf_output", mode: 'copy'
 
   conda "$TOOL_FOLDER/conda_env.yml"
+
+  cache false
 
   input:
   path cleaned_csv
@@ -117,7 +124,7 @@ process split_subsets {
 
 workflow {
   export()
-  postprocess(export.out.temp_path)
+  postprocess(export.out.merged_csv, export.out.merged_parquet)
   generate_subset(postprocess.out.cleaned_csv, postprocess.out.cleaned_parquet)    
   if ("$params.split") {
     generate_mgf(generate_subset.out.output_parquet)
