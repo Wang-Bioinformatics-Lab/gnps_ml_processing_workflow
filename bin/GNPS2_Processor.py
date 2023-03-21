@@ -1,4 +1,6 @@
 import datetime
+from pathlib import Path
+from glob import glob
 import sys
 import argparse
 import requests
@@ -120,7 +122,7 @@ def helper(process_num, scan_start, all_spectra_list):
                         if msModel is not None: summary_dict["msModel"] = msModel.get('value')
                         if msManufacturer is not None: summary_dict["msManufacturer"] = msManufacturer.get('value')
                         if msIonisation is not None: summary_dict["msIonisation"] = msIonisation.get('value')
-                        if msMassAnalyzer is not None: summary_dict["msMassAnalyzer"] = msMassAnalyzer.get('value')
+                        if msMassAnalyzer is not None: summary_dict["msMassAnalyzer"] = [msMassAnalyzer.get('value')]
                         if msDetector is not None: summary_dict["msDetector"] =msDetector.get('value')
                         if msDissociationMethod is not None: summary_dict['msDissociationMethod'] = msDissociationMethod
                         
@@ -175,7 +177,6 @@ def helper(process_num, scan_start, all_spectra_list):
                     for id in analyzer_ids:
                         if id in accessions:
                             summary_dict['msMassAnalyzer'].append(id_to_name[id])
-                            break
                     if len(summary_dict['msMassAnalyzer']) == 0:
                         del summary_dict['msMassAnalyzer']
 
@@ -302,6 +303,24 @@ def main():
     print("Files not found:", np.sum(file_not_found_count))
     print("Unicode Decode Errors:", np.sum(file_not_found_count))
     print("MGF files skipped:", np.sum(mgf_file_count))
+    
+    merged_csv_path = "ALL_GNPS_merged.csv"
+    merged_parquet_path = "ALL_GNPS_merged.parquet"
+    
+    if not os.path.isfile(merged_csv_path):
+        if not os.path.isfile(merged_parquet_path):
+            file_pattern = re.compile(r'.*?(\d+).*?')
+            def get_order(file,):
+                match = file_pattern.match(Path(file).name)
+                return int(match.groups()[0])
+
+            sorted_csv_files = sorted(glob('./temp/temp_*.csv'), key=get_order)
+            sorted_mgf_files = sorted(glob('./temp/temp_*.mgf'), key=get_order)
+
+            os.system("cat " + " ".join(sorted_csv_files) +"> " + merged_csv_path)
+            os.system("cat " + " ".join(sorted_mgf_files) +"> " + merged_parquet_path)
+            os.system("rm " + " ".join(sorted_csv_files))
+            os.system("rm " + " ".join(sorted_mgf_files))
 
 if __name__ == '__main__':
     main()

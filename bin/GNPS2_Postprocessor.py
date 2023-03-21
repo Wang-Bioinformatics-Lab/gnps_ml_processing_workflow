@@ -1,4 +1,6 @@
+import ast
 import os
+import numpy as np
 import pandas as pd
 from pyteomics import mgf
 from pyteomics.mgf import IndexedMGF
@@ -12,7 +14,7 @@ from tqdm import tqdm
 
 def sanity_checks(summary):
     assert len(summary[(summary.msManufacturer == 'Thermo') & (summary.msMassAnalyzer == 'qtof')]) == 0
-    assert len((summary[(summary.msMassAnalyzer == 'orbitrap')]) & (summary[(summary.msManufacturer == 'Bruker Daltonics')]))
+    assert len(summary[(summary.msMassAnalyzer == 'orbitrap') & (summary.msManufacturer == 'Bruker Daltonics')])
 
 def basic_cleaning(summary):
     # scan
@@ -52,9 +54,30 @@ def basic_cleaning(summary):
     summary.loc[['thermo' in x.lower() for x in summary.msManufacturer], 'msManufacturer'] = 'Thermo'
 
     # msMassAnalyzer
-    summary.msMassAnalyzer = summary.astype(str).msMassAnalyzer.map(lambda x: x.lower())
-    summary.loc[summary.msMassAnalyzer == 'quadrupole tof','msMassAnalyzer'] = 'qtof'
-    summary.loc[summary.msMassAnalyzer == 'fourier transform ion cyclotron resonance mass spectrometer','msMassAnalyzer'] = 'ftms'
+    def transform_analyzer(x:str):
+        if 'quadrupole tof' == x:
+            return 'qtof'
+        if 'fourier transform ion cyclotron resonance mass spectrometer' == x:
+            return 'ftms'
+        if 'time-of-flight' == x:
+            return 'tof'
+        return x
+    def merge_analyzer(x:list):
+        if np.any(["orbitrap" in y for y in x]):
+            return "orbitrap"
+        if "quadrupole" in x and "tof" in x:
+            return 'qtof'
+        return x[0]
+    
+    summary.msMassAnalyzer = summary.msMassAnalyzer.str.lower()
+    # summary.msMassAnalyzer = summary.msMassAnalyzer.str.strip('[]').str.strip("'").str.split(',')
+    mask = ~ summary.msMassAnalyzer.isna()
+    summary.loc[mask,'msMassAnalyzer'] = summary.loc[mask,'msMassAnalyzer'].apply(lambda x: ast.literal_eval(x))
+    summary.loc[mask,'msMassAnalyzer'] = summary.loc[mask,'msMassAnalyzer'].apply(lambda x: [transform_analyzer(y) for y in x])
+    summary.loc[mask,'msMassAnalyzer'] = summary.loc[mask,'msMassAnalyzer'].apply(merge_analyzer)
+    # summary.loc[mask].apply(lambda x: [y == 'quadrupole tof' for y in x].any())
+    # summary.loc[mask,'msMassAnalyzer'] = 'qtof' 
+    # summary.loc[summary.msMassAnalyzer == 'fourier transform ion cyclotron resonance mass spectrometer','msMassAnalyzer'] = 'ftms'
 
     # Detector
     '''A very specific set of files has MS:1000253 as the detector name which is used for mzML files, 
@@ -63,7 +86,10 @@ def basic_cleaning(summary):
     Conversion source: https://raw.githubusercontent.com/HUPO-PSI/psi-ms-CV/master/psi-ms.obo
     '''
 
-    summary.loc[['MS:1000253' == x for x in summary.msDetector], 'msDetector'] = 'electron multiplier tube'
+    summary.loc[['MS:1000253' == x for x in summary.msDetector], 'msDetector'] = 'EMT'
+    summary.loc[summary.msDetector == "electron multiplier", 'msDetector'] = 'EMT'
+    summary.loc[summary.msDetector == "microchannel plate detector", 'msDetector'] = 'MCP'
+    
     
     return summary
 
@@ -152,21 +178,6 @@ def generate_parquet_file(input_mgf, spectrum_ids):
                        
 
 def postprocess_files(csv_path, mgf_path, output_csv_path, output_parquet_path):
-    if not os.path.isfile(csv_path):
-        if not os.path.isfile(mgf_path):
-            file_pattern = re.compile(r'.*?(\d+).*?')
-            def get_order(file,):
-                match = file_pattern.match(Path(file).name)
-                return int(match.groups()[0])
-
-            sorted_csv_files = sorted(glob('./temp/temp_*.csv'), key=get_order)
-            sorted_mgf_files = sorted(glob('./temp/temp_*.mgf'), key=get_order)
-
-            os.system("cat " + " ".join(sorted_csv_files) +"> " + csv_path)
-            os.system("cat " + " ".join(sorted_mgf_files) +"> " + mgf_path)
-            os.system("rm " + " ".join(sorted_csv_files))
-            os.system("rm " + " ".join(sorted_mgf_files))
-
     summary = pd.read_csv(csv_path)
 
     # Cleaning up files:
