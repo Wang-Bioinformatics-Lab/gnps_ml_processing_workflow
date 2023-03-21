@@ -177,7 +177,7 @@ def generate_parquet_file(input_mgf, spectrum_ids):
             
                        
 
-def postprocess_files(csv_path, mgf_path, output_csv_path, output_parquet_path):
+def postprocess_files(csv_path, parquet_path, output_csv_path, output_parquet_path):
     summary = pd.read_csv(csv_path)
 
     # Cleaning up files:
@@ -193,19 +193,19 @@ def postprocess_files(csv_path, mgf_path, output_csv_path, output_parquet_path):
     # Add Fingerprints
     summary = generate_fingerprints(summary)
 
-    parquet_as_df = generate_parquet_file(mgf_path, summary.spectrum_id.astype('str'))
+    parquet_as_df = generate_parquet_file(parquet_path, summary.spectrum_id.astype('str'))
     parquet_as_df.to_parquet(output_parquet_path)
     summary.to_csv(output_csv_path, index=False)
 
 def main():
     csv_path = "ALL_GNPS_merged.csv"
-    mgf_path = "ALL_GNPS_merged.mgf"
+    parquet_path = "ALL_GNPS_merged.parquet"
     cleaned_csv_path = "ALL_GNPS_cleaned.csv"
     cleaned_parquet_path = "ALL_GNPS_cleaned.parquet"
 
     if not os.path.isfile(cleaned_csv_path):
         if not os.path.isfile(cleaned_parquet_path):
-            postprocess_files(csv_path, mgf_path, cleaned_csv_path, cleaned_parquet_path)
+            postprocess_files(csv_path, parquet_path, cleaned_csv_path, cleaned_parquet_path)
             
 if __name__ == '__main__':
     main()
