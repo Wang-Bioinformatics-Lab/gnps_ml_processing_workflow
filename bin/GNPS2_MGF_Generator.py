@@ -12,11 +12,28 @@ def generate_mgf(parquet_file):
     df = vaex.open(parquet_file)
     to_mgf = []
     spectrum_ids = df.spectrum_id.unique()
+    # for i, spectrum_id in enumerate(spectrum_ids):
+    #     # spectra = df.loc[df.spectrum_id == spectrum_id]
+    #     spectra = df[df.spectrum_id == spectrum_id]
+    #     to_mgf.append({'m/z array':spectra.mz.values, 'intensity array':spectra.i.values, 'params':{'SCAN': i, 'TITLE':spectrum_id,'prec_mz':spectra.prec_mz.values[0][0]}})
+    # pyteomics.mgf.write(to_mgf, output=name+'.mgf',write_charges=False, write_ions=False)
+    
+    
+    output_mgf = open(name+'.mgf', "w")
     for i, spectrum_id in enumerate(spectrum_ids):
-        # spectra = df.loc[df.spectrum_id == spectrum_id]
         spectra = df[df.spectrum_id == spectrum_id]
-        to_mgf.append({'m/z array':spectra.mz.values, 'intensity array':spectra.i.values, 'params':{'SCAN': i, 'TITLE':spectrum_id,'prec_mz':spectra.prec_mz.values[0][0]}})
-    pyteomics.mgf.write(to_mgf, output=name+'.mgf',write_charges=False, write_ions=False)
+        
+    
+        output_mgf.write("BEGIN IONS\n")
+        output_mgf.write("PEPMASS={}\n".format(spectra.prec_mz.values[0][0]))
+        output_mgf.write("TITLE={}\n".format(spectrum_id))
+        output_mgf.write("SCANS={}\n".format(i))
+
+        peaks = zip(spectra.mz.values, spectra.i.values)
+        for peak in peaks:
+            output_mgf.write("{} {}\n".format(peak[0], peak[1]))
+
+        output_mgf.write("END IONS\n")
     
 def main():
     parser = argparse.ArgumentParser(description='Generate MGF Files.')
