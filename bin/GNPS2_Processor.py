@@ -136,6 +136,7 @@ def helper(process_num, scan_start, all_spectra_list):
                 else:
                     run_list = data.findall('.//{*}run')
                     run = None
+                    xml_spectrum=None
                     for r in run_list:
                         spectra_list = data.findall('.//{*}spectrum') # Since etree doesn't support regex, we will have to narrow down the scan numbers regularly
                         xml_spectrum=None
@@ -148,8 +149,17 @@ def helper(process_num, scan_start, all_spectra_list):
                             break
                     if r is None:
                         raise IOError("Run Not Found.")
-                    instrument_config = run.attrib['defaultInstrumentConfigurationRef']
-                    assert instrument_config is not None
+                    # A default instrument config is attributed to each run, however this can be superseeded for a particular scan    
+                    instrument_config = None
+                    
+                    scanList = xml_spectrum.find('.//{*}scanList')
+                    if scanList.attrib.get('count')!= '1': raise NotImplementedError("Parising has not been implemented for more than one scan.")
+                    s = scanList.find('.//{*}scan')
+                    instrument_config = s.attrib.get("instrumentConfigurationRef")
+                    
+                    if instrument_config is None:
+                        instrument_config = run.attrib['defaultInstrumentConfigurationRef']
+                        assert instrument_config is not None
                     config_for_specturm = instrument_conigurations.find('.//{*}instrumentConfiguration[@id="' + instrument_config + '"]')
                 # bs_spectrum = bs_data.find('spectrum', {"id": re.compile('scan={}$'.format(source_scan))})
                 
