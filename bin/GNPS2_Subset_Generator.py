@@ -4,9 +4,6 @@ import argparse
 import os
 import vaex
 
-def slice_parquet(file_path:str, spectrum_ids:list, batch_size:int=100):
-    pf = vaex.open(file_path)
-
 def Bruker_Fragmentation_Prediction(summary_path:str, parquet_path:str):
     """This function follows the cleaning in 3DMolMS applied to Bruker qtof instruments.
 
