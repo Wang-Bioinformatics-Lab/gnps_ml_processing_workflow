@@ -3,7 +3,23 @@ import pandas as pd
 import argparse
 import os
 import vaex
+import pickle
 
+def Generate_Pairs_List(summary:pd.DataFrame):
+    """Generate a spectra adjacency list based on the smiles string
+
+    Args:
+        summary (pd.DataFrame): The subset summary
+
+    Returns:
+        list: A list of tuples with value (spectrum_id, [similar spectrum_ids])
+    """
+    output = []
+    for _, row in summary[['spectrum_id', 'Smiles']].iterrows():
+        similar_ids = summary.loc[row["Smiles"] == summary["Smiles"],"spectrum_id"].values
+        output.append((row["spectrum_id"],list(similar_ids)))
+    return output
+    
 def Bruker_Fragmentation_Prediction(summary_path:str, parquet_path:str):
     """This function follows the cleaning in 3DMolMS applied to Bruker qtof instruments.
 
@@ -40,14 +56,18 @@ def MH_MNA_Translation(summary_path:str, parquet_path:str):
     reduced_df = pd.read_csv(summary_path)
 
     reduced_df = reduced_df.loc[reduced_df.msMassAnalyzer == 'orbitrap']
-    reduced_df = reduced_df.loc[reduced_df.GNPS_Inst == 'orbitrap']
+    # reduced_df = reduced_df.loc[reduced_df.GNPS_Inst == 'orbitrap']
     reduced_df = reduced_df.loc[~reduced_df.Smiles.isna()]
     reduced_df = reduced_df.loc[(reduced_df.Adduct == 'M+H') | (reduced_df.Adduct == 'M+Na')]
 
     reduced_df.to_csv('./summary/MH_MNA_Translation.csv', index=False)
-    
+    pairs_list = Generate_Pairs_List(reduced_df)
+    with open("./util/MH_MNA_Translation_pairs.pkl", "wb") as fp:
+        pickle.dump(pairs_list, fp)
+        
     id_list = list(reduced_df.spectrum_id )
     del reduced_df
+    del pairs_list
     
     parquet_as_df = vaex.open(parquet_path)
     parquet_as_df = parquet_as_df[parquet_as_df.spectrum_id.isin(id_list)]
@@ -67,6 +87,7 @@ def main():
     
     if not os.path.isdir('./spectra'): os.makedirs('./spectra', exist_ok=True)
     if not os.path.isdir('./summary'): os.makedirs('./summary', exist_ok=True)
+    if not os.path.isdir('./util'): os.makedirs('./util', exist_ok=True)
     
     
     if args.subset == 'Bruker_Fragmentation_Prediction':
