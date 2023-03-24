@@ -67,8 +67,45 @@ def MH_MNA_Translation(summary_path:str, parquet_path:str):
     parquet_as_df = parquet_as_df[parquet_as_df.spectrum_id.isin(id_list)]
     parquet_as_df.export_parquet('./spectra/MH_MNA_Translation.parquet')
     
+def Orbitrap_Sturcture_Prediction(summary_path:str, parquet_path:str):  
+    """This function follows the cleaning in 3DMolMS applied to orbitrap instruments.
+
+    Args:
+        summary_path (str): _description_
+        parquet_path (str): _description_
+
+    """
+    reduced_df = pd.read_csv(summary_path)
+
+    allowed_atoms = ['C', 'H', 'O', 'N', 'F', 'S', 'Cl', 'P', 'B', 'Br', 'I']
+
+    # Remove structure-less entries. select instrument = orbitrap, GNPS_Inst = orbitrap, adduct = M+H
+    reduced_df = reduced_df[(~reduced_df['Smiles'].isna()) & (reduced_df['msMassAnalyzer'] == 'orbitrap') & (reduced_df['GNPS_Inst'] == 'orbitrap') & (reduced_df['Adduct'] == 'M+H') ]
+    
+    # Remove all entires with atoms not in ['C', 'H', 'O', 'N', 'F', 'S', 'Cl', 'P', 'B', 'Br', 'I']
+    reduced_df['Smiles_letters_only'] = reduced_df['Smiles'].apply(lambda x: "".join(re.findall("[a-zA-Z]+", x)))
+    reduced_df['Smiles_cleaned'] = reduced_df['Smiles_letters_only'].apply(lambda x: "".join(re.findall("^[" + "|".join(allowed_atoms) + "]+$", x)))
+    reduced_df = reduced_df[reduced_df['Smiles_cleaned'] != ""]
+    reduced_df.drop(['Smiles_letters_only','Smiles_cleaned'], inplace=True, axis=1)
+
+    # reduced_df = reduced_df[reduced_df.msManufacturer == 'Bruker Daltonics']  
+    reduced_df.to_csv('./summary/Orbitrap_Fragmentation_Prediction.csv', index=False)
+    
+    id_list = list(reduced_df.spectrum_id )
+    del reduced_df
+    
+    parquet_as_df = vaex.open(parquet_path)
+    parquet_as_df = parquet_as_df[parquet_as_df.spectrum_id.isin(id_list)]
+    parquet_as_df.export_parquet('./spectra/Orbitrap_Fragmentation_Prediction.parquet')
+
+def Thermo_Bruker_Translation(summary_path:str, parquet_path:str):
+    raise NotImplementedError
+    thermo = df.loc[(df.msManufacturer=="Thermo")&(~df.Smiles.isna()),['spectrum_id', 'Smiles']]
+    bruker = df.loc[(df.msManufacturer=="Bruker Daltonics")&(~df.Smiles.isna()),['spectrum_id', 'Smiles']]
+    bruker.merge(thermo, on='Smiles', how='inner')
+    
 def main():
-    subsets = ['Bruker_Fragmentation_Prediction','MH_MNA_Translation','GNPS_default']
+    subsets = ['Bruker_Fragmentation_Prediction','MH_MNA_Translation','Orbitrap_Sturcture_Prediction','GNPS_default']
     parser = argparse.ArgumentParser(
                     prog = 'GNPS2 Subset Generator',
                     description = 'This program generates predetermined subsets splits from GNPS2.')
@@ -88,9 +125,12 @@ def main():
         Bruker_Fragmentation_Prediction(csv_path, parquet_path)
     elif args.subset == 'MH_MNA_Translation':
         MH_MNA_Translation(csv_path, parquet_path)
+    elif args.subset == 'Orbitrap_Sturcture_Prediction':
+        Orbitrap_Sturcture_Prediction(csv_path, parquet_path)
     elif args.subset == 'GNPS_default':
         Bruker_Fragmentation_Prediction(csv_path, parquet_path)
         MH_MNA_Translation(csv_path, parquet_path)
+        Orbitrap_Sturcture_Prediction(csv_path, parquet_path)
         
             
 if __name__ == '__main__':
