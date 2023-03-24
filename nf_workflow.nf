@@ -4,7 +4,7 @@ nextflow.enable.dsl=2
 // params.subset = "Bruker_Fragmentation_Prediction"
 // params.subset = "MH_MNA_Translation"
 params.subset = "GNPS_default"
-params.split  = true
+params.split  = false
 
 params.spectra_parallelism = 10
 // Workflow Boiler Plate
@@ -127,7 +127,7 @@ workflow {
   export()
   postprocess(export.out.merged_csv, export.out.merged_parquet)
   generate_subset(postprocess.out.cleaned_csv, postprocess.out.cleaned_parquet)    
-  if ("$params.split") {
+  if (params.split) {
     generate_mgf(generate_subset.out.output_parquet)
     generate_mgf.out.output_mgf  | calculate_similarities 
     calculate_similarities.out.spectral_similarities | split_subsets
