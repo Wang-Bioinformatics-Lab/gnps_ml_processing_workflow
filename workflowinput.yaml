@@ -19,6 +19,8 @@ parameterlist:
           display: GNPS Default Subsets
         - value: Bruker_Fragmentation_Prediction
           display: Bruker Fragmentation Prediction
+        - value: Orbitrap_Fragmentation_Prediction
+          display: M+H Orbitrap Fragmentation Prediction
         - value: MH_MNA_Translation
           display: M+H M+NA Translation + Unsupervised Data
         # More options go here
