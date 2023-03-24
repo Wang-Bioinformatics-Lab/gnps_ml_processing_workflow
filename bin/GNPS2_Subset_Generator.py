@@ -67,7 +67,7 @@ def MH_MNA_Translation(summary_path:str, parquet_path:str):
     parquet_as_df = parquet_as_df[parquet_as_df.spectrum_id.isin(id_list)]
     parquet_as_df.export_parquet('./spectra/MH_MNA_Translation.parquet')
     
-def Orbitrap_Sturcture_Prediction(summary_path:str, parquet_path:str):  
+def Orbitrap_Fragmentation_Prediction(summary_path:str, parquet_path:str):  
     """This function follows the cleaning in 3DMolMS applied to orbitrap instruments.
 
     Args:
@@ -105,7 +105,7 @@ def Thermo_Bruker_Translation(summary_path:str, parquet_path:str):
     bruker.merge(thermo, on='Smiles', how='inner')
     
 def main():
-    subsets = ['Bruker_Fragmentation_Prediction','MH_MNA_Translation','Orbitrap_Sturcture_Prediction','GNPS_default']
+    subsets = ['Bruker_Fragmentation_Prediction','MH_MNA_Translation','Orbitrap_Fragmentation_Prediction','GNPS_default']
     parser = argparse.ArgumentParser(
                     prog = 'GNPS2 Subset Generator',
                     description = 'This program generates predetermined subsets splits from GNPS2.')
@@ -125,12 +125,12 @@ def main():
         Bruker_Fragmentation_Prediction(csv_path, parquet_path)
     elif args.subset == 'MH_MNA_Translation':
         MH_MNA_Translation(csv_path, parquet_path)
-    elif args.subset == 'Orbitrap_Sturcture_Prediction':
-        Orbitrap_Sturcture_Prediction(csv_path, parquet_path)
+    elif args.subset == 'Orbitrap_Fragmentation_Prediction':
+        Orbitrap_Fragmentation_Prediction(csv_path, parquet_path)
     elif args.subset == 'GNPS_default':
         Bruker_Fragmentation_Prediction(csv_path, parquet_path)
         MH_MNA_Translation(csv_path, parquet_path)
-        Orbitrap_Sturcture_Prediction(csv_path, parquet_path)
+        Orbitrap_Fragmentation_Prediction(csv_path, parquet_path)
         
             
 if __name__ == '__main__':
