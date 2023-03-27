@@ -27,6 +27,8 @@ parameterlist:
           display: M+H M+NA Translation + Unsupervised Data
         - value: Structural_Modification
           display: Structural Modification (Both Orbitrap and QToF)
+        - value: Structural_Similarity_Prediction
+          display: M+H QToF Structural Similarity Prediction
         # More options go here
 
 

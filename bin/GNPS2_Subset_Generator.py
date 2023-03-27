@@ -136,6 +136,28 @@ def Thermo_Bruker_Translation(summary_path:str, parquet_path:str):
     parquet_as_df = vaex.open(parquet_path)
     parquet_as_df = parquet_as_df[parquet_as_df.spectrum_id.isin(id_list)]
     parquet_as_df.export_parquet('./spectra/Thermo_Bruker_Translation.parquet')
+  
+def Structural_Similarity_Prediction(summary_path:str, parquet_path:str):
+    # This dataset: spec1 + spec2 -> struct similarity
+    parquet_as_df = vaex.open(parquet_path)
+            
+    df = pd.read_csv(summary_path)
+    df = df.loc[~df.Smiles.isna()]
+    df = df.loc[df.Adduct == 'M+H']
+    qtof = df.loc[(df.msMassAnalyzer == 'qtof') & (df.GNPS_Inst == 'qtof')]    
+    sim = build_tanimoto_similarity_list_precomputed(qtof, similarity_threshold=0.0)
+    
+    # Save to csv
+    qtof.to_csv('./summary/Structural_Similarity_Prediction.csv')
+    # Save to parquet
+    parquet_as_df[parquet_as_df.spectrum_id.isin(qtof.spectrum_id)].export_parquet('./spectra/Structural_Similarity_Prediction.parquet')
+    
+    # Save similarities
+    sim.to_csv('./util/Structural_Similarity_Prediction.csv', index=False)
+
+def Spectral_Similarity_Prediction(summary_path:str, parquet_path:str):
+    # This dataset: struct1 + struct2 -> spectral similarity
+    raise NotImplementedError
     
 def Structural_Modification(summary_path:str, parquet_path:str):
     # This dataset: Struct1 + Spec1 + struct2 -> spec2
@@ -205,7 +227,8 @@ def Structural_Modification(summary_path:str, parquet_path:str):
 
 def main():
     subsets = ['Bruker_Fragmentation_Prediction','MH_MNA_Translation','Orbitrap_Fragmentation_Prediction',\
-                'Thermo_Bruker_Translation','Structural_Modification','GNPS_default']
+                'Thermo_Bruker_Translation','Structural_Modification','Structural_Similarity_Prediction',\
+                'GNPS_default']
     parser = argparse.ArgumentParser(
                     prog = 'GNPS2 Subset Generator',
                     description = 'This program generates predetermined subsets splits from GNPS2.')
@@ -231,12 +254,15 @@ def main():
         Thermo_Bruker_Translation(csv_path, parquet_path)
     elif args.subset == 'Structural_Modification':
         Structural_Modification(csv_path, parquet_path)
+    elif args.subset == 'Structural_Similarity_Prediction':
+        Structural_Similarity_Prediction(csv_path, parquet_path)
     elif args.subset == 'GNPS_default':
         Bruker_Fragmentation_Prediction(csv_path, parquet_path)
         MH_MNA_Translation(csv_path, parquet_path)
         Orbitrap_Fragmentation_Prediction(csv_path, parquet_path)
         Thermo_Bruker_Translation(csv_path, parquet_path)
         Structural_Modification(csv_path, parquet_path)
+        Structural_Similarity_Prediction(csv_path, parquet_path)
         
             
 if __name__ == '__main__':
