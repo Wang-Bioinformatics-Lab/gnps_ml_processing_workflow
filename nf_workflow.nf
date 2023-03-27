@@ -60,9 +60,9 @@ process generate_subset {
   output:
   path "ALL_GNPS_cleaned.csv"
   path "ALL_GNPS_cleaned.parquet"
-  path "summary/*.csv"
-  path "spectra/*.parquet", emit: output_parquet
-  path "util/*.pkl", optional: true
+  path "summary/*"
+  path "spectra/*", emit: output_parquet
+  path "util/*", optional: true
 
   """
   python3 $TOOL_FOLDER/GNPS2_Subset_Generator.py "$params.subset"
