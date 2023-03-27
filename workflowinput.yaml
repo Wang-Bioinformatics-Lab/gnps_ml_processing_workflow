@@ -25,6 +25,8 @@ parameterlist:
           display: Thermo to Bruker Translation
         - value: MH_MNA_Translation
           display: M+H M+NA Translation + Unsupervised Data
+        - value: Structural_Modification
+          display: Structural Modification (Both Orbitrap and QToF)
         # More options go here
 
 
