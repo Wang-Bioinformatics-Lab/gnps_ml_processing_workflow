@@ -21,6 +21,8 @@ parameterlist:
           display: Bruker Fragmentation Prediction
         - value: Orbitrap_Fragmentation_Prediction
           display: M+H Orbitrap Fragmentation Prediction
+        - value: Thermo_Bruker_Translation
+          display: Thermo to Bruker Translation
         - value: MH_MNA_Translation
           display: M+H M+NA Translation + Unsupervised Data
         # More options go here

@@ -99,13 +99,37 @@ def Orbitrap_Fragmentation_Prediction(summary_path:str, parquet_path:str):
     parquet_as_df.export_parquet('./spectra/Orbitrap_Fragmentation_Prediction.parquet')
 
 def Thermo_Bruker_Translation(summary_path:str, parquet_path:str):
-    raise NotImplementedError
-    thermo = df.loc[(df.msManufacturer=="Thermo")&(~df.Smiles.isna()),['spectrum_id', 'Smiles']]
-    bruker = df.loc[(df.msManufacturer=="Bruker Daltonics")&(~df.Smiles.isna()),['spectrum_id', 'Smiles']]
-    bruker.merge(thermo, on='Smiles', how='inner')
+    df = pd.read_csv(summary_path)
+    df = df.loc[~df.Smiles.isna()]
+    df = df.loc[df.Adduct.isin(['M+H','M-H'])]
+    df.Smiles = df.Smiles.astype(str)
+    thermo = df.loc[(df.msManufacturer=="Thermo") & (df.msModel == "Q Exactive"),['spectrum_id', 'Smiles', 'Adduct']]
+    bruker = df.loc[(df.msManufacturer=="Bruker Daltonics") * (df.msModel == "maXis impact"),['spectrum_id', 'Smiles', 'Adduct']]
+    spectrum_ids = bruker.merge(thermo, on=['Smiles','Adduct'], how='inner')
+    
+    # Generate a list of spectrum pairs
+    pairs_list = []
+    for id in spectrum_ids.spectrum_id_x.unique():
+        pairs_list.append((id, list(spectrum_ids.loc[spectrum_ids.spectrum_id_x == id, "spectrum_id_y"].values)))
+    with open("./util/Thermo_Bruker_Translation_pairs.pkl", "wb") as fp:
+        pickle.dump(pairs_list, fp)
+    
+    spectrum_ids = pd.concat((spectrum_ids.spectrum_id_x, spectrum_ids.spectrum_id_y)).values
+    
+    # Select dataframe entried where spectrum_id is in spectrum_ids
+    df = df[df.spectrum_id.isin(spectrum_ids)]
+    
+    df.to_csv('./summary/Thermo_Bruker_Translation.csv', index=False)
+    
+    id_list = list(df.spectrum_id )
+    del df, bruker, thermo
+    
+    parquet_as_df = vaex.open(parquet_path)
+    parquet_as_df = parquet_as_df[parquet_as_df.spectrum_id.isin(id_list)]
+    parquet_as_df.export_parquet('./spectra/Thermo_Bruker_Translation.parquet')
     
 def main():
-    subsets = ['Bruker_Fragmentation_Prediction','MH_MNA_Translation','Orbitrap_Fragmentation_Prediction','GNPS_default']
+    subsets = ['Bruker_Fragmentation_Prediction','MH_MNA_Translation','Orbitrap_Fragmentation_Prediction','Thermo_Bruker_Translation','GNPS_default']
     parser = argparse.ArgumentParser(
                     prog = 'GNPS2 Subset Generator',
                     description = 'This program generates predetermined subsets splits from GNPS2.')
@@ -127,10 +151,13 @@ def main():
         MH_MNA_Translation(csv_path, parquet_path)
     elif args.subset == 'Orbitrap_Fragmentation_Prediction':
         Orbitrap_Fragmentation_Prediction(csv_path, parquet_path)
+    elif args.subset == 'Thermo_Bruker_Translation':
+        Thermo_Bruker_Translation(csv_path, parquet_path)
     elif args.subset == 'GNPS_default':
         Bruker_Fragmentation_Prediction(csv_path, parquet_path)
         MH_MNA_Translation(csv_path, parquet_path)
         Orbitrap_Fragmentation_Prediction(csv_path, parquet_path)
+        Thermo_Bruker_Translation(csv_path, parquet_path)
         
             
 if __name__ == '__main__':
