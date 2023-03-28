@@ -34,14 +34,17 @@ def generate_mgf(parquet_file):
             output_mgf.write("{} {}\n".format(peak[0], peak[1]))
 
         output_mgf.write("END IONS\n")
+        
+    output_mgf.close()
     
 def main():
     parser = argparse.ArgumentParser(description='Generate MGF Files.')
     parser.add_argument('-p', type=int, help='number or processors to use', default=10)
+    parser.add_argument('-path', type=str, help='Path to locate parquet files', default='./*.parquet')
     args = parser.parse_args()
     
-    files = glob('./*.parquet')
-    parquet_outputs = [x for x in files if x != './ALL_GNPS_cleaned.parquet']
+    files = glob(args.path)
+    parquet_outputs = [x for x in files if x != './ALL_GNPS_cleaned.parquet']   # We don't want to generate an MGF for the entire dataset
     
     Parallel(n_jobs=args.p)(delayed(generate_mgf)(parquet_file) for parquet_file in tqdm(parquet_outputs))
         

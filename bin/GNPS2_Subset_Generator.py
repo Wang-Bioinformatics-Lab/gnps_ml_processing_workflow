@@ -157,7 +157,19 @@ def Structural_Similarity_Prediction(summary_path:str, parquet_path:str):
 
 def Spectral_Similarity_Prediction(summary_path:str, parquet_path:str):
     # This dataset: struct1 + struct2 -> spectral similarity
-    raise NotImplementedError
+    parquet_as_df = vaex.open(parquet_path)
+            
+    df = pd.read_csv(summary_path)
+    df = df.loc[~df.Smiles.isna()]
+    df = df.loc[df.Adduct == 'M+H']
+    qtof = df.loc[(df.msMassAnalyzer == 'qtof') & (df.GNPS_Inst == 'qtof')]    
+    
+    # Save to csv
+    qtof.to_csv('./summary/Spectral_Similarity_Prediction.csv')
+    # Save to parquet
+    parquet_as_df[parquet_as_df.spectrum_id.isin(qtof.spectrum_id)].export_parquet('./spectra/Spectral_Similarity_Prediction.parquet')
+    
+    # We will use the networking barebones workflow to generate the similarities
     
 def Structural_Modification(summary_path:str, parquet_path:str):
     # This dataset: Struct1 + Spec1 + struct2 -> spec2
@@ -228,6 +240,7 @@ def Structural_Modification(summary_path:str, parquet_path:str):
 def main():
     subsets = ['Bruker_Fragmentation_Prediction','MH_MNA_Translation','Orbitrap_Fragmentation_Prediction',\
                 'Thermo_Bruker_Translation','Structural_Modification','Structural_Similarity_Prediction',\
+                'Spectral_Similarity_Prediction', \
                 'GNPS_default']
     parser = argparse.ArgumentParser(
                     prog = 'GNPS2 Subset Generator',
@@ -256,6 +269,8 @@ def main():
         Structural_Modification(csv_path, parquet_path)
     elif args.subset == 'Structural_Similarity_Prediction':
         Structural_Similarity_Prediction(csv_path, parquet_path)
+    elif args.subset == 'Spectral_Similarity_Prediction':
+        Spectral_Similarity_Prediction(csv_path, parquet_path)
     elif args.subset == 'GNPS_default':
         Bruker_Fragmentation_Prediction(csv_path, parquet_path)
         MH_MNA_Translation(csv_path, parquet_path)
@@ -263,6 +278,7 @@ def main():
         Thermo_Bruker_Translation(csv_path, parquet_path)
         Structural_Modification(csv_path, parquet_path)
         Structural_Similarity_Prediction(csv_path, parquet_path)
+        Spectral_Similarity_Prediction(csv_path, parquet_path)
         
             
 if __name__ == '__main__':
