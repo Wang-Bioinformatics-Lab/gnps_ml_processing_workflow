@@ -300,7 +300,7 @@ def main():
         print("Found {} entries with structures out of {} structures: {:4.2f}%".format(len(all_spectra_list), org_len, len(all_spectra_list)/org_len*100))
     
     p = args.p
-    num_sections = 500
+    num_sections = 1000
     print("Using {} processors.".format(p))
     indices = np.array_split(np.arange(1,len(all_spectra_list)+1), num_sections)
     scan_start = [x[0] for x in indices]
@@ -312,7 +312,7 @@ def main():
     
     print("Files not found:", np.sum(file_not_found_count))
     print("Unicode Decode Errors:", np.sum(file_not_found_count))
-    print("MGF files skipped:", np.sum(mgf_file_count))
+    print("MGF files skipped:", np.sum(UnicodeDecodeError_count))
     
     merged_csv_path = "ALL_GNPS_merged.csv"
     merged_parquet_path = "ALL_GNPS_merged.parquet"
