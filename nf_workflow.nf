@@ -5,8 +5,9 @@ nextflow.enable.dsl=2
 // params.subset = "MH_MNA_Translation"
 params.subset = "GNPS_default"
 params.split  = false
+use_default_path = true
 
-params.spectra_parallelism = 10
+params.spectra_parallelism = 2
 // Workflow Boiler Plate
 params.OMETALINKING_YAML = "flow_filelinking.yaml"
 params.OMETAPARAM_YAML = "job_parameters.yaml"
@@ -14,7 +15,7 @@ params.OMETAPARAM_YAML = "job_parameters.yaml"
 TOOL_FOLDER = "$baseDir/bin"
 GNPS_EXPORTS_FOLDER = "$baseDir/GNPS_ml_exports"
 
-params.parallelism = 24
+params.parallelism = 12
 
 process export {
     conda "$TOOL_FOLDER/conda_env.yml"
@@ -51,8 +52,6 @@ process generate_subset {
 
   conda "$TOOL_FOLDER/conda_env.yml"
 
-  cache false
-
   input:
   path cleaned_csv
   path cleaned_parquet
@@ -73,13 +72,22 @@ process generate_mgf {
   conda "$TOOL_FOLDER/conda_env.yml"
 
   input:
-  path output_parquet
+  path dummy
 
   output:
-  path "*.mgf", emit: output_mgf
+  path "*.mgf", emit: output_mgf, optional: true
 
+  // The default path will process all files while the other path will process only the spectral_similarity_prediction subset
+  if (use_default_path) {
+    """
+    python3 $TOOL_FOLDER/GNPS2_MGF_Generator.py -p "$params.parallelism"
+    """
+  } else {
+    """
+    python3 $TOOL_FOLDER/GNPS2_MGF_Generator.py -p "$params.parallelism" -path "./Spectral_Similarity_Prediction.parquet"
+    """
+  }
   """
-  python3 $TOOL_FOLDER/GNPS2_MGF_Generator.py -p "$params.parallelism"
   """
 }
 
@@ -123,10 +131,32 @@ process split_subsets {
   """
 }
 
+process publish_similarities_for_prediction {
+  publishDir "./nf_output/", mode: 'copy'
+
+  input:
+  path inputFile
+
+  output:
+  path "./util/Spectral_Similarity_Prediction_Similarities.tsv"
+
+  """
+  cp ${inputFile} ./util/Spectral_Similarity_Prediction_Similarities.tsv
+  """
+}
+
 workflow {
   export()
   postprocess(export.out.merged_csv, export.out.merged_parquet)
   generate_subset(postprocess.out.cleaned_csv, postprocess.out.cleaned_parquet)    
+  // For the spectral similarity prediction task, we need to calculate all pairs similarity in the training set
+  if (params.subset == "GNPS_default" || params.subset == "Spectral_Similarity_Prediction") {
+    use_default_path = false
+    generate_mgf(generate_subset.out.output_parquet)
+    generate_mgf.out.output_mgf  | calculate_similarities 
+    publish_similarities_for_prediction(calculate_similarities.out.spectral_similarities)
+  }
+
   if (params.split) {
     generate_mgf(generate_subset.out.output_parquet)
     generate_mgf.out.output_mgf  | calculate_similarities 
