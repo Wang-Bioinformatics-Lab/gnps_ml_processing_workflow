@@ -1,9 +1,9 @@
-# Nextflow Template
+# GNPS ML Export Workflow
 
 To run the workflow to test simply do
 
 ```
-make run
+nohup nextflow run nf_workflow.nf -bg &
 ```
 
 To learn NextFlow checkout this documentation:
