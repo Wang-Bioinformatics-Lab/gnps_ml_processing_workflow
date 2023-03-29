@@ -6,6 +6,11 @@ To run the workflow to test simply do
 nohup nextflow run nf_workflow.nf -bg &
 ```
 
+You can specify a specific subset using one of the following:
+['Bruker_Fragmentation_Prediction', 'MH_MNA_Translation', 'Orbitrap_Fragmentation_Prediction','Thermo_Bruker_Translation', 'Structural_Modification', 'Structural_Similarity_Prediction', 'Spectral_Similarity_Prediction']
+
+E.g: ```nohup nextflow run nf_workflow.nf --subset=MH_MNA_Translation -bg &```
+
 To learn NextFlow checkout this documentation:
 
 https://www.nextflow.io/docs/latest/index.html
