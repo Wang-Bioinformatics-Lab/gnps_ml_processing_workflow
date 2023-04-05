@@ -7,7 +7,7 @@ params.subset = "GNPS_default"
 params.split  = false
 use_default_path = true
 
-params.spectra_parallelism = 2
+params.spectra_parallelism = 100
 // Workflow Boiler Plate
 params.OMETALINKING_YAML = "flow_filelinking.yaml"
 params.OMETAPARAM_YAML = "job_parameters.yaml"
@@ -17,16 +17,44 @@ GNPS_EXPORTS_FOLDER = "$baseDir/GNPS_ml_exports"
 
 params.parallelism = 12
 
+process prep_params {
+  conda "$TOOL_FOLDER/conda_env.yml"
+
+  output:
+  path 'params/params_*.npy', emit: export_params
+
+  """
+  python3 $TOOL_FOLDER/prep_params.py -p "$params.spectra_parallelism"  
+  """
+}
+
 process export {
     conda "$TOOL_FOLDER/conda_env.yml"
 
+    input: 
+    each input_file
+
     output:
-    path './ALL_GNPS_merged.parquet', emit: merged_parquet
-    path './ALL_GNPS_merged.csv', emit: merged_csv
+    path 'temp/*', emit: temp_files
 
     """
-    python3 $TOOL_FOLDER/GNPS2_Processor.py -p "$params.spectra_parallelism"  
+    python3 $TOOL_FOLDER/GNPS2_Processor.py -f $input_file
     """
+}
+
+process merge_export {
+
+  input:
+  path temp_files
+
+  output:
+  path './ALL_GNPS_merged.mgf', emit: merged_csv
+  path './ALL_GNPS_merged.csv', emit: merged_mgf
+
+  """
+  python3 $TOOL_FOLDER/merge_files.py 
+  """
+
 }
 
 process postprocess {
@@ -146,8 +174,10 @@ process publish_similarities_for_prediction {
 }
 
 workflow {
-  export()
-  postprocess(export.out.merged_csv, export.out.merged_parquet)
+  prep_params()
+  export(prep_params.out.export_params)
+  merge_export(export.out.temp_files.collect())
+  postprocess(merge_export.out.merged_csv, merge_export.out.merged_mgf)
   generate_subset(postprocess.out.cleaned_csv, postprocess.out.cleaned_parquet)    
   // For the spectral similarity prediction task, we need to calculate all pairs similarity in the training set
   if (params.subset == "GNPS_default" || params.subset == "Spectral_Similarity_Prediction") {

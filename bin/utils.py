@@ -190,7 +190,7 @@ def build_tanimoto_similarity_list_precomputed(mgf_summary:pd.DataFrame,output_d
     for i in range(N):
         sims = BulkTanimotoSimilarity(fps[i],fps[i+1:])
         for j in range(0,len(sims)):
-            if sims[j] > similarity_threshold:
+            if sims[j] >= similarity_threshold:
                 id1.append(idx_mapping[i])
                 id2.append(idx_mapping[i+1+j])  #i + 1 +j because we skip the diagonal
                 sim.append(sims[j])

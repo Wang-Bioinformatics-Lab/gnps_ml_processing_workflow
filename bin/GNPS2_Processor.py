@@ -18,11 +18,8 @@ from joblib import Parallel, delayed
 
 '''
 Standard command line usage: nohup python3 GNPS_MGF_maker_lxml.py ALL_GNPS -s -p 10
-- 
-TODO: 
-- Check to see if data is already in JSON file, prefer that data over mzML/mzXML data
-- 
 '''
+
 # Get ids for parsing mzML files
 graph = obonet.read_obo('https://raw.githubusercontent.com/HUPO-PSI/psi-ms-CV/master/psi-ms.obo')
 id_to_name = {id_: data.get('name') for id_, data in graph.nodes(data=True)}
@@ -263,74 +260,19 @@ def helper(process_num, scan_start, all_spectra_list):
     return file_not_found_count, UnicodeDecodeError_count, mgf_file_count
 
 def main():
-    # now = datetime.datetime.now()
-    # year = now.year
-    # quarter = int(now.month/4) + 1
-
-    # final_csv_path = "./GNPS_ml_exports/ALL_GNPS_merged_{}_{}.csv".format(quarter, year)
-    # final_mgf_path = "./GNPS_ml_exports/ALL_GNPS_merged_{}_{}.mgf".format(quarter, year)
-
-    
-    # We only want to generate these files quarter, so we'll check if it has already been done
-    # if not os.path.isfile(final_csv_path):
-    #     if not os.path.isfile(final_mgf_path):
-    parser = argparse.ArgumentParser(description='Process some integers.')
-    # parser.add_argument('input_libraryname', default='ALL_GNPS')
-    parser.add_argument('-s', '--structures_required', help="remove entries that don't include structures", action="store_true")
-    parser.add_argument('-p', type=int, help='number or processors to use', default=10)
-
+    parser = argparse.ArgumentParser(description='Process some GNPS2 Entries.')
+    parser.add_argument('-f', '--file', help="path to params file", required=True)
     args = parser.parse_args()
 
-    # all_library_names = args.input_libraryname.split(";")
-    all_library_names = "ALL_GNPS".split(";")
-    # all_library_names = "BERKELEY-LAB".split(";")
-    
-    all_spectra_list = []
-
-    for library_name in all_library_names:  # We used to want to use the cached gnpslibrary, but now that it's running quarterly only this doesn't need to be cached
-        gnps_url = "https://gnps-external.ucsd.edu/gnpslibrary/{}.json".format(library_name)
-        temp_spectra_list = requests.get(gnps_url).json()
-        all_spectra_list += temp_spectra_list
-
     if not os.path.isdir('./temp'): os.makedirs('./temp')
-
-    if args.structures_required:
-        org_len = len(all_spectra_list)
-        all_spectra_list = [spectrum for spectrum in all_spectra_list if spectrum['Smiles'] != 'n/a' and spectrum['Smiles'] != 'n\/a']
-        print("Found {} entries with structures out of {} structures: {:4.2f}%".format(len(all_spectra_list), org_len, len(all_spectra_list)/org_len*100))
+    spectra = np.load(args.file, allow_pickle=True)
+    # A regex that captures the values from 'params/params_{}_{}.npy'
+    regex = r"params\/params_([^_]+)_([^\.]+)\.npy"
+    match = re.search(regex, args.file)
+    p_idx = int(match.group(1))
+    start_scan = int(match.group(2))
     
-    p = args.p
-    num_sections = 1000
-    print("Using {} processors.".format(p))
-    indices = np.array_split(np.arange(1,len(all_spectra_list)+1), num_sections)
-    scan_start = [x[0] for x in indices]
-    splits = np.array_split(all_spectra_list, num_sections)
-    del all_spectra_list
+    helper(p_idx, start_scan, spectra)
     
-    r = Parallel(n_jobs=p)(delayed(helper)(p_idx, scan_start[p_idx], splits[p_idx]) for p_idx in tqdm(range(num_sections)))
-    file_not_found_count, UnicodeDecodeError_count, mgf_file_count = zip(*r)
-    
-    print("Files not found:", np.sum(file_not_found_count))
-    print("Unicode Decode Errors:", np.sum(file_not_found_count))
-    print("MGF files skipped:", np.sum(UnicodeDecodeError_count))
-    
-    merged_csv_path = "ALL_GNPS_merged.csv"
-    merged_parquet_path = "ALL_GNPS_merged.parquet"
-    
-    if not os.path.isfile(merged_csv_path):
-        if not os.path.isfile(merged_parquet_path):
-            file_pattern = re.compile(r'.*?(\d+).*?')
-            def get_order(file,):
-                match = file_pattern.match(Path(file).name)
-                return int(match.groups()[0])
-
-            sorted_csv_files = sorted(glob('./temp/temp_*.csv'), key=get_order)
-            sorted_mgf_files = sorted(glob('./temp/temp_*.mgf'), key=get_order)
-
-            os.system("cat " + " ".join(sorted_csv_files) +"> " + merged_csv_path)
-            os.system("cat " + " ".join(sorted_mgf_files) +"> " + merged_parquet_path)
-            os.system("rm " + " ".join(sorted_csv_files))
-            os.system("rm " + " ".join(sorted_mgf_files))
-
 if __name__ == '__main__':
     main()
