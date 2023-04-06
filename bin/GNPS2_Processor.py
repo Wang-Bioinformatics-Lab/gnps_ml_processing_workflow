@@ -63,6 +63,9 @@ def helper(process_num, scan_start, all_spectra_list):
         extension = str(source_file.split('.')[-1].strip())
         source_file = source_file.split('/')[-1]
         source_scan = spectrum.get("scan")
+        
+        rt_pattern = re.compile("([0-9]*[.])?[0-9]+")
+        
         if source_scan is None or source_scan == -1:
             raise IOError("Expected source scan to be specified but it was not")
         try:
@@ -90,7 +93,11 @@ def helper(process_num, scan_start, all_spectra_list):
                     ce = bs_scan.get('collisionEnergy')
                     rt = bs_scan.get('retentionTime')
                     if ce is not None: summary_dict["collision_energy"] = ce
-                    if rt is not None: summary_dict["retention_time"] = rt
+                    if rt is not None: 
+                        # If we found a retention time, make sure that it is in seconds. Then, extract the float
+                        if rt[-1] == 'S':
+                            rt = float(re.search(rt_pattern,rt).group(0))
+                            summary_dict["retention_time"] = rt
                     msInstrumentID = None
                     msInstrumentID = bs_scan.get('msInstrumentID')   
                     precursorMZ =  bs_scan.find('precursorMz')

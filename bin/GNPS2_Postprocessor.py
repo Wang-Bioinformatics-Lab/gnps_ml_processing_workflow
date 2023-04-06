@@ -21,12 +21,7 @@ def basic_cleaning(summary):
     # ionization
     summary.msIonisation = summary.msIonisation.astype(str)
     summary.loc[['esi' in x.lower() or 'electrospray' in x.lower() for x in summary.msIonisation], 'msIonisation'] = "ESI"
-
-    # retention time
-    assert pd.Series([x[-1] == 'S' for x in summary.retention_time[~ summary.retention_time.isna()]]).all() # Sanity check because right now everything is in seconds
-    pattern = re.compile("([0-9]*[.])?[0-9]+")
-    summary.loc[~ summary.retention_time.isna(),"retention_time"] = summary.loc[~ summary.retention_time.isna(),"retention_time"].apply(lambda x: re.search(pattern,x).group(0))
-
+    
     # Adduct
     summary.Adduct = summary.Adduct.apply(lambda x: str(x).strip())
     # Strip starting and ending braces if no charge is specified
