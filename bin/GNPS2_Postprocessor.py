@@ -2,14 +2,8 @@ import ast
 import os
 import numpy as np
 import pandas as pd
-from pyteomics import mgf
 from pyteomics.mgf import IndexedMGF
-from glob import glob
 import re
-from pathlib import Path 
-import datetime
-from rdkit.Chem import AllChem
-from rdkit import Chem
 from tqdm import tqdm
 
 def sanity_checks(summary):
@@ -130,25 +124,6 @@ def propogate_msModel_field(summary):
 
     return summary
 
-def generate_fingerprints(summary):
-    summary = summary.assign(mol=None)
-    summary.loc[summary.Smiles != 'nan', 'mol'] = summary.loc[summary.Smiles != 'nan', 'Smiles'].apply(lambda x: Chem.MolFromSmiles(x, sanitize=True))
-    smiles_parsing_success = [x is not None for x in summary.mol]
-    summary.loc[smiles_parsing_success,'Morgan_2048_2'] = summary.loc[smiles_parsing_success,'mol'].apply( \
-        lambda x: list(AllChem.GetMorganFingerprintAsBitVect(x,2,useChirality=False,nBits=2048)))
-    summary.loc[smiles_parsing_success,'Morgan_4096_2'] = summary.loc[smiles_parsing_success,'mol'].apply( \
-        lambda x: list(AllChem.GetMorganFingerprintAsBitVect(x,2,useChirality=False,nBits=4096)))
-    summary.loc[smiles_parsing_success,'Morgan_2048_3'] = summary.loc[smiles_parsing_success,'mol'].apply( \
-        lambda x: list(AllChem.GetMorganFingerprintAsBitVect(x,3,useChirality=False,nBits=2048)))
-    summary.loc[smiles_parsing_success,'Morgan_4096_3'] = summary.loc[smiles_parsing_success,'mol'].apply( \
-        lambda x: list(AllChem.GetMorganFingerprintAsBitVect(x,3,useChirality=False,nBits=4096)))
-    # summary.loc[smiles_parsing_success,'RdKit_2048_5'] = summary.loc[smiles_parsing_success,'mol'].apply( \
-    #     lambda x: Chem.RDKFingerprint(x,minPath=5,fpSize=2048))
-    # summary.loc[smiles_parsing_success,'RdKit_4096_5'] = summary.loc[smiles_parsing_success,'mol'].apply( \
-    #     lambda x: Chem.RDKFingerprint(x,minPath=5,fpSize=4096))
-    summary.drop('mol', axis=1,inplace=True)
-    return summary
-
 def generate_parquet_file(input_mgf, spectrum_ids):
     """
     Details on output format:
@@ -190,9 +165,6 @@ def postprocess_files(csv_path, mgf_path, output_csv_path, output_parquet_path):
     summary = propogate_msModel_field(summary)
     sanity_checks(summary)
     
-    # Add Fingerprints
-    summary = generate_fingerprints(summary)
-
     parquet_as_df = generate_parquet_file(mgf_path, summary.spectrum_id.astype('str'))
     parquet_as_df.to_parquet(output_parquet_path)
     summary.to_csv(output_csv_path, index=False)
