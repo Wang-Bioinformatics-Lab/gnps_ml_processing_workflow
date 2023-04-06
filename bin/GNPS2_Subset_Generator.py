@@ -4,7 +4,7 @@ import argparse
 import os
 import vaex
 import pickle
-from utils import build_tanimoto_similarity_list_precomputed
+from utils import build_tanimoto_similarity_list_precomputed, generate_fingerprints
 
     
 def Bruker_Fragmentation_Prediction(summary_path:str, parquet_path:str):
@@ -56,17 +56,22 @@ def MH_MNA_Translation(summary_path:str, parquet_path:str):
             output.append((row["spectrum_id"],list(similar_ids)))
         return output
     
-    pairs_list = Generate_Pairs_List(reduced_df)
-    with open("./util/MH_MNA_Translation_pairs.pkl", "wb") as fp:
-        pickle.dump(pairs_list, fp)
-        
+def Fingerprint_Prediction(summary_path:str, parquet_path:str):
+    reduced_df = pd.read_csv(summary_path)
+
+    reduced_df = reduced_df.loc[reduced_df.msMassAnalyzer == 'orbitrap']
+    reduced_df = reduced_df.loc[reduced_df.GNPS_Inst == 'orbitrap']
+    reduced_df = reduced_df.loc[~reduced_df.Smiles.isna()]
+    reduced_df = reduced_df.loc[(reduced_df.Adduct == 'M+H')]
+    reduced_df = generate_fingerprints(reduced_df)
+    reduced_df.to_csv('./summary/Fingerprint_Prediction.csv', index=False)
+    
     id_list = list(reduced_df.spectrum_id )
     del reduced_df
-    del pairs_list
     
     parquet_as_df = vaex.open(parquet_path)
     parquet_as_df = parquet_as_df[parquet_as_df.spectrum_id.isin(id_list)]
-    parquet_as_df.export_parquet('./spectra/MH_MNA_Translation.parquet')
+    parquet_as_df.export_parquet('./spectra/Fingerprint_Prediction.parquet')
     
 def Orbitrap_Fragmentation_Prediction(summary_path:str, parquet_path:str):  
     """This function follows the cleaning in 3DMolMS applied to orbitrap instruments.
@@ -261,6 +266,8 @@ def main():
         Bruker_Fragmentation_Prediction(csv_path, parquet_path)
     elif args.subset == 'MH_MNA_Translation':
         MH_MNA_Translation(csv_path, parquet_path)
+    elif args.subset == 'Fingerprint_Prediction':
+        Fingerprint_Prediction(csv_path, parquet_path)
     elif args.subset == 'Orbitrap_Fragmentation_Prediction':
         Orbitrap_Fragmentation_Prediction(csv_path, parquet_path)
     elif args.subset == 'Thermo_Bruker_Translation':
@@ -274,6 +281,7 @@ def main():
     elif args.subset == 'GNPS_default':
         Bruker_Fragmentation_Prediction(csv_path, parquet_path)
         MH_MNA_Translation(csv_path, parquet_path)
+        Fingerprint_Prediction(csv_path, parquet_path)
         Orbitrap_Fragmentation_Prediction(csv_path, parquet_path)
         Thermo_Bruker_Translation(csv_path, parquet_path)
         Structural_Modification(csv_path, parquet_path)
