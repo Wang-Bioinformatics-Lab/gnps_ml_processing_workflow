@@ -1,10 +1,4 @@
-import datetime
-from pathlib import Path
-from glob import glob
-import sys
 import argparse
-import requests
-from tqdm import tqdm
 from bs4 import BeautifulSoup as bs
 from lxml import etree
 import os
@@ -14,7 +8,6 @@ import networkx
 import re
 import json
 import csv
-from joblib import Parallel, delayed 
 
 '''
 Standard command line usage: nohup python3 GNPS_MGF_maker_lxml.py ALL_GNPS -s -p 10
