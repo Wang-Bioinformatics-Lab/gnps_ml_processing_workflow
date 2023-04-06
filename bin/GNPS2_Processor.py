@@ -184,8 +184,11 @@ def helper(process_num, scan_start, all_spectra_list):
                 accessions = {x.attrib['accession']: x.attrib.get('value') for x in xml_spectrum.findall('.//{*}cvParam')}
                 ce = accessions.get(collision_energy_id)
                 if ce is not None: summary_dict["collision_energy"] = ce
-                rt = accessions.get(retention_id)
-                if rt is not None: summary_dict['retention_time'] = rt
+                # rt = accessions.get(retention_id)
+                # if rt is not None: summary_dict['retention_time'] = rt
+                # retention time is stored as a cvParam
+                rt = s.find(".//{*}cvParam[@accession='MS:1000016']")
+                if rt is not None: summary_dict['retention_time'] = float(rt.attrib.get('value')) * 60 # Unlike mzXML, mzML store retention time in minutes, convert to seconds
                 
                 for id in dissociation_ids: # Dissociation is specified with the precursor, not the instrument config
                     if accessions.get(id) is not None:
