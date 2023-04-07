@@ -150,6 +150,7 @@ def Structural_Similarity_Prediction(summary_path:str, parquet_path:str):
     df = df.loc[~df.Smiles.isna()]
     df = df.loc[df.Adduct == 'M+H']
     qtof = df.loc[(df.msMassAnalyzer == 'qtof') & (df.GNPS_Inst == 'qtof')]    
+    qtof = generate_fingerprints(qtof)
     sim = build_tanimoto_similarity_list_precomputed(qtof, similarity_threshold=0.0)
     
     # Save to csv
@@ -197,6 +198,9 @@ def Structural_Modification(summary_path:str, parquet_path:str):
     # Remove entries with duplicate SMILES
     positive = positive.drop_duplicates(subset=['Smiles'])
     negative = negative.drop_duplicates(subset=['Smiles'])
+    # Generate Fingerprints
+    positive = generate_fingerprints(positive)
+    negative = generate_fingerprints(negative)
     # Calculate structural similarities
     positive_sim = build_tanimoto_similarity_list_precomputed(positive, similarity_threshold = 0.70)
     negative_sim = build_tanimoto_similarity_list_precomputed(negative, similarity_threshold = 0.70)
@@ -222,6 +226,9 @@ def Structural_Modification(summary_path:str, parquet_path:str):
     # Remove entries with duplicate SMILES
     positive = positive.drop_duplicates(subset=['Smiles'])
     negative = negative.drop_duplicates(subset=['Smiles'])
+    # Add fingerprints
+    positive = generate_fingerprints(positive)
+    negative = generate_fingerprints(negative)
     # Calculate structural similarities
     positive_sim = build_tanimoto_similarity_list_precomputed(positive, similarity_threshold = 0.70)
     negative_sim = build_tanimoto_similarity_list_precomputed(negative, similarity_threshold = 0.70)

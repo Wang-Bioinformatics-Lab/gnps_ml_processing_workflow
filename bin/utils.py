@@ -1,7 +1,8 @@
 from rdkit.DataStructs.cDataStructs import BulkTanimotoSimilarity
-from rdkit.Chem.AllChem import GetMorganFingerprintAsBitVect
-from rdkit.Chem import AllChem
+from rdkit import Chem
 from rdkit.Chem import MolFromSmiles
+from rdkit.Chem import AllChem
+from rdkit.Chem.AllChem import GetMorganFingerprintAsBitVect
 import pandas as pd
 from tqdm import tqdm
 import pandas as pd
@@ -9,7 +10,6 @@ import networkx as nx
 import numpy as np
 from networkx.algorithms import community 
 from typing import Tuple
-import json
 from rdkit.Chem import DataStructs
 
 def split_cliques(num_nodes:int,ids:list,training_fraction: float=0.8, early_stopping=None):

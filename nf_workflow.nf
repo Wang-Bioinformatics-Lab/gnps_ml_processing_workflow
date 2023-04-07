@@ -127,7 +127,6 @@ process calculate_similarities {
   path "similarity_calculations/*", emit: spectral_similarities
 
   """
-  alias python=python3
   nextflow run $baseDir/GNPS_PureNetworking_Workflow/workflow/workflow.nf \
                 --inputspectra $mgf \
                 --parallelism $params.parallelism \
