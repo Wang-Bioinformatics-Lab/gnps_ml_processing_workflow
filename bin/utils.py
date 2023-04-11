@@ -178,7 +178,7 @@ def build_tanimoto_similarity_list_precomputed(mgf_summary:pd.DataFrame,output_d
     structure_mask = ~ mgf_summary[fingerprint_column_name].isna()
     print("Found {}  structures in {} files".format(sum(structure_mask), len(structure_mask)))
     
-    fps = [DataStructs.CreateFromBitString(x) for x in mgf_summary[fingerprint_column_name][structure_mask]]
+    fps = [DataStructs.CreateFromBitString(''.join(str(y) for y in x)) for x in mgf_summary[fingerprint_column_name][structure_mask]]
     # Indices are now non contiguous because the entries without structures are removed
     # This will map back to the original scan number  
     idx_mapping = {i: spectrum_id for i, spectrum_id in enumerate(mgf_summary.spectrum_id[structure_mask])}
