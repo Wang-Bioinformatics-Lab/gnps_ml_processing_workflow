@@ -56,6 +56,18 @@ def MH_MNA_Translation(summary_path:str, parquet_path:str):
             output.append((row["spectrum_id"],list(similar_ids)))
         return output
     
+    pairs_list = Generate_Pairs_List(reduced_df)
+    with open("./util/MH_MNA_Translation_pairs.pkl", "wb") as fp:
+        pickle.dump(pairs_list, fp)
+
+    id_list = list(reduced_df.spectrum_id )
+    del reduced_df
+    del pairs_list
+
+    parquet_as_df = vaex.open(parquet_path)
+    parquet_as_df = parquet_as_df[parquet_as_df.spectrum_id.isin(id_list)]
+    parquet_as_df.export_parquet('./spectra/MH_MNA_Translation.parquet')
+    
 def Fingerprint_Prediction(summary_path:str, parquet_path:str):
     reduced_df = pd.read_csv(summary_path)
 
@@ -175,7 +187,7 @@ def Spectral_Similarity_Prediction(summary_path:str, parquet_path:str):
     # Save to parquet
     parquet_as_df[parquet_as_df.spectrum_id.isin(qtof.spectrum_id)].export_parquet('./spectra/Spectral_Similarity_Prediction.parquet')
     
-    # We will use the networking barebones workflow to generate the similarities
+    # We will use the networking barebones workflow to generate the similarities (see workflow)
     
 def Structural_Modification(summary_path:str, parquet_path:str):
     # This dataset: Struct1 + Spec1 + struct2 -> spec2
