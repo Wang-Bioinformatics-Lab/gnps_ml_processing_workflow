@@ -1,6 +1,6 @@
 import sys
 import pandas as pd
-from utils import build_tanimoto_similarity_list_precomputed, get_splits_index_only
+from utils import build_tanimoto_similarity_list_precomputed, get_splits_index_only, generate_fingerprints
 import vaex
 
 # argv should look like ['/home/user/SourceCode/GNPS_ML_Processing_Workflow/bin/GNPS2_Subset_Split.py', 'similarity_calculations/spectra_MH_MNA_Translation/merged_pairs.tsv', '/home/user/SourceCode/GNPS_ML_Processing_Workflow/nf_output/spectra_spectra_MH_MNA_Translation.parquet', '/home/user/SourceCode/GNPS_ML_Processing_Workflow/nf_output/summary_spectra_MH_MNA_Translation.csv']
@@ -9,6 +9,7 @@ def main():
     _, spectral_similarity, spectra, summary = sys.argv
     
     summary_df = pd.read_csv(summary)
+    summary_df = generate_fingerprints(summary_df)
     
     tanimoto_similarity = build_tanimoto_similarity_list_precomputed(summary_df, similarity_threshold = 0.5, output_dir=None)
     spectral_similarity = pd.read_table(spectral_similarity).drop(['DeltaMZ','MinRatio','AlignScore3','MatchedPeaks'], axis=1)

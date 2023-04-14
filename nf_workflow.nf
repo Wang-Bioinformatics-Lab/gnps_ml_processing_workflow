@@ -88,7 +88,7 @@ process generate_subset {
   path "ALL_GNPS_cleaned.csv"
   path "ALL_GNPS_cleaned.parquet"
   path "summary/*"
-  path "spectra/*", emit: output_parquet
+  path "spectra/*.parquet", emit: output_parquet
   path "util/*", optional: true
 
   """
@@ -100,28 +100,34 @@ process generate_mgf {
   conda "$TOOL_FOLDER/conda_env.yml"
 
   input:
-  path dummy
+  each parquet_file
 
   output:
-  path "*.mgf", emit: output_mgf, optional: true
+  path "*.mgf", emit: output_mgf//, optional: true
 
   // The default path will process all files while the other path will process only the spectral_similarity_prediction subset
-  if (use_default_path) {
-    """
-    python3 $TOOL_FOLDER/GNPS2_MGF_Generator.py -p "$params.parallelism"
-    """
-  } else {
-    """
-    python3 $TOOL_FOLDER/GNPS2_MGF_Generator.py -p "$params.parallelism" -path "./Spectral_Similarity_Prediction.parquet"
-    """
-  }
+  //old if 
+  //python3 $TOOL_FOLDER/GNPS2_MGF_Generator.py -p "$params.parallelism"
+  //old else
+  // // python3 $TOOL_FOLDER/GNPS2_MGF_Generator.py -p "$params.parallelism" -path "./Spectral_Similarity_Prediction.parquet"
+  
+  // if (use_default_path) {
+  //   """ 
+  //   python3 $TOOL_FOLDER/GNPS2_MGF_Generator.py -input_path $parquet_file -output_path ${name}.mgf"
+  //   """
+  // } else {
+  //   """
+  //   python3 $TOOL_FOLDER/GNPS2_MGF_Generator.py -input_path "./Spectral_Similarity_Prediction.parquet" -output_path "./Spectral_Similarity_Prediction.mgf"
+  //   """
+  // }
   """
+  python3 $TOOL_FOLDER/GNPS2_MGF_Generator.py -input_path "$parquet_file"
   """
 }
 
 process calculate_similarities {
   input:
-  path mgf
+  each mgf
 
   output:
   path "similarity_calculations/*", emit: spectral_similarities
@@ -137,8 +143,6 @@ process calculate_similarities {
 process split_subsets {
   conda "$TOOL_FOLDER/conda_env.yml"
   publishDir "./nf_output", mode: 'copy'
-
-  cache false
 
   input:
   path spectral_similarities
@@ -159,16 +163,18 @@ process split_subsets {
 }
 
 process publish_similarities_for_prediction {
+  // I'm not sure if there's a better way to skip the files we don't need, for now we'll just ignore the errors
   publishDir "./nf_output/", mode: 'copy'
+  errorStrategy 'ignore'
 
   input:
-  path inputFile
+  path inputFiles
 
   output:
-  path "./util/Spectral_Similarity_Prediction_Similarities.tsv"
+  path "./util/Spectral_Similarity_Prediction_Similarities.tsv", optional: true
 
   """
-  cp ${inputFile} ./util/Spectral_Similarity_Prediction_Similarities.tsv
+  [ -f "Spectral_Similarity_Prediction/merged_pairs.tsv" ] && mkdir util && cp Spectral_Similarity_Prediction/merged_pairs.tsv ./util/Spectral_Similarity_Prediction_Similarities.tsv
   """
 }
 
@@ -181,14 +187,23 @@ workflow {
   // For the spectral similarity prediction task, we need to calculate all pairs similarity in the training set
   if (params.subset == "GNPS_default" || params.subset == "Spectral_Similarity_Prediction") {
     use_default_path = false
+    // generate_subset.out.output_parquet.collect()  // Make sure this finishes first
+    // channel.fromPath(".nf_output/Spectral_Similarity_Prediction.parquet") | generate_mgf
     generate_mgf(generate_subset.out.output_parquet)
-    generate_mgf.out.output_mgf  | calculate_similarities 
+    calculate_similarities(generate_mgf.out.output_mgf)
+
     publish_similarities_for_prediction(calculate_similarities.out.spectral_similarities)
+
   }
+  // } else if (params.subset == "Spectral_Similarity_Prediction") {
+  //   generate_subset.out.output_parquet.collect()  // Make sure this finishes first
+  //   channel.fromPath(".nf_output/Spectral_Similarity_Prediction.parquet") | generate_mgf
+  //   // generate_mgf(generate_subset.out.output_parquet)
+  //   generate_mgf.out.output_mgf  | calculate_similarities 
+  //   publish_similarities_for_prediction(calculate_similarities.out.spectral_similarities)
+  // }
 
   if (params.split) {
-    generate_mgf(generate_subset.out.output_parquet)
-    generate_mgf.out.output_mgf  | calculate_similarities 
     calculate_similarities.out.spectral_similarities | split_subsets
   }
 }

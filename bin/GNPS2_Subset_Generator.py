@@ -171,7 +171,7 @@ def Structural_Similarity_Prediction(summary_path:str, parquet_path:str):
     parquet_as_df[parquet_as_df.spectrum_id.isin(qtof.spectrum_id)].export_parquet('./spectra/Structural_Similarity_Prediction.parquet')
     
     # Save similarities
-    sim.to_csv('./util/Structural_Similarity_Prediction.csv', index=False)
+    sim.to_csv('./util/Structural_Similarity_Prediction_Pairs.csv', index=False)
 
 def Spectral_Similarity_Prediction(summary_path:str, parquet_path:str):
     # This dataset: struct1 + struct2 -> spectral similarity
@@ -222,15 +222,15 @@ def Structural_Modification(summary_path:str, parquet_path:str):
     positive = positive[positive.spectrum_id.isin(positive_ids)]
     negative = negative[negative.spectrum_id.isin(negative_ids)]
     # Save to csv
-    positive.to_csv('./summary/Structural_Modification/orbitrap_positive.csv', index=False)
-    negative.to_csv('./summary/Structural_Modification/orbitrap_negative.csv', index=False)
+    positive.to_csv('./summary/Structural_Modification_orbitrap_positive.csv', index=False)
+    negative.to_csv('./summary/Structural_Modification_orbitrap_negative.csv', index=False)
     # Save to parquet
-    parquet_as_df[parquet_as_df.spectrum_id.isin(positive_ids)].export_parquet('./spectra/Structural_Modification/orbitrap_positive.parquet')
-    parquet_as_df[parquet_as_df.spectrum_id.isin(negative_ids)].export_parquet('./spectra/Structural_Modification/orbitrap_negative.parquet')
+    parquet_as_df[parquet_as_df.spectrum_id.isin(positive_ids)].export_parquet('./spectra/Structural_Modification_orbitrap_positive.parquet')
+    parquet_as_df[parquet_as_df.spectrum_id.isin(negative_ids)].export_parquet('./spectra/Structural_Modification_orbitrap_negative.parquet')
     
     # Save Similarities to utils
-    positive_sim.to_csv('./util/Structural_Modification/orbitrap_positive_sim.csv', index=False)
-    negative_sim.to_csv('./util/Structural_Modification/orbitrap_negative_sim.csv', index=False)
+    positive_sim.to_csv('./util/Structural_Modification_orbitrap_positive_sim.csv', index=False)
+    negative_sim.to_csv('./util/Structural_Modification_orbitrap_negative_sim.csv', index=False)
     
     # qtof Portion
     positive = df.loc[(df.Adduct == 'M+H') & (df.msMassAnalyzer == 'qtof') & (df.GNPS_Inst == 'qtof')]
@@ -250,15 +250,15 @@ def Structural_Modification(summary_path:str, parquet_path:str):
     positive = positive[positive.spectrum_id.isin(positive_ids)]
     negative = negative[negative.spectrum_id.isin(negative_ids)]
     # Save to csv
-    positive.to_csv('./summary/Structural_Modification/qtof_positive.csv', index=False)
-    negative.to_csv('./summary/Structural_Modification/qtof_negative.csv', index=False)
+    positive.to_csv('./summary/Structural_Modification_qtof_positive.csv', index=False)
+    negative.to_csv('./summary/Structural_Modification_qtof_negative.csv', index=False)
     # Save to parquet
-    parquet_as_df[parquet_as_df.spectrum_id.isin(positive_ids)].export_parquet('./spectra/Structural_Modification/qtof_positive.parquet')
-    parquet_as_df[parquet_as_df.spectrum_id.isin(negative_ids)].export_parquet('./spectra/Structural_Modification/qtof_negative.parquet')
+    parquet_as_df[parquet_as_df.spectrum_id.isin(positive_ids)].export_parquet('./spectra/Structural_Modification_qtof_positive.parquet')
+    parquet_as_df[parquet_as_df.spectrum_id.isin(negative_ids)].export_parquet('./spectra/Structural_Modification_qtof_negative.parquet')
     
     # Save Similarities to utils
-    positive_sim.to_csv('./util/Structural_Modification/qtof_positive_sim.csv', index=False)
-    negative_sim.to_csv('./util/Structural_Modification/qtof_negative_sim.csv', index=False)
+    positive_sim.to_csv('./util/Structural_Modification_qtof_positive_sim.csv', index=False)
+    negative_sim.to_csv('./util/Structural_Modification_qtof_negative_sim.csv', index=False)
     
 
 def main():
