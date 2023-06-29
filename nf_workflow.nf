@@ -1,10 +1,12 @@
 #!/usr/bin/env nextflow
 nextflow.enable.dsl=2
 
-// params.subset = "Bruker_Fragmentation_Prediction"
+params.subset = "Orbitrap_Fragmentation_Prediction"
+params.split  = true
+
 // params.subset = "MH_MNA_Translation"
-params.subset = "GNPS_default"
-params.split  = false
+// params.subset = "GNPS_default"
+// params.split  = false
 use_default_path = true
 
 params.spectra_parallelism = 100
@@ -80,6 +82,8 @@ process generate_subset {
 
   conda "$TOOL_FOLDER/conda_env.yml"
 
+  cache false
+
   input:
   path cleaned_csv
   path cleaned_parquet
@@ -126,6 +130,8 @@ process generate_mgf {
 }
 
 process calculate_similarities {
+  publishDir "./nf_output", mode: 'copy'
+  
   input:
   each mgf
 
@@ -184,13 +190,17 @@ workflow {
   merge_export(export.out.temp_files.collect())
   postprocess(merge_export.out.merged_csv, merge_export.out.merged_mgf)
   generate_subset(postprocess.out.cleaned_csv, postprocess.out.cleaned_parquet)    
+
+  generate_mgf(generate_subset.out.output_parquet)
+  calculate_similarities(generate_mgf.out.output_mgf)
+
   // For the spectral similarity prediction task, we need to calculate all pairs similarity in the training set
   if (params.subset == "GNPS_default" || params.subset == "Spectral_Similarity_Prediction") {
     use_default_path = false
-    // generate_subset.out.output_parquet.collect()  // Make sure this finishes first
-    // channel.fromPath(".nf_output/Spectral_Similarity_Prediction.parquet") | generate_mgf
-    generate_mgf(generate_subset.out.output_parquet)
-    calculate_similarities(generate_mgf.out.output_mgf)
+    //// generate_subset.out.output_parquet.collect()  // Make sure this finishes first
+    //// channel.fromPath(".nf_output/Spectral_Similarity_Prediction.parquet") | generate_mgf
+    //generate_mgf(generate_subset.out.output_parquet)
+    //calculate_similarities(generate_mgf.out.output_mgf)
 
     publish_similarities_for_prediction(calculate_similarities.out.spectral_similarities)
 
