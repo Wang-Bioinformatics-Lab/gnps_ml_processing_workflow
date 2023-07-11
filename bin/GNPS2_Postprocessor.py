@@ -61,12 +61,12 @@ def basic_cleaning(summary):
     summary.msMassAnalyzer = summary.msMassAnalyzer.astype('str')
     summary.msMassAnalyzer = summary.msMassAnalyzer.str.lower()
     
-    # This was a thing but it seems like the mass analyzer data is always nan now
+    summary.msMassAnalyzer = summary.msMassAnalyzer.str.lower()
     # summary.msMassAnalyzer = summary.msMassAnalyzer.str.strip('[]').str.strip("'").str.split(',')
-    # mask = ~ summary.msMassAnalyzer.isna()
-    # summary.loc[mask,'msMassAnalyzer'] = summary.loc[mask,'msMassAnalyzer'].apply(lambda x: ast.literal_eval(x))
-    # summary.loc[mask,'msMassAnalyzer'] = summary.loc[mask,'msMassAnalyzer'].apply(lambda x: [transform_analyzer(y) for y in x])
-    # summary.loc[mask,'msMassAnalyzer'] = summary.loc[mask,'msMassAnalyzer'].apply(merge_analyzer)
+    mask = ~ summary.msMassAnalyzer.isna()
+    summary.loc[mask,'msMassAnalyzer'] = summary.loc[mask,'msMassAnalyzer'].apply(lambda x: ast.literal_eval(x))
+    summary.loc[mask,'msMassAnalyzer'] = summary.loc[mask,'msMassAnalyzer'].apply(lambda x: [transform_analyzer(y) for y in x])
+    summary.loc[mask,'msMassAnalyzer'] = summary.loc[mask,'msMassAnalyzer'].apply(merge_analyzer)
     # summary.loc[mask].apply(lambda x: [y == 'quadrupole tof' for y in x].any())
     # summary.loc[mask,'msMassAnalyzer'] = 'qtof' 
     # summary.loc[summary.msMassAnalyzer == 'fourier transform ion cyclotron resonance mass spectrometer','msMassAnalyzer'] = 'ftms'
