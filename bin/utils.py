@@ -15,6 +15,7 @@ import vaex
 import dask.dataframe as dd
 from rdkit import Chem
 from rdkit.Chem import MolStandardize, rdMolDescriptors, MolFromSmiles
+from pandarallel import pandarallel
 
 
 def split_cliques(num_nodes:int,ids:list,training_fraction: float=0.8, early_stopping=None):
@@ -183,11 +184,16 @@ def build_tanimoto_similarity_list_precomputed(mgf_summary:pd.DataFrame,output_d
     if type(mgf_summary) is pd.DataFrame:
         structure_mask = ~ mgf_summary[fingerprint_column_name].isna()
         num_structures = structure_mask.sum()
+        pandarallel.initialize(progress_bar=False)
+        fps = mgf_summary[fingerprint_column_name][structure_mask].parallel_apply(lambda x: DataStructs.CreateFromBitString(''.join(str(y) for y in x))).values
+        
         
     elif type(mgf_summary) == dd.core.DataFrame:
         dask=True
         structure_mask = mgf_summary.Smiles.notnull() 
         num_structures = structure_mask.sum().compute()
+        fps = mgf_summary[fingerprint_column_name][structure_mask].apply(lambda x: DataStructs.CreateFromBitString(''.join(str(y) for y in x))).values
+        
     else:
         raise ValueError("mgf_summary must be a pandas or dask dataframe")
     print("Found {}  structures in {} files".format(num_structures, len(mgf_summary)))
@@ -195,7 +201,6 @@ def build_tanimoto_similarity_list_precomputed(mgf_summary:pd.DataFrame,output_d
     print(mgf_summary[fingerprint_column_name][structure_mask].value_counts())
     
     
-    fps = mgf_summary[fingerprint_column_name][structure_mask].apply(lambda x: DataStructs.CreateFromBitString(''.join(str(y) for y in x))).values
     if dask: fps.compute_chunk_sizes()
     # Indices are now non contiguous because the entries without structures are removed
     # This will map back to the original scan number  
@@ -233,6 +238,48 @@ def get_fingerprints(smiles_string):
                     list(AllChem.GetMorganFingerprintAsBitVect(mol, 3, useChirality=False, nBits=2048)),
                     list(AllChem.GetMorganFingerprintAsBitVect(mol, 3, useChirality=False, nBits=4096))], dtype=object)
 
+def _generate_fingerprints_pandas_helper(smiles):
+    mol = Chem.MolFromSmiles(str(smiles), sanitize=True)
+    if mol is not None:
+        return {'Morgan_2048_2': list(AllChem.GetMorganFingerprintAsBitVect(mol,2,useChirality=False,nBits=2048)), 
+                'Morgan_4096_2': list(AllChem.GetMorganFingerprintAsBitVect(mol,2,useChirality=False,nBits=4096)), 
+                'Morgan_2048_3': list(AllChem.GetMorganFingerprintAsBitVect(mol,3,useChirality=False,nBits=2048)), 
+                'Morgan_4096_3':list(AllChem.GetMorganFingerprintAsBitVect(mol,3,useChirality=False,nBits=4096))}
+    else: 
+        return {'Morgan_2048_2': None, 
+                'Morgan_4096_2': None, 
+                'Morgan_2048_3': None, 
+                'Morgan_4096_3': None}
+
+def _generate_fingerprints_pandas(summary, mode='regular'):
+    # Here, we offer two different modes. The idea of the 'low_mem' mode is that it calculates the molecule inside the apply.add()
+    # function, which is then discarded. This is useful if you have a large dataframe and don't want to keep the molecules in memory.
+    
+    if mode == 'regular':
+        summary = summary.assign(mol=None)
+        summary.loc[summary.Smiles != 'nan', 'mol'] = summary.loc[summary.Smiles != 'nan', 'Smiles'].apply(lambda x: Chem.MolFromSmiles(x, sanitize=True))
+        smiles_parsing_success = [x is not None for x in summary.mol]
+        summary.loc[smiles_parsing_success,'Morgan_2048_2'] = summary.loc[smiles_parsing_success,'mol'].apply( \
+            lambda x: list(AllChem.GetMorganFingerprintAsBitVect(x,2,useChirality=False,nBits=2048)))
+        summary.loc[smiles_parsing_success,'Morgan_4096_2'] = summary.loc[smiles_parsing_success,'mol'].apply( \
+            lambda x: list(AllChem.GetMorganFingerprintAsBitVect(x,2,useChirality=False,nBits=4096)))
+        summary.loc[smiles_parsing_success,'Morgan_2048_3'] = summary.loc[smiles_parsing_success,'mol'].apply( \
+            lambda x: list(AllChem.GetMorganFingerprintAsBitVect(x,3,useChirality=False,nBits=2048)))
+        summary.loc[smiles_parsing_success,'Morgan_4096_3'] = summary.loc[smiles_parsing_success,'mol'].apply( \
+            lambda x: list(AllChem.GetMorganFingerprintAsBitVect(x,3,useChirality=False,nBits=4096)))
+        # summary.loc[smiles_parsing_success,'RdKit_2048_5'] = summary.loc[smiles_parsing_success,'mol'].apply( \
+        #     lambda x: Chem.RDKFingerprint(x,minPath=5,fpSize=2048))
+        # summary.loc[smiles_parsing_success,'RdKit_4096_5'] = summary.loc[smiles_parsing_success,'mol'].apply( \
+        #     lambda x: Chem.RDKFingerprint(x,minPath=5,fpSize=4096))
+        summary.drop('mol', axis=1, inplace=True)
+    elif mode == 'low_mem':
+        pandarallel.initialize(progress_bar=False)
+        # The low memory implementation will return a series of dictionaries when we call apply, so we'll make it a dataframe with from_records
+        summary[['Morgan_2048_2','Morgan_4096_2','Morgan_2048_3','Morgan_4096_3']] = pd.DataFrame.from_records(summary['Smiles'].parallel_apply(_generate_fingerprints_pandas_helper))
+        return summary
+    else:
+        raise ValueError("Mode must be 'regular' or 'low_mem'")
+
 def _generate_fingerprints_dask(summary):
     # summary = dd.read_csv(summary, dtype={'Smiles':str,'msDetector':str,'msDissociationMethod':str,'msManufacturer':str,'msMassAnalyzer':str,'msModel':str})
     def _get_fingerprint(mol, params):
@@ -263,22 +310,7 @@ def generate_fingerprints(summary):
     # Check to make sure that the columns are not already present
     if not all([x in summary.columns for x in columns_to_add]):
         if type(summary) is pd.DataFrame:
-            summary = summary.assign(mol=None)
-            summary.loc[summary.Smiles != 'nan', 'mol'] = summary.loc[summary.Smiles != 'nan', 'Smiles'].apply(lambda x: Chem.MolFromSmiles(x, sanitize=True))
-            smiles_parsing_success = [x is not None for x in summary.mol]
-            summary.loc[smiles_parsing_success,'Morgan_2048_2'] = summary.loc[smiles_parsing_success,'mol'].apply( \
-                lambda x: list(AllChem.GetMorganFingerprintAsBitVect(x,2,useChirality=False,nBits=2048)))
-            summary.loc[smiles_parsing_success,'Morgan_4096_2'] = summary.loc[smiles_parsing_success,'mol'].apply( \
-                lambda x: list(AllChem.GetMorganFingerprintAsBitVect(x,2,useChirality=False,nBits=4096)))
-            summary.loc[smiles_parsing_success,'Morgan_2048_3'] = summary.loc[smiles_parsing_success,'mol'].apply( \
-                lambda x: list(AllChem.GetMorganFingerprintAsBitVect(x,3,useChirality=False,nBits=2048)))
-            summary.loc[smiles_parsing_success,'Morgan_4096_3'] = summary.loc[smiles_parsing_success,'mol'].apply( \
-                lambda x: list(AllChem.GetMorganFingerprintAsBitVect(x,3,useChirality=False,nBits=4096)))
-            # summary.loc[smiles_parsing_success,'RdKit_2048_5'] = summary.loc[smiles_parsing_success,'mol'].apply( \
-            #     lambda x: Chem.RDKFingerprint(x,minPath=5,fpSize=2048))
-            # summary.loc[smiles_parsing_success,'RdKit_4096_5'] = summary.loc[smiles_parsing_success,'mol'].apply( \
-            #     lambda x: Chem.RDKFingerprint(x,minPath=5,fpSize=4096))
-            summary.drop('mol', axis=1, inplace=True)
+            return _generate_fingerprints_pandas(summary, mode='low_mem')
         elif type(summary) is vaex.dataframe.DataFrameLocal:
             raise NotImplementedError("Vaex not yet implemented")
             # We'll assume it's vaex
