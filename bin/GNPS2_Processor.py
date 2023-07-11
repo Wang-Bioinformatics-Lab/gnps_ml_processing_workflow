@@ -25,7 +25,7 @@ analyzer_ids = networkx.ancestors(graph,'MS:1000443')
 retention_id = 'MS:1000894'
 collision_energy_id = 'MS:1000045'
 
-def helper(process_num, scan_start, all_spectra_list):
+def helper(process_num, scan_start, all_spectra_list, path_to_provenance):
     scan = scan_start
     file_not_found_count = 0
     UnicodeDecodeError_count = 0
@@ -71,7 +71,7 @@ def helper(process_num, scan_start, all_spectra_list):
         try:
             if extension == 'mzXML':
                 # f, _ = request.urlretrieve('ftp://ccms-ftp.ucsd.edu/GNPS_Library_Provenance/{}/{}'.format(task,source_file))
-                f = "/home/user/LabData/GNPS_Library_Provenance/{}/{}".format(task,source_file)
+                f = path_to_provenance + "{}/{}".format(task,source_file)
                 # data_dict = list(mzxml.read(f, read_schema=True))[0]
                 
                 '''
@@ -124,7 +124,7 @@ def helper(process_num, scan_start, all_spectra_list):
                         if msDissociationMethod is not None: summary_dict['msDissociationMethod'] = msDissociationMethod
                         
             elif extension == 'mzML':
-                f = "/home/user/LabData/GNPS_Library_Provenance/{}/{}".format(task,source_file)
+                f = path_to_provenance + "{}/{}".format(task,source_file)
                 data = etree.parse(f, parser).getroot()
                 instrument_conigurations = data.find('.//{*}instrumentConfigurationList')
                 num_instrument_configurations = data.find('.//{*}instrumentConfigurationList').attrib['count']
@@ -265,6 +265,7 @@ def helper(process_num, scan_start, all_spectra_list):
 def main():
     parser = argparse.ArgumentParser(description='Process some GNPS2 Entries.')
     parser.add_argument('-f', '--file', help="path to params file", required=True)
+    parser.add_argument('--path_to_provenance', help="The path (or url) to GNPS_Library_Provenance", default="/new-pool/LabData/GNPS_Library_Provenance/")
     args = parser.parse_args()
 
     if not os.path.isdir('./temp'): os.makedirs('./temp')
@@ -275,7 +276,7 @@ def main():
     p_idx = int(match.group(1))
     start_scan = int(match.group(2))
     
-    helper(p_idx, start_scan, spectra)
+    helper(p_idx, start_scan, spectra, args.path_to_provenance)
     
 if __name__ == '__main__':
     main()
