@@ -4,8 +4,55 @@ import argparse
 import os
 import vaex
 import pickle
-from utils import build_tanimoto_similarity_list_precomputed, generate_fingerprints
+from utils import build_tanimoto_similarity_list_precomputed, generate_fingerprints, harmonize_smiles_rdkit
+import dask.dataframe as dd
+    
+def MH_MNA_Translation(summary_path:str, parquet_path:str):
 
+    reduced_df = pd.read_csv(summary_path)
+
+    # reduced_df = reduced_df.loc[reduced_df.msMassAnalyzer == 'orbitrap']
+    # reduced_df = reduced_df.loc[reduced_df.GNPS_Inst == 'orbitrap']
+    reduced_df = reduced_df.loc[~reduced_df.Smiles.isna()]
+    reduced_df = reduced_df.loc[(reduced_df.Adduct == 'M+H') | (reduced_df.Adduct == 'M+Na')]
+
+    reduced_df.to_csv('./summary/MH_MNA_Translation.csv', index=False)
+    
+    def Generate_Pairs_List(summary:pd.DataFrame):
+        output = []
+        for _, row in summary[['spectrum_id', 'Smiles','Adduct']].iterrows():
+            similar_ids = summary.loc[(row["Smiles"] == summary["Smiles"]) & (row["Adduct"] != summary["Adduct"]),"spectrum_id"].values
+            output.append((row["spectrum_id"],list(similar_ids)))
+        return output
+    
+    pairs_list = Generate_Pairs_List(reduced_df)
+    with open("./util/MH_MNA_Translation_pairs.pkl", "wb") as fp:
+        pickle.dump(pairs_list, fp)
+
+    id_list = list(reduced_df.spectrum_id )
+    del reduced_df
+    del pairs_list
+
+    parquet_as_df = vaex.open(parquet_path)
+    parquet_as_df = parquet_as_df[parquet_as_df.spectrum_id.isin(id_list)]
+    parquet_as_df.export_parquet('./spectra/MH_MNA_Translation.parquet')
+    
+def Fingerprint_Prediction(summary_path:str, parquet_path:str):
+    reduced_df = pd.read_csv(summary_path)
+
+    # reduced_df = reduced_df.loc[reduced_df.msMassAnalyzer == 'orbitrap']
+    # reduced_df = reduced_df.loc[reduced_df.GNPS_Inst == 'orbitrap']
+    reduced_df = reduced_df.loc[~reduced_df.Smiles.isna()]
+    # reduced_df = reduced_df.loc[(reduced_df.Adduct == 'M+H')]
+    reduced_df = generate_fingerprints(reduced_df)
+    reduced_df.to_csv('./summary/Fingerprint_Prediction.csv', index=False)
+    
+    id_list = list(reduced_df.spectrum_id )
+    del reduced_df
+    
+    parquet_as_df = vaex.open(parquet_path)
+    parquet_as_df = parquet_as_df[parquet_as_df.spectrum_id.isin(id_list)]
+    parquet_as_df.export_parquet('./spectra/Fingerprint_Prediction.parquet') 
     
 def Bruker_Fragmentation_Prediction(summary_path:str, parquet_path:str):
     """This function follows the cleaning in 3DMolMS applied to Bruker qtof instruments.
@@ -37,54 +84,7 @@ def Bruker_Fragmentation_Prediction(summary_path:str, parquet_path:str):
     parquet_as_df = vaex.open(parquet_path)
     parquet_as_df = parquet_as_df[parquet_as_df.spectrum_id.isin(id_list)]
     parquet_as_df.export_parquet('./spectra/Bruker_Fragmentation_Prediction.parquet')
-    
-def MH_MNA_Translation(summary_path:str, parquet_path:str):
 
-    reduced_df = pd.read_csv(summary_path)
-
-    reduced_df = reduced_df.loc[reduced_df.msMassAnalyzer == 'orbitrap']
-    reduced_df = reduced_df.loc[reduced_df.GNPS_Inst == 'orbitrap']
-    reduced_df = reduced_df.loc[~reduced_df.Smiles.isna()]
-    reduced_df = reduced_df.loc[(reduced_df.Adduct == 'M+H') | (reduced_df.Adduct == 'M+Na')]
-
-    reduced_df.to_csv('./summary/MH_MNA_Translation.csv', index=False)
-    
-    def Generate_Pairs_List(summary:pd.DataFrame):
-        output = []
-        for _, row in summary[['spectrum_id', 'Smiles','Adduct']].iterrows():
-            similar_ids = summary.loc[(row["Smiles"] == summary["Smiles"]) & (row["Adduct"] != summary["Adduct"]),"spectrum_id"].values
-            output.append((row["spectrum_id"],list(similar_ids)))
-        return output
-    
-    pairs_list = Generate_Pairs_List(reduced_df)
-    with open("./util/MH_MNA_Translation_pairs.pkl", "wb") as fp:
-        pickle.dump(pairs_list, fp)
-
-    id_list = list(reduced_df.spectrum_id )
-    del reduced_df
-    del pairs_list
-
-    parquet_as_df = vaex.open(parquet_path)
-    parquet_as_df = parquet_as_df[parquet_as_df.spectrum_id.isin(id_list)]
-    parquet_as_df.export_parquet('./spectra/MH_MNA_Translation.parquet')
-    
-def Fingerprint_Prediction(summary_path:str, parquet_path:str):
-    reduced_df = pd.read_csv(summary_path)
-
-    reduced_df = reduced_df.loc[reduced_df.msMassAnalyzer == 'orbitrap']
-    reduced_df = reduced_df.loc[reduced_df.GNPS_Inst == 'orbitrap']
-    reduced_df = reduced_df.loc[~reduced_df.Smiles.isna()]
-    reduced_df = reduced_df.loc[(reduced_df.Adduct == 'M+H')]
-    reduced_df = generate_fingerprints(reduced_df)
-    reduced_df.to_csv('./summary/Fingerprint_Prediction.csv', index=False)
-    
-    id_list = list(reduced_df.spectrum_id )
-    del reduced_df
-    
-    parquet_as_df = vaex.open(parquet_path)
-    parquet_as_df = parquet_as_df[parquet_as_df.spectrum_id.isin(id_list)]
-    parquet_as_df.export_parquet('./spectra/Fingerprint_Prediction.parquet')
-    
 def Orbitrap_Fragmentation_Prediction(summary_path:str, parquet_path:str):  
     """This function follows the cleaning in 3DMolMS applied to orbitrap instruments.
 
@@ -127,7 +127,7 @@ def Thermo_Bruker_Translation(summary_path:str, parquet_path:str):
     """
     df = pd.read_csv(summary_path)
     df = df.loc[~df.Smiles.isna()]
-    df = df.loc[df.Adduct.isin(['M+H','M-H'])]
+    # df = df.loc[df.Adduct.isin(['M+H','M-H'])]
     df.Smiles = df.Smiles.astype(str)
     thermo = df.loc[(df.msManufacturer=="Thermo") & (df.msModel == "Q Exactive"),['spectrum_id', 'Smiles', 'Adduct']]
     bruker = df.loc[(df.msManufacturer=="Bruker Daltonics") * (df.msModel == "maXis impact"),['spectrum_id', 'Smiles', 'Adduct']]
@@ -158,18 +158,37 @@ def Structural_Similarity_Prediction(summary_path:str, parquet_path:str):
     # This dataset: spec1 + spec2 -> struct similarity
     parquet_as_df = vaex.open(parquet_path)
             
-    df = pd.read_csv(summary_path)
-    df = df.loc[~df.Smiles.isna()]
-    df = df.loc[df.Adduct == 'M+H']
-    qtof = df.loc[(df.msMassAnalyzer == 'qtof') & (df.GNPS_Inst == 'qtof')]    
-    qtof = generate_fingerprints(qtof)
-    sim = build_tanimoto_similarity_list_precomputed(qtof, similarity_threshold=0.0)
-    
+    # df = df.loc[df.Adduct == 'M+H']
+    # qtof = df.loc[(df.msMassAnalyzer == 'qtof') & (df.GNPS_Inst == 'qtof')]    
+    # qtof = generate_fingerprints(qtof)
+    # sim = build_tanimoto_similarity_list_precomputed(qtof, similarity_threshold=0.0)
     # Save to csv
-    qtof.to_csv('./summary/Structural_Similarity_Prediction.csv')
-    # Save to parquet
-    parquet_as_df[parquet_as_df.spectrum_id.isin(qtof.spectrum_id)].export_parquet('./spectra/Structural_Similarity_Prediction.parquet')
+    # qtof.to_csv('./summary/Structural_Similarity_Prediction.csv', index=False)
+    # # Save to parquet
+    # parquet_as_df[parquet_as_df.spectrum_id.isin(qtof.spectrum_id)].export_parquet('./spectra/Structural_Similarity_Prediction.parquet')
+    df = dd.read_csv(summary_path, dtype={'Smiles':str,
+                                               'msDetector':str,
+                                               'msDissociationMethod':str,
+                                               'msManufacturer':str,
+                                               'msMassAnalyzer':str,
+                                               'msModel':str})
+    # Remove all entries without structure
+    df = df[df.Smiles.notnull()]
+    # Clean SMILES
+    df['Smiles'] = df['Smiles'].map_partitions(harmonize_smiles_rdkit)
+    # Remove all entries whose smiles failed to parse
+    df  = df[df.Smiles.notnull()]
     
+    df  = generate_fingerprints(df)
+    sim = build_tanimoto_similarity_list_precomputed(df, similarity_threshold=0.0)
+
+    # Save to csv
+    df.to_csv('./summary/Structural_Similarity_Prediction.csv', index=False)
+    # Save to parquet
+    # Make sure to call compute here to load the values into memory
+    parquet_as_df[parquet_as_df.spectrum_id.isin(df.spectrum_id.values.compute())].export_parquet('./spectra/Structural_Similarity_Prediction.parquet')
+    
+
     # Save similarities
     sim.to_csv('./util/Structural_Similarity_Prediction_Pairs.csv', index=False)
 
@@ -179,13 +198,14 @@ def Spectral_Similarity_Prediction(summary_path:str, parquet_path:str):
             
     df = pd.read_csv(summary_path)
     df = df.loc[~df.Smiles.isna()]
-    df = df.loc[df.Adduct == 'M+H']
-    qtof = df.loc[(df.msMassAnalyzer == 'qtof') & (df.GNPS_Inst == 'qtof')]    
+    # df = df.loc[df.Adduct == 'M+H']
+    # qtof = df.loc[(df.msMassAnalyzer == 'qtof') & (df.GNPS_Inst == 'qtof')]    
     
     # Save to csv
-    qtof.to_csv('./summary/Spectral_Similarity_Prediction.csv')
+    # qtof.to_csv('./summary/Spectral_Similarity_Prediction.csv', index=False)
+    df.to_csv('./summary/Spectral_Similarity_Prediction.csv', index=False)
     # Save to parquet
-    parquet_as_df[parquet_as_df.spectrum_id.isin(qtof.spectrum_id)].export_parquet('./spectra/Spectral_Similarity_Prediction.parquet')
+    parquet_as_df[parquet_as_df.spectrum_id.isin(df.spectrum_id)].export_parquet('./spectra/Spectral_Similarity_Prediction.parquet')
     
     # We will use the networking barebones workflow to generate the similarities (see workflow)
     

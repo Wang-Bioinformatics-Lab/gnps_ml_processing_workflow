@@ -1,9 +1,10 @@
 #!/usr/bin/env nextflow
 nextflow.enable.dsl=2
 
-params.subset = "Orbitrap_Fragmentation_Prediction"
+// params.subset = "Orbitrap_Fragmentation_Prediction"
 params.split  = true
 
+params.subset = "Structural_Similarity_Prediction"
 // params.subset = "MH_MNA_Translation"
 // params.subset = "GNPS_default"
 // params.split  = false
