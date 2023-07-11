@@ -174,6 +174,11 @@ def Structural_Similarity_Prediction(summary_path:str, parquet_path:str):
                                                'msModel':str})
     # Remove all entries without structure
     df = df[df.Smiles.notnull()]
+    
+    """
+    TODO: Move this smiles cleaning to GNPS_PostProcessor.py
+    """
+    
     # Clean SMILES
     df['Smiles'] = df['Smiles'].map_partitions(harmonize_smiles_rdkit)
     # Remove all entries whose smiles failed to parse
