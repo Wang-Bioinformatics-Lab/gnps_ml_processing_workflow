@@ -11,6 +11,11 @@ import numpy as np
 from networkx.algorithms import community 
 from typing import Tuple
 from rdkit.Chem import DataStructs
+import vaex
+import dask.dataframe as dd
+from rdkit import Chem
+from rdkit.Chem import MolStandardize, rdMolDescriptors, MolFromSmiles
+
 
 def split_cliques(num_nodes:int,ids:list,training_fraction: float=0.8, early_stopping=None):
     """ A function returning the indices of cliques in a graph that maximize the number of total datapoints in a training set.
@@ -174,11 +179,24 @@ def build_tanimoto_similarity_list_precomputed(mgf_summary:pd.DataFrame,output_d
     Returns:
         pd.DataFrame: _description_
     """    
+    dask = False
+    if type(mgf_summary) is pd.DataFrame:
+        structure_mask = ~ mgf_summary[fingerprint_column_name].isna()
+        num_structures = structure_mask.sum()
+        
+    elif type(mgf_summary) == dd.core.DataFrame:
+        dask=True
+        structure_mask = mgf_summary.Smiles.notnull() 
+        num_structures = structure_mask.sum().compute()
+    else:
+        raise ValueError("mgf_summary must be a pandas or dask dataframe")
+    print("Found {}  structures in {} files".format(num_structures, len(mgf_summary)))
+
+    print(mgf_summary[fingerprint_column_name][structure_mask].value_counts())
     
-    structure_mask = ~ mgf_summary[fingerprint_column_name].isna()
-    print("Found {}  structures in {} files".format(sum(structure_mask), len(structure_mask)))
     
-    fps = [DataStructs.CreateFromBitString(''.join(str(y) for y in x)) for x in mgf_summary[fingerprint_column_name][structure_mask]]
+    fps = mgf_summary[fingerprint_column_name][structure_mask].apply(lambda x: DataStructs.CreateFromBitString(''.join(str(y) for y in x))).values
+    if dask: fps.compute_chunk_sizes()
     # Indices are now non contiguous because the entries without structures are removed
     # This will map back to the original scan number  
     idx_mapping = {i: spectrum_id for i, spectrum_id in enumerate(mgf_summary.spectrum_id[structure_mask])}
@@ -199,24 +217,125 @@ def build_tanimoto_similarity_list_precomputed(mgf_summary:pd.DataFrame,output_d
     if output_dir is not None: out.to_csv(output_dir, index_label=False)
     return out
 
+def get_fingerprints(smiles_string):
+    """Returns a list of fingerprints for a given smiles string"""
+    error_value = np.array([None, None, None, None], dtype=object)
+    
+    if smiles_string=='nan':
+        return error_value
+    mol = Chem.MolFromSmiles(str(smiles_string), sanitize=True)
+    if mol is None:
+        return error_value
+    
+    # If vaex is using mmultiprocessing, it will implicty convert the return value into a numpy araray. 
+    return np.array([list(AllChem.GetMorganFingerprintAsBitVect(mol, 2, useChirality=False, nBits=2048)),
+                    list(AllChem.GetMorganFingerprintAsBitVect(mol, 2, useChirality=False, nBits=4096)),
+                    list(AllChem.GetMorganFingerprintAsBitVect(mol, 3, useChirality=False, nBits=2048)),
+                    list(AllChem.GetMorganFingerprintAsBitVect(mol, 3, useChirality=False, nBits=4096))], dtype=object)
+
+def _generate_fingerprints_dask(summary):
+    # summary = dd.read_csv(summary, dtype={'Smiles':str,'msDetector':str,'msDissociationMethod':str,'msManufacturer':str,'msMassAnalyzer':str,'msModel':str})
+    def _get_fingerprint(mol, params):
+        if mol is None:
+            return None
+        else:
+            if params == 'Morgan_2048_2':
+                return str(GetMorganFingerprintAsBitVect(mol, 2, nBits=2048))
+            elif params == 'Morgan_2048_3':
+                return str(GetMorganFingerprintAsBitVect(mol, 3, nBits=2048))
+            elif params == 'Morgan_4096_2':
+                return str(GetMorganFingerprintAsBitVect(mol, 2, nBits=4096))
+            elif params == 'Morgan_4096_3':
+                return str(GetMorganFingerprintAsBitVect(mol, 3, nBits=4096))
+            else:
+                raise ValueError("Invalid fingerprint type")
+            
+    summary['mol'] = summary.apply(lambda x: MolFromSmiles(str(x['Smiles'])), axis=1, meta=('mol', 'object'))
+    summary['Morgan_2048_2'] = summary.apply(lambda x: _get_fingerprint(x['mol'], 'Morgan_2048_2'), axis=1, meta=('Morgan_2048_2', 'str'))
+    summary['Morgan_2048_3'] = summary.apply(lambda x: _get_fingerprint(x['mol'], 'Morgan_2048_2'), axis=1, meta=('Morgan_2048_3', 'str'))
+    summary['Morgan_4096_2'] = summary.apply(lambda x: _get_fingerprint(x['mol'], 'Morgan_2048_2'), axis=1, meta=('Morgan_4096_2', 'str'))
+    summary['Morgan_4096_3'] = summary.apply(lambda x: _get_fingerprint(x['mol'], 'Morgan_2048_2'), axis=1, meta=('Morgan_4096_3', 'str'))
+    
+    return summary.drop('mol', axis=1)
+
 def generate_fingerprints(summary):
     columns_to_add = ['Morgan_2048_2', 'Morgan_4096_2', 'Morgan_2048_3', 'Morgan_4096_3']
     # Check to make sure that the columns are not already present
     if not all([x in summary.columns for x in columns_to_add]):
-        summary = summary.assign(mol=None)
-        summary.loc[summary.Smiles != 'nan', 'mol'] = summary.loc[summary.Smiles != 'nan', 'Smiles'].apply(lambda x: Chem.MolFromSmiles(x, sanitize=True))
-        smiles_parsing_success = [x is not None for x in summary.mol]
-        summary.loc[smiles_parsing_success,'Morgan_2048_2'] = summary.loc[smiles_parsing_success,'mol'].apply( \
-            lambda x: list(AllChem.GetMorganFingerprintAsBitVect(x,2,useChirality=False,nBits=2048)))
-        summary.loc[smiles_parsing_success,'Morgan_4096_2'] = summary.loc[smiles_parsing_success,'mol'].apply( \
-            lambda x: list(AllChem.GetMorganFingerprintAsBitVect(x,2,useChirality=False,nBits=4096)))
-        summary.loc[smiles_parsing_success,'Morgan_2048_3'] = summary.loc[smiles_parsing_success,'mol'].apply( \
-            lambda x: list(AllChem.GetMorganFingerprintAsBitVect(x,3,useChirality=False,nBits=2048)))
-        summary.loc[smiles_parsing_success,'Morgan_4096_3'] = summary.loc[smiles_parsing_success,'mol'].apply( \
-            lambda x: list(AllChem.GetMorganFingerprintAsBitVect(x,3,useChirality=False,nBits=4096)))
-        # summary.loc[smiles_parsing_success,'RdKit_2048_5'] = summary.loc[smiles_parsing_success,'mol'].apply( \
-        #     lambda x: Chem.RDKFingerprint(x,minPath=5,fpSize=2048))
-        # summary.loc[smiles_parsing_success,'RdKit_4096_5'] = summary.loc[smiles_parsing_success,'mol'].apply( \
-        #     lambda x: Chem.RDKFingerprint(x,minPath=5,fpSize=4096))
-        summary.drop('mol', axis=1,inplace=True)
+        if type(summary) is pd.DataFrame:
+            summary = summary.assign(mol=None)
+            summary.loc[summary.Smiles != 'nan', 'mol'] = summary.loc[summary.Smiles != 'nan', 'Smiles'].apply(lambda x: Chem.MolFromSmiles(x, sanitize=True))
+            smiles_parsing_success = [x is not None for x in summary.mol]
+            summary.loc[smiles_parsing_success,'Morgan_2048_2'] = summary.loc[smiles_parsing_success,'mol'].apply( \
+                lambda x: list(AllChem.GetMorganFingerprintAsBitVect(x,2,useChirality=False,nBits=2048)))
+            summary.loc[smiles_parsing_success,'Morgan_4096_2'] = summary.loc[smiles_parsing_success,'mol'].apply( \
+                lambda x: list(AllChem.GetMorganFingerprintAsBitVect(x,2,useChirality=False,nBits=4096)))
+            summary.loc[smiles_parsing_success,'Morgan_2048_3'] = summary.loc[smiles_parsing_success,'mol'].apply( \
+                lambda x: list(AllChem.GetMorganFingerprintAsBitVect(x,3,useChirality=False,nBits=2048)))
+            summary.loc[smiles_parsing_success,'Morgan_4096_3'] = summary.loc[smiles_parsing_success,'mol'].apply( \
+                lambda x: list(AllChem.GetMorganFingerprintAsBitVect(x,3,useChirality=False,nBits=4096)))
+            # summary.loc[smiles_parsing_success,'RdKit_2048_5'] = summary.loc[smiles_parsing_success,'mol'].apply( \
+            #     lambda x: Chem.RDKFingerprint(x,minPath=5,fpSize=2048))
+            # summary.loc[smiles_parsing_success,'RdKit_4096_5'] = summary.loc[smiles_parsing_success,'mol'].apply( \
+            #     lambda x: Chem.RDKFingerprint(x,minPath=5,fpSize=4096))
+            summary.drop('mol', axis=1, inplace=True)
+        elif type(summary) is vaex.dataframe.DataFrameLocal:
+            raise NotImplementedError("Vaex not yet implemented")
+            # We'll assume it's vaex
+            print("Using vaex")
+            summary['mol'] = summary.apply(lambda x: Chem.MolFromSmiles(x, sanitize=True), arguments=[summary.Smiles], multiprocessing=False)
+            summary['Morgan_2048_2'] = summary.apply((lambda x: list(AllChem.GetMorganFingerprintAsBitVect(x,2,useChirality=False,nBits=2048))), arguments=[summary.mol])
+            summary.execute()
+            summary.materialize('Morgan_2048_2')
+            # summary['fingerprints'] = summary.apply(get_fingerprints, arguments=[summary.Smiles])
+            
+            # summary['Morgan_2048_2'] = summary.apply((lambda x: x[0]), arguments=[summary.fingerprints])
+            # summary['Morgan_4096_2'] = summary.apply((lambda x: x[1]), arguments=[summary.fingerprints])
+            # summary['Morgan_2048_3'] = summary.apply((lambda x: x[2]), arguments=[summary.fingerprints])
+            # summary['Morgan_4096_3'] = summary.apply((lambda x: x[3]), arguments=[summary.fingerprints])
+            # summary.drop('fingerprints', inplace=True)
+            # summary.execute()
+        elif type(summary) == dd.core.DataFrame:    
+            if summary.Smiles.isnull().any().compute():
+                raise ValueError("Smiles column contains null values")        
+            _generate_fingerprints_dask(summary)
+        
+        else: 
+            raise ValueError("Summary is not a pandas or dask dataframe but got type {}".format(type(summary)))
+
     return summary
+
+
+# Code Credit: Yasin El Abiead
+def harmonize_smiles_rdkit(smiles, tautomer_limit = 900):
+    if smiles is None: return None
+    try:
+        smiles = str(smiles)
+        # take the largest covalently bound molecule
+        smiles_largest = MolStandardize.fragment.LargestFragmentChooser(smiles).prefer_organic
+        mol = Chem.MolFromSmiles(smiles_largest)
+
+        monomass = rdMolDescriptors.CalcExactMolWt(mol)
+        # standardize tautomer
+        if monomass < tautomer_limit:
+            smiles_largest = MolStandardize.canonicalize_tautomer_smiles(smiles_largest)
+            mol = Chem.MolFromSmiles(smiles_largest)
+
+        # remove unnecessary charges
+        uc = MolStandardize.charge.Uncharger()
+        uncharged_mol = uc.uncharge(mol)
+        
+        # standardize the molecule
+        lfc = MolStandardize.fragment.LargestFragmentChooser()
+        standard_mol = lfc.choose(uncharged_mol)
+
+        # remove stereochemistry
+        Chem.RemoveStereochemistry(standard_mol)
+
+        # get the standardized SMILES
+        standard_smiles = Chem.MolToSmiles(standard_mol)
+        return standard_smiles
+
+    except Exception as e:
+        print(f"An error occurred with input {smiles}: {e}")
+        return None
