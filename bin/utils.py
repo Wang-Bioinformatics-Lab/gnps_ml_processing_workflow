@@ -1,3 +1,4 @@
+import csv
 from rdkit.DataStructs.cDataStructs import BulkTanimotoSimilarity
 from rdkit import Chem
 from rdkit.Chem import MolFromSmiles
@@ -17,6 +18,7 @@ from rdkit import Chem
 from rdkit.Chem import MolStandardize, rdMolDescriptors, MolFromSmiles
 from pandarallel import pandarallel
 
+PARALLEL_WORKERS = 8 # Number of workers to use for parallel processing
 
 def split_cliques(num_nodes:int,ids:list,training_fraction: float=0.8, early_stopping=None):
     """ A function returning the indices of cliques in a graph that maximize the number of total datapoints in a training set.
@@ -167,24 +169,24 @@ def build_tanimoto_similarity_list(mgf_summary:pd.DataFrame,output_dir:str=None,
     if output_dir is not None: out.to_csv(output_dir, index_label=False)
     return out
 
-def build_tanimoto_similarity_list_precomputed(mgf_summary:pd.DataFrame,output_dir:str=None, similarity_threshold=0.50, fingerprint_column_name='Morgan_2048_3') -> pd.DataFrame:
+def build_tanimoto_similarity_list_precomputed(mgf_summary:pd.DataFrame,output_file:str, similarity_threshold=0.50, fingerprint_column_name='Morgan_2048_3') -> pd.DataFrame:
     """This function computes the all pairs tanimoto similarity on an MGF summary dataframe.
 
     Args:
         mgf_summary (pd.DataFrame): A dataframe containing a scan column and a smiles column.
-        output_dir (str, optional): _description_. Defaults to None.
+        output_file (str, optional): _description_.
         similarity_threshold (float, optional): _description_. Defaults to 0.50.
         fingerprint_column_name (str, optional): _description_. Defaults to 'Morgan_2048_3'.
         num_bits (int, optional): _description_. Defaults to 4096.
 
     Returns:
-        pd.DataFrame: _description_
+        None: The output is written to output file. This file can be large and should be read with an out-of-core library.
     """    
     dask = False
     if type(mgf_summary) is pd.DataFrame:
         structure_mask = ~ mgf_summary[fingerprint_column_name].isna()
         num_structures = structure_mask.sum()
-        pandarallel.initialize(progress_bar=False)
+        pandarallel.initialize(progress_bar=False, nb_workers=PARALLEL_WORKERS)
         fps = mgf_summary[fingerprint_column_name][structure_mask].parallel_apply(lambda x: DataStructs.CreateFromBitString(''.join(str(y) for y in x))).values
         
         
@@ -207,20 +209,21 @@ def build_tanimoto_similarity_list_precomputed(mgf_summary:pd.DataFrame,output_d
     idx_mapping = {i: spectrum_id for i, spectrum_id in enumerate(mgf_summary.spectrum_id[structure_mask])}
     N = len(fps)
 
-    id1 = []
-    id2 = []
-    sim = []
-
-    for i in range(N):
-        sims = BulkTanimotoSimilarity(fps[i],fps[i+1:])
-        for j in range(0,len(sims)):
-            if sims[j] >= similarity_threshold:
-                id1.append(idx_mapping[i])
-                id2.append(idx_mapping[i+1+j])  #i + 1 +j because we skip the diagonal
-                sim.append(sims[j])
-    out = pd.DataFrame({"spectrumid1":id1, "spectrumid2":id2, 'Tanimoto_Similarity':sim},)
-    if output_dir is not None: out.to_csv(output_dir, index_label=False)
-    return out
+    with open(output_file, 'w', newline='') as csvfile:
+        fieldnames = ['spectrumid1', 'spectrumid2', 'Tanimoto_Similarity']
+        writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+        writer.writeheader()
+        for i in range(N):
+            sims = BulkTanimotoSimilarity(fps[i],fps[i+1:])
+            for j in range(0,len(sims)):
+                if sims[j] >= similarity_threshold:
+                    row = {
+                        'spectrumid1': idx_mapping[i],
+                        'spectrumid2': idx_mapping[i + 1 + j],  # i + 1 + j because we skip the diagonal
+                        'Tanimoto_Similarity': sims[j]
+                    }
+                    writer.writerow(row)
+    return None
 
 def get_fingerprints(smiles_string):
     """Returns a list of fingerprints for a given smiles string"""
@@ -239,17 +242,17 @@ def get_fingerprints(smiles_string):
                     list(AllChem.GetMorganFingerprintAsBitVect(mol, 3, useChirality=False, nBits=4096))], dtype=object)
 
 def _generate_fingerprints_pandas_helper(smiles):
-    mol = Chem.MolFromSmiles(str(smiles), sanitize=True)
-    if mol is not None:
-        return {'Morgan_2048_2': list(AllChem.GetMorganFingerprintAsBitVect(mol,2,useChirality=False,nBits=2048)), 
-                'Morgan_4096_2': list(AllChem.GetMorganFingerprintAsBitVect(mol,2,useChirality=False,nBits=4096)), 
-                'Morgan_2048_3': list(AllChem.GetMorganFingerprintAsBitVect(mol,3,useChirality=False,nBits=2048)), 
-                'Morgan_4096_3':list(AllChem.GetMorganFingerprintAsBitVect(mol,3,useChirality=False,nBits=4096))}
-    else: 
-        return {'Morgan_2048_2': None, 
-                'Morgan_4096_2': None, 
-                'Morgan_2048_3': None, 
-                'Morgan_4096_3': None}
+    if smiles is not None and smiles != 'nan':
+        mol = Chem.MolFromSmiles(str(smiles), sanitize=True)
+        if mol is not None:
+            return {'Morgan_2048_2': list(AllChem.GetMorganFingerprintAsBitVect(mol,2,useChirality=False,nBits=2048)), 
+                    'Morgan_4096_2': list(AllChem.GetMorganFingerprintAsBitVect(mol,2,useChirality=False,nBits=4096)), 
+                    'Morgan_2048_3': list(AllChem.GetMorganFingerprintAsBitVect(mol,3,useChirality=False,nBits=2048)), 
+                    'Morgan_4096_3':list(AllChem.GetMorganFingerprintAsBitVect(mol,3,useChirality=False,nBits=4096))}
+    return {'Morgan_2048_2': None, 
+            'Morgan_4096_2': None, 
+            'Morgan_2048_3': None, 
+            'Morgan_4096_3': None}
 
 def _generate_fingerprints_pandas(summary, mode='regular'):
     # Here, we offer two different modes. The idea of the 'low_mem' mode is that it calculates the molecule inside the apply.add()
@@ -273,7 +276,7 @@ def _generate_fingerprints_pandas(summary, mode='regular'):
         #     lambda x: Chem.RDKFingerprint(x,minPath=5,fpSize=4096))
         summary.drop('mol', axis=1, inplace=True)
     elif mode == 'low_mem':
-        pandarallel.initialize(progress_bar=False)
+        pandarallel.initialize(progress_bar=False, nb_workers=PARALLEL_WORKERS)
         # The low memory implementation will return a series of dictionaries when we call apply, so we'll make it a dataframe with from_records
         summary[['Morgan_2048_2','Morgan_4096_2','Morgan_2048_3','Morgan_4096_3']] = pd.DataFrame.from_records(summary['Smiles'].parallel_apply(_generate_fingerprints_pandas_helper))
         return summary
