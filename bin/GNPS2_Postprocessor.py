@@ -1,14 +1,19 @@
 import ast
+import math
 import os
+import pickle
 import numpy as np
 import pandas as pd
 from pyteomics.mgf import IndexedMGF
 import re
 from tqdm import tqdm
+from utils import harmonize_smiles_rdkit
+from rdkit import Chem
 
 def sanity_checks(summary):
     assert len(summary[(summary.msManufacturer == 'Thermo') & (summary.msMassAnalyzer == 'qtof')]) == 0
     assert len(summary[(summary.msMassAnalyzer == 'orbitrap') & (summary.msManufacturer == 'Bruker Daltonics')]) == 0 
+    assert len(summary[(summary.Adduct == 'None') & (summary.Adduct == 'nan') & (summary.Adduct.isna())]) == 0
 
 def basic_cleaning(summary):
     # scan
@@ -21,13 +26,13 @@ def basic_cleaning(summary):
     # ionization
     summary.msIonisation = summary.msIonisation.astype(str)
     summary.loc[['esi' in x.lower() or 'electrospray' in x.lower() for x in summary.msIonisation], 'msIonisation'] = "ESI"
+    summary.loc[['' == x or 'positive' == x.lower() or 'negative'  == x.lower() for x in summary.msIonisation], 'msIonisation'] = "nan"
     
     # Adduct
-    summary.Adduct = summary.Adduct.apply(lambda x: str(x).strip())
-    # Strip starting and ending braces if no charge is specified
-    summary.Adduct = summary.Adduct.map(lambda x: x[1:-1] if x.strip()[-1] == ']' and x[0] == '[' else x)
-    # Strip starting and ending braces if no charge is specified
-    summary.Adduct = summary.Adduct.map(lambda x: x[1:-2] if (x.strip()[-2:] == ']+' or x[-2:] == ']-') and x[0] == '[' else x)
+    # Adduct Table Credit: Yasin El Abiead
+    adduct_mapping = pickle.load(open('./adduct_mapping.pkl', 'rb'))
+    summary.Adduct = summary.Adduct.apply(lambda x: adduct_mapping.get(x.strip()))
+    summary = summary[summary.Adduct.notna()]    
 
     # Conversion of numerical columns to numerical types to protect against contamination
     summary.Precursor_MZ = summary.Precursor_MZ.astype(float)
@@ -61,10 +66,20 @@ def basic_cleaning(summary):
     summary.msMassAnalyzer = summary.msMassAnalyzer.astype('str')
     summary.msMassAnalyzer = summary.msMassAnalyzer.str.lower()
     
-    summary.msMassAnalyzer = summary.msMassAnalyzer.str.lower()
     # summary.msMassAnalyzer = summary.msMassAnalyzer.str.strip('[]').str.strip("'").str.split(',')
-    mask = ~ summary.msMassAnalyzer.isna()
-    summary.loc[mask,'msMassAnalyzer'] = summary.loc[mask,'msMassAnalyzer'].apply(lambda x: ast.literal_eval(x))
+    mask = (summary.msMassAnalyzer.notna()) & (summary.msMassAnalyzer != 'nan')
+    def literal_eval_helper(x):
+        """
+        An small helper function to handle weird entries in msMassAnalyzer
+        """
+        try:
+            return ast.literal_eval(x)
+        except Exception as e:
+            print(e)
+            print(f"Error in literal_eval_helper when trying to parse {x}")
+            return ["nan"]
+    
+    summary.loc[mask,'msMassAnalyzer'] = summary.loc[mask,'msMassAnalyzer'].apply(lambda x: literal_eval_helper(x))
     summary.loc[mask,'msMassAnalyzer'] = summary.loc[mask,'msMassAnalyzer'].apply(lambda x: [transform_analyzer(y) for y in x])
     summary.loc[mask,'msMassAnalyzer'] = summary.loc[mask,'msMassAnalyzer'].apply(merge_analyzer)
     # summary.loc[mask].apply(lambda x: [y == 'quadrupole tof' for y in x].any())
@@ -83,6 +98,19 @@ def basic_cleaning(summary):
     summary.loc[summary.msDetector == "microchannel plate detector", 'msDetector'] = 'MCP'
     
     
+    return summary
+
+def clean_smiles(summary):
+    """This function will harmonize the tautomers for the smiles strings and remove invalid strings.
+
+    Args:
+        summary (DataFrame): The summary dataframe
+
+    Returns:
+        DataFrame: The modified summary dataframe
+    """
+    summary.Smiles = summary.Smiles.astype(str)
+    summary.Smiles = summary.Smiles.apply(lambda x: harmonize_smiles_rdkit(x))
     return summary
 
 def propogate_GNPS_Inst_field(summary):
@@ -155,6 +183,9 @@ def postprocess_files(csv_path, mgf_path, output_csv_path, output_parquet_path):
 
     # Cleaning up files:
     summary = basic_cleaning(summary)
+    
+    # Clean smiles strings:
+    summary = clean_smiles(summary)
     
     # Exploiting GNPS_Inst annotations:
     summary = propogate_GNPS_Inst_field(summary)
