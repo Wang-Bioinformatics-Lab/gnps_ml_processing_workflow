@@ -166,36 +166,30 @@ def Structural_Similarity_Prediction(summary_path:str, parquet_path:str):
     # qtof.to_csv('./summary/Structural_Similarity_Prediction.csv', index=False)
     # # Save to parquet
     # parquet_as_df[parquet_as_df.spectrum_id.isin(qtof.spectrum_id)].export_parquet('./spectra/Structural_Similarity_Prediction.parquet')
-    df = dd.read_csv(summary_path, dtype={'Smiles':str,
-                                               'msDetector':str,
-                                               'msDissociationMethod':str,
-                                               'msManufacturer':str,
-                                               'msMassAnalyzer':str,
-                                               'msModel':str})
-    # Remove all entries without structure
-    df = df[df.Smiles.notnull()]
     
-    """
-    TODO: Move this smiles cleaning to GNPS_PostProcessor.py
-    """
+    df = pd.read_csv(summary_path, dtype=   {'Smiles':str,
+                                            'msDetector':str,
+                                            'msDissociationMethod':str,
+                                            'msManufacturer':str,
+                                            'msMassAnalyzer':str,
+                                            'msModel':str})
+    df.Smiles = df.Smiles.astype(str)
+    df = df[(df.Smiles.notnull()) & (df.Smiles != 'nan')]
+    df = generate_fingerprints(df)
+
+    # Compute and Save Similarities
+    build_tanimoto_similarity_list_precomputed(df, './util/Structural_Similarity_Prediction_Pairs.csv', similarity_threshold=0.0)
     
-    # Clean SMILES
-    df['Smiles'] = df['Smiles'].map_partitions(harmonize_smiles_rdkit)
-    # Remove all entries whose smiles failed to parse
-    df  = df[df.Smiles.notnull()]
-    
-    df  = generate_fingerprints(df)
-    sim = build_tanimoto_similarity_list_precomputed(df, similarity_threshold=0.0)
+    if type(df) == dd.DataFrame:
+        final_ids = df.spectrum_id.values.compute()
+    else:
+        final_ids = df.spectrum_id.values
 
     # Save to csv
     df.to_csv('./summary/Structural_Similarity_Prediction.csv', index=False)
     # Save to parquet
     # Make sure to call compute here to load the values into memory
-    parquet_as_df[parquet_as_df.spectrum_id.isin(df.spectrum_id.values.compute())].export_parquet('./spectra/Structural_Similarity_Prediction.parquet')
-    
-
-    # Save similarities
-    sim.to_csv('./util/Structural_Similarity_Prediction_Pairs.csv', index=False)
+    parquet_as_df[parquet_as_df.spectrum_id.isin(final_ids)].export_parquet('./spectra/Structural_Similarity_Prediction.parquet')
 
 def Spectral_Similarity_Prediction(summary_path:str, parquet_path:str):
     # This dataset: struct1 + struct2 -> spectral similarity
@@ -238,12 +232,16 @@ def Structural_Modification(summary_path:str, parquet_path:str):
     # Generate Fingerprints
     positive = generate_fingerprints(positive)
     negative = generate_fingerprints(negative)
-    # Calculate structural similarities
-    positive_sim = build_tanimoto_similarity_list_precomputed(positive, similarity_threshold = 0.70)
-    negative_sim = build_tanimoto_similarity_list_precomputed(negative, similarity_threshold = 0.70)
+    # Compute and Save Similarities to utils
+    positive_sim_path = './util/Structural_Modification_orbitrap_positive_sim.csv'
+    negative_sim_path = './util/Structural_Modification_orbitrap_negative_sim.csv'
+    build_tanimoto_similarity_list_precomputed(positive, positive_sim_path, similarity_threshold = 0.70)
+    build_tanimoto_similarity_list_precomputed(negative, negative_sim_path, similarity_threshold = 0.70)
     # Remove entires not included in positive_sim
-    positive_ids = pd.concat((positive_sim.spectrumid1,positive_sim.spectrumid2)).unique()
-    negative_ids = pd.concat((negative_sim.spectrumid1,negative_sim.spectrumid2)).unique()
+    positive_sim = vaex.open(positive_sim_path)
+    negative_sim = vaex.open(negative_sim_path)
+    positive_ids = pd.concat((positive_sim.spectrumid1.to_pandas_series().unique(),positive_sim.spectrumid2.to_pandas_series().unique())).unique()
+    negative_ids = pd.concat((negative_sim.spectrumid1.to_pandas_series().unique(),negative_sim.spectrumid2.to_pandas_series().unique())).unique()
     positive = positive[positive.spectrum_id.isin(positive_ids)]
     negative = negative[negative.spectrum_id.isin(negative_ids)]
     # Save to csv
@@ -252,10 +250,6 @@ def Structural_Modification(summary_path:str, parquet_path:str):
     # Save to parquet
     parquet_as_df[parquet_as_df.spectrum_id.isin(positive_ids)].export_parquet('./spectra/Structural_Modification_orbitrap_positive.parquet')
     parquet_as_df[parquet_as_df.spectrum_id.isin(negative_ids)].export_parquet('./spectra/Structural_Modification_orbitrap_negative.parquet')
-    
-    # Save Similarities to utils
-    positive_sim.to_csv('./util/Structural_Modification_orbitrap_positive_sim.csv', index=False)
-    negative_sim.to_csv('./util/Structural_Modification_orbitrap_negative_sim.csv', index=False)
     
     # qtof Portion
     positive = df.loc[(df.Adduct == 'M+H') & (df.msMassAnalyzer == 'qtof') & (df.GNPS_Inst == 'qtof')]
@@ -266,12 +260,16 @@ def Structural_Modification(summary_path:str, parquet_path:str):
     # Add fingerprints
     positive = generate_fingerprints(positive)
     negative = generate_fingerprints(negative)
-    # Calculate structural similarities
-    positive_sim = build_tanimoto_similarity_list_precomputed(positive, similarity_threshold = 0.70)
-    negative_sim = build_tanimoto_similarity_list_precomputed(negative, similarity_threshold = 0.70)
+    # Calculate and save structural similarities
+    positive_sim_path = './util/Structural_Modification_qtof_positive_sim.csv'
+    negative_sim_path = './util/Structural_Modification_qtof_negative_sim.csv'
+    build_tanimoto_similarity_list_precomputed(positive, positive_sim_path, similarity_threshold = 0.70)
+    build_tanimoto_similarity_list_precomputed(negative, negative_sim_path, similarity_threshold = 0.70)
     # Remove entires not included in positive_sim
-    positive_ids = pd.concat((positive_sim.spectrumid1,positive_sim.spectrumid2)).unique()
-    negative_ids = pd.concat((negative_sim.spectrumid1,negative_sim.spectrumid2)).unique()
+    positive_sim = vaex.open(positive_sim_path)
+    negative_sim = vaex.open(negative_sim_path)
+    positive_ids = pd.concat((positive_sim.spectrumid1.to_pandas_series().unique(),positive_sim.spectrumid2.to_pandas_series().unique())).unique()
+    negative_ids = pd.concat((negative_sim.spectrumid1.to_pandas_series().unique(),negative_sim.spectrumid2.to_pandas_series().unique())).unique()
     positive = positive[positive.spectrum_id.isin(positive_ids)]
     negative = negative[negative.spectrum_id.isin(negative_ids)]
     # Save to csv
@@ -280,10 +278,6 @@ def Structural_Modification(summary_path:str, parquet_path:str):
     # Save to parquet
     parquet_as_df[parquet_as_df.spectrum_id.isin(positive_ids)].export_parquet('./spectra/Structural_Modification_qtof_positive.parquet')
     parquet_as_df[parquet_as_df.spectrum_id.isin(negative_ids)].export_parquet('./spectra/Structural_Modification_qtof_negative.parquet')
-    
-    # Save Similarities to utils
-    positive_sim.to_csv('./util/Structural_Modification_qtof_positive_sim.csv', index=False)
-    negative_sim.to_csv('./util/Structural_Modification_qtof_negative_sim.csv', index=False)
     
 
 def main():
