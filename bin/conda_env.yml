@@ -16,6 +16,7 @@ dependencies:
   - joblib
   - pyarrow
   - fastparquet
+  - dask
   - pip:
     - obonet
     - vaex
