@@ -43,7 +43,7 @@ class Adduct:
   """ 
   __electron_weight=0.00054858
 
-  def __init__(self, adduct):
+  def __init__(self, adduct: str):
     
     """
       Args:
@@ -85,7 +85,7 @@ class Adduct:
     return hash(self.__multimer, self.__adduct_mass, self.__charge, self.__charge_type)
 
 
-  def __calculate_mass_from_formula_to_add_or_subtract(adduct_formula):
+  def __calculate_mass_from_formula_to_add_or_subtract(adduct_formula: str) -> float:
     """
       Args:
         formula (str): String representing the formula within an adduct in the form +HCOOH-H, +Ca, +H, +CH3COOH-H, etc..
@@ -113,16 +113,16 @@ class Adduct:
       
     return mass_of_adduct_to_add_or_subtract
   
-  def get_multimer(self):
+  def get_multimer(self) -> int:
     return self.__multimer
 
-  def get_adduct_mass(self):
+  def get_adduct_mass(self)-> float:
     return self.__adduct_mass
   
-  def get_adduct_charge(self):
+  def get_adduct_charge(self)-> int:
     return self.__charge
 
-  def get_adduct_charge_type(self):
+  def get_adduct_charge_type(self)-> str:
     return self.__charge_type
 
       

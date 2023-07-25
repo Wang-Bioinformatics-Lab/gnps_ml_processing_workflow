@@ -34,6 +34,7 @@ from Element import Element_type, element_weights
 from IncorrectFormula import IncorrectFormula
 from NotFoundElement import NotFoundElement
 from Adduct import Adduct
+from typing import Union
 
 class Formula:
   __electron_weight=0.00054858
@@ -50,7 +51,7 @@ class Formula:
   get_monoisotopic_mass_with_adduct(): returns the monoisotopic mass of the formula +- the adduct
     """
   
-  def __init__(self, elements, adduct):
+  def __init__(self, elements: dict[Union['Element_type',str], int], adduct: Union['Adduct', str]):
     """
     Args:
       element_type (dict of Element_type and int): dictionary containing elements and their apps in a formula. If an element appears more than once, its appearences will be updated. Example {'C': 48, 'H': 72, 'N': 10, 'O': 12}
@@ -84,7 +85,7 @@ class Formula:
       raise IncorrectFormula(elements)
     self.__monoisotopic_mass = self.__calculate_monoisotopic_mass()
     if isinstance(adduct, str):
-      if adduct == 'None' or Adduct is None:
+      if adduct == 'None' or adduct == '' or Adduct is None:
         self.__adduct=None
       else: 
         self.__adduct = Adduct(adduct)
@@ -109,7 +110,7 @@ class Formula:
   def __hash__(self):
     return hash(frozenset(self.__elements.items()))
 
-  def get_formula_from_str(formula_str, adduct):
+  def get_formula_from_str(formula_str: str, adduct: str) -> 'Formula':
     """
     Args:
       formula_str (str): represents a molecular formula as a string of type [Element_type][NumberOfOccurences]: C4H5N6Na
@@ -130,7 +131,7 @@ class Formula:
       
     return Formula(elements, adduct)
   
-  def get_formula_from_smiles(smiles, adduct):
+  def get_formula_from_smiles(smiles: str, adduct: str) -> 'Formula':
     """
     Args:
       smiles (str): represents a molecular structure as a string. Example: CCCCCCC[C@@H](C/C=C/CCC(=O)NC/C(=C/Cl)/[C@@]12[C@@H](O1)[C@H](CCC2=O)O)OC
@@ -148,26 +149,26 @@ class Formula:
     if mol is None:
       raise IncorrectFormula(smiles)
       
-  def get_elements(self):
+  def get_elements(self) -> dict['Element_type',int]:
     """
     Returns: A copy of the dictionary of the elements so the formula cannot be mutated
     """
     return self.__elements.copy()
 
-  def __calculate_monoisotopic_mass(self):
+  def __calculate_monoisotopic_mass(self) -> float:
 
     monoisotopic_mass = 0
     for element, appearances in self.__elements.items():
       monoisotopic_mass += element_weights[element] * appearances
     return monoisotopic_mass
         
-  def get_monoisotopic_mass(self):
+  def get_monoisotopic_mass(self) -> float:
     """
     Returns: the monoisotopic mass of the formula taking into account the adduct formed, such as '[M+CH3CN+H]+', '[M-3H2O+2H]2+' or '[5M+Ca]2+'
     """
     return self.__monoisotopic_mass
   
-  def __calculate_monoisotopic_mass_with_adduct(self):
+  def __calculate_monoisotopic_mass_with_adduct(self) -> float:
     """
     Returns: the monoisotopic mass of the formula taking into account the adduct formed, such as '[M+CH3CN+H]+', '[M-3H2O+2H]2+' or '[5M+Ca]2+'
     """
@@ -193,14 +194,14 @@ class Formula:
     
     return monoisotopic_mass_with_adduct
 
-  def get_monoisotopic_mass_with_adduct(self):
+  def get_monoisotopic_mass_with_adduct(self) -> float:
     """
     Returns: the monoisotopic mass of the formula taking into account the adduct coupled to the structure
     """
     return self.__monoisotopic_mass_with_adduct
     
 
-  def check_monoisotopic_mass(self, external_mass, mass_tolerance_in_ppm=50):
+  def check_monoisotopic_mass(self, external_mass: float, mass_tolerance_in_ppm: Union[int, float] =50) -> bool:
     """
     Args:
       external_mass (numeric): represents a monoisotopic mass to be compared with the mass of the formula
@@ -215,7 +216,7 @@ class Formula:
     else:
       return False
   
-  def check_monoisotopic_mass_with_adduct(self, external_mass, mass_tolerance_in_ppm=50):
+  def check_monoisotopic_mass_with_adduct(self, external_mass: float, mass_tolerance_in_ppm: Union[int, float] =50) -> bool:
     """
     Args:
       external_mass (numeric): represents a monoisotopic mass to be compared with the mass of the formula
@@ -232,7 +233,7 @@ class Formula:
   
 
 
-  def ppm_to_absolute(reference_monoisotopic_mass, ppm=50):
+  def ppm_to_absolute(reference_monoisotopic_mass, ppm=50) -> float:
     """
     Args:
       reference_monoisotopic_mass (numeric): monoisotopic mass of reference
