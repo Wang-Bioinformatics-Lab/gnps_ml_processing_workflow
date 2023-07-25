@@ -10,10 +10,7 @@ from tqdm import tqdm
 from utils import harmonize_smiles_rdkit
 from rdkit import Chem
 
-def sanity_checks(summary):
-    assert len(summary[(summary.msManufacturer == 'Thermo') & (summary.msMassAnalyzer == 'qtof')]) == 0
-    assert len(summary[(summary.msMassAnalyzer == 'orbitrap') & (summary.msManufacturer == 'Bruker Daltonics')]) == 0 
-    assert len(summary[(summary.Adduct == 'None') & (summary.Adduct == 'nan') & (summary.Adduct.isna())]) == 0
+from formula_validation import Formula, Adduct, IncorrectFormula, IncorrectAdduct
 
 def basic_cleaning(summary):
     # scan
@@ -28,7 +25,7 @@ def basic_cleaning(summary):
     summary.loc[['esi' in x.lower() or 'electrospray' in x.lower() for x in summary.msIonisation], 'msIonisation'] = "ESI"
     summary.loc[['' == x or 'positive' == x.lower() or 'negative'  == x.lower() for x in summary.msIonisation], 'msIonisation'] = "nan"
     
-    # Adduct
+    # Adduct translation from chemical names to adduct formulas -> 'M+TFA-H': '[M+C2HF3O2-H]-'
     # Adduct Table Credit: Yasin El Abiead
     adduct_mapping = pickle.load(open('./adduct_mapping.pkl', 'rb'))
     summary.Adduct = summary.Adduct.apply(lambda x: adduct_mapping.get(x.strip()))
@@ -150,7 +147,20 @@ def propogate_msModel_field(summary):
 
     return summary
 
-def generate_parquet_file(input_mgf, spectrum_ids):
+
+def sanity_checks(summary):
+    assert len(summary[(summary.msManufacturer == 'Thermo') & (summary.msMassAnalyzer == 'qtof')]) == 0
+    assert len(summary[(summary.msMassAnalyzer == 'orbitrap') & (summary.msManufacturer == 'Bruker Daltonics')]) == 0 
+    assert len(summary[(summary.Adduct == 'None') & (summary.Adduct == 'nan') & (summary.Adduct.isna())]) == 0
+
+def add_columns_formula_analysis(summary): 
+    column_name_ppmBetweenExpAndThMass='ppmBetweenExpAndThMass'
+    
+    formula = Formula.formula_from_smiles(summary.Smiles, summary.Adduct)
+
+    summary[column_name_ppmBetweenExpAndThMass]
+
+def generate_parquet_df(input_mgf, spectrum_ids):
     """
     Details on output format:
     Columns will be [level_0, index, i, i_norm, mz, precmz]
@@ -193,8 +203,10 @@ def postprocess_files(csv_path, mgf_path, output_csv_path, output_parquet_path):
     # Exploiting Some of the info in msModel
     summary = propogate_msModel_field(summary)
     sanity_checks(summary)
+
+    add_columns_formula_analysis(summary)
     
-    parquet_as_df = generate_parquet_file(mgf_path, summary.spectrum_id.astype('str'))
+    parquet_as_df = generate_parquet_df(mgf_path, summary.spectrum_id.astype('str'))
     parquet_as_df.to_parquet(output_parquet_path)
     summary.to_csv(output_csv_path, index=False)
 
