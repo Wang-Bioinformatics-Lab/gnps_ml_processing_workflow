@@ -10,5 +10,5 @@ GNPS_ml_exports/*
 nf_output/
 bin/env/
 nf_output_validated_instrument/
-bin/__pycache__/
+bin/*__pycache__*
 spectral_similarities

@@ -232,7 +232,7 @@ class Formula:
       return False
   
 
-  def absolute_to_ppm(self, reference_monoisotopic_mass: Union[float,int]) -> float:
+  def ppm_difference_with_exp_mass(self, reference_monoisotopic_mass: Union[float,int]) -> float:
     """
     Args:
       reference_monoisotopic_mass (numeric): monoisotopic mass of reference
@@ -240,7 +240,20 @@ class Formula:
     Returns: the ppms between the monoisotopic mass of the formula taking into account the adduct and the experimental mass detected
     Raise: a exception if reference_monoisotopic_mass or ppm are not numbers
     """
-    ppm_diff = abs((self.get_monoisotopic_mass_with_adduct() - reference_monoisotopic_mass) / self.get_monoisotopic_mass_with_adduct()) * 1e6
+    print(self.get_monoisotopic_mass_with_adduct(), reference_monoisotopic_mass)
+    return Formula.absolute_to_ppm(self.get_monoisotopic_mass_with_adduct(), reference_monoisotopic_mass)
+
+  
+  def absolute_to_ppm(reference_monoisotopic_mass: Union[float,int], mass_to_compare: Union[float,int]) -> float:
+    """
+    Args:
+      reference_monoisotopic_mass (numeric): monoisotopic mass of reference
+      mass_to_compare(numeric): mass to compare
+    Returns: the ppms between the reference_monoisotopic_mass mass and mass_to_compare
+    Raise: a exception if reference_monoisotopic_mass or ppm are not numbers
+    """
+    
+    ppm_diff = abs((reference_monoisotopic_mass - mass_to_compare) / reference_monoisotopic_mass) * 1000000.0
     return ppm_diff
 
 
@@ -448,9 +461,9 @@ def main():
     smiles_1 = 'CCCCCCC[C@@H](C/C=C/CCC(=O)NC/C(=C/Cl)/[C@@]12[C@@H](O1)[C@H](CCC2=O)O)OC'
     adduct = '[5M+Ca]2+' # adduct weight = 41.00328858
     my_formula = Formula.formula_from_smiles(smiles_1, adduct)
-    reference_mass = 1158.010
-    expected_value = 6.94
-    current_value = my_formula.get_monoisotopic_mass_with_adduct()
+    experimental_mass = 1158.099
+    expected_value = 7.45
+    current_value = my_formula.ppm_difference_with_exp_mass(experimental_mass)
     if(math.isclose(current_value,expected_value,abs_tol=0.01)):
       print("Test PASSED. The function Calculating the ppm difference between a formula and an experimental value.")
     else:
