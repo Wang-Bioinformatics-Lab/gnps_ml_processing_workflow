@@ -21,3 +21,4 @@ dependencies:
     - obonet
     - vaex
     - pandarallel 
+    - dask
