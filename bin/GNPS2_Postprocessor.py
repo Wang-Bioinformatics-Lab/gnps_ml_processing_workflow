@@ -158,7 +158,8 @@ def add_columns_formula_analysis(summary):
     
     formula = Formula.formula_from_smiles(summary.Smiles, summary.Adduct)
 
-    summary[column_name_ppmBetweenExpAndThMass]
+    summary[column_name_ppmBetweenExpAndThMass] = formula.ppm_difference_with_exp_mass(summary.Precursor_MZ)
+
 
 def generate_parquet_df(input_mgf, spectrum_ids):
     """
