@@ -201,7 +201,7 @@ class Formula:
     return self.__monoisotopic_mass_with_adduct
     
 
-  def check_monoisotopic_mass(self, external_mass: float, mass_tolerance_in_ppm: Union[int, float] =50) -> bool:
+  def check_monoisotopic_mass(self, external_mass: Union[float,int], mass_tolerance_in_ppm: Union[int, float] =50) -> bool:
     """
     Args:
       external_mass (numeric): represents a monoisotopic mass to be compared with the mass of the formula
@@ -216,7 +216,7 @@ class Formula:
     else:
       return False
   
-  def check_monoisotopic_mass_with_adduct(self, external_mass: float, mass_tolerance_in_ppm: Union[int, float] =50) -> bool:
+  def check_monoisotopic_mass_with_adduct(self, external_mass: Union[float,int], mass_tolerance_in_ppm: Union[int, float] =50) -> bool:
     """
     Args:
       external_mass (numeric): represents a monoisotopic mass to be compared with the mass of the formula
@@ -233,7 +233,7 @@ class Formula:
   
 
 
-  def ppm_to_absolute(reference_monoisotopic_mass, ppm=50) -> float:
+  def ppm_to_absolute(reference_monoisotopic_mass: Union[float,int], ppm: Union[float,int] = 50) -> float:
     """
     Args:
       reference_monoisotopic_mass (numeric): monoisotopic mass of reference
