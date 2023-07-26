@@ -350,6 +350,10 @@ def harmonize_smiles_rdkit(smiles, tautomer_limit = 900):
         smiles_largest = MolStandardize.fragment.LargestFragmentChooser(smiles).prefer_organic
         mol = Chem.MolFromSmiles(smiles_largest)
 
+        if mol is None:
+            # The files failed to parse, it should be removed
+            return None
+        
         monomass = rdMolDescriptors.CalcExactMolWt(mol)
         # standardize tautomer
         if monomass < tautomer_limit:
