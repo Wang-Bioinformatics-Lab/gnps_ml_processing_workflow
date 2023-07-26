@@ -180,7 +180,6 @@ def add_columns_formula_analysis(summary):
             
     summary[column_name_ppmBetweenExpAndThMass] = summary.apply(helper, axis=1)
 
-
 def generate_parquet_df(input_mgf, spectrum_ids):
     """
     Details on output format:
