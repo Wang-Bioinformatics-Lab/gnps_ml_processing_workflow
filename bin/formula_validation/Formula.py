@@ -29,12 +29,13 @@ this Formula class.
 __author__    = "Alberto Gil de la Fuente"
 __copyright__   = "GPL License version 3"
 
+from typing import Union
 
 from Element import Element_type, element_weights
 from IncorrectFormula import IncorrectFormula
 from NotFoundElement import NotFoundElement
 from Adduct import Adduct
-from typing import Union
+
 
 class Formula:
   __electron_weight=0.00054858

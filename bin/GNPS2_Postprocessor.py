@@ -10,7 +10,25 @@ from tqdm import tqdm
 from utils import harmonize_smiles_rdkit
 from rdkit import Chem
 
-from formula_validation import Formula, Adduct, IncorrectFormula, IncorrectAdduct
+import sys
+
+# Modify sys.path to include the parent directory
+parent_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), 'formula_validation'))
+sys.path.append(parent_dir)
+print(sys.path)
+
+# Import module2 using relative import
+from Formula import Formula
+from Adduct import Adduct
+from IncorrectFormula import IncorrectFormula
+from IncorrectAdduct import IncorrectAdduct
+
+# Now you can use module2 in your code
+
+# Restore sys.path to its original state if needed
+sys.path.remove(parent_dir)
+
+
 
 def basic_cleaning(summary):
     # scan
@@ -107,7 +125,7 @@ def clean_smiles(summary):
         DataFrame: The modified summary dataframe
     """
     summary.Smiles = summary.Smiles.astype(str)
-    summary.Smiles = summary.Smiles.apply(lambda x: harmonize_smiles_rdkit(x))
+    #summary.Smiles = summary.Smiles.apply(lambda x: harmonize_smiles_rdkit(x))
     return summary
 
 def propogate_GNPS_Inst_field(summary):
@@ -153,12 +171,15 @@ def sanity_checks(summary):
     assert len(summary[(summary.msMassAnalyzer == 'orbitrap') & (summary.msManufacturer == 'Bruker Daltonics')]) == 0 
     assert len(summary[(summary.Adduct == 'None') & (summary.Adduct == 'nan') & (summary.Adduct.isna())]) == 0
 
+
 def add_columns_formula_analysis(summary): 
     column_name_ppmBetweenExpAndThMass='ppmBetweenExpAndThMass'
     
-    formula = Formula.formula_from_smiles(summary.Smiles, summary.Adduct)
+    def helper(row):
+        return Formula.formula_from_smiles(row['Smiles'], row['Adduct']).ppm_difference_with_exp_mass(row['Precursor_MZ'])
+            
+    summary[column_name_ppmBetweenExpAndThMass] = summary.apply(helper, axis=1)
 
-    summary[column_name_ppmBetweenExpAndThMass]
 
 def generate_parquet_df(input_mgf, spectrum_ids):
     """
@@ -206,13 +227,13 @@ def postprocess_files(csv_path, mgf_path, output_csv_path, output_parquet_path):
 
     add_columns_formula_analysis(summary)
     
-    parquet_as_df = generate_parquet_df(mgf_path, summary.spectrum_id.astype('str'))
-    parquet_as_df.to_parquet(output_parquet_path)
+    #parquet_as_df = generate_parquet_df(mgf_path, summary.spectrum_id.astype('str'))
+    #parquet_as_df.to_parquet(output_parquet_path)
     summary.to_csv(output_csv_path, index=False)
 
 def main():
-    csv_path = "ALL_GNPS_merged.csv"
-    mgf_path = "ALL_GNPS_merged.mgf"
+    csv_path = "/home/alberto/Downloads/sample_csv.csv"
+    mgf_path = "/home/alberto/Downloads/sample_mgf.mgf"
     cleaned_csv_path = "ALL_GNPS_cleaned.csv"
     cleaned_parquet_path = "ALL_GNPS_cleaned.parquet"
 
