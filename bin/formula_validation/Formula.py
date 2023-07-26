@@ -29,7 +29,7 @@ this Formula class.
 __author__    = "Alberto Gil de la Fuente"
 __copyright__   = "GPL License version 3"
 
-from typing import Union
+from typing import Union, Dict
 
 from Element import Element_type, element_weights
 from IncorrectFormula import IncorrectFormula
@@ -143,11 +143,38 @@ class Formula:
     """
     from rdkit import Chem
     from rdkit.Chem.rdMolDescriptors import CalcMolFormula
+    if smiles =='' or smiles=='nan' or smiles == 'None' or smiles == None:
+      raise IncorrectFormula(smiles)
+    elif smiles.startswith('InChI='):
+      return Formula.formula_from_inchi(smiles,adduct)
+    
     mol = Chem.MolFromSmiles(smiles)
-    formula = CalcMolFormula(mol)
-    return Formula.formula_from_str(formula, adduct)
     if mol is None:
       raise IncorrectFormula(smiles)
+    formula = CalcMolFormula(mol)
+    return Formula.formula_from_str(formula, adduct)
+    
+    
+  def formula_from_inchi(inchi: str, adduct: str) -> 'Formula':
+    """
+    Args:
+      inchi (str): represents a molecular structure as a string. Example: InChI=1S/C45H73N5O10S3/c1-14-17-24(6)34(52)26(8)37-25(7)30(58-13)18-31-46-29(19-61-31)39-49-45(12,21-62-39)43-50-44(11,20-63-43)42(57)48-32(22(4)15-2)35(53)27(9)40(55)59-36(23(5)16-3)38(54)47-33(28(10)51)41(56)60-37/h19,22-28,30,32-37,51-53H,14-18,20-21H2,1-13H3,(H,47,54)(H,48,57)/t22-,23-,24+,25-,26-,27+,28+,30-,32-,33-,34-,35-,36-,37-,44+,45+/m0/s1
+      adduct (str): adduct representing the adduct formed by the molecular formula expressed by the form '[M+C2H2O-H]-'
+    Returns:
+      Formula: according to the structure
+    Raises:
+      IncorrectFormula: if the SMILES does not represent a structure
+    """
+    from rdkit import Chem
+    from rdkit.Chem.rdMolDescriptors import CalcMolFormula
+    if not inchi.startswith('InChI='):
+      raise IncorrectFormula(inchi)
+  
+    mol = Chem.MolFromInchi(inchi)
+    if mol is None:
+      raise IncorrectFormula(smiles)
+    formula = CalcMolFormula(mol)
+    return Formula.formula_from_str(formula, adduct)
       
   def get_elements(self) -> Dict['Element_type',int]:
     """
@@ -342,7 +369,7 @@ def main():
     smiles_2 = 'CCC[C@@H](C)[C@@H]([C@H](C)[C@@H]1[C@H]([C@H](Cc2nc(cs2)C3=N[C@](CS3)(C4=N[C@](CS4)(C(=O)N[C@H]([C@H]([C@H](C(=O)O[C@H](C(=O)N[C@H](C(=O)O1)[C@@H](C)O)[C@@H](C)CC)C)O)[C@@H](C)CC)C)C)OC)C)O'
     smiles_3 = 'CCCCCCC[C@@H](C/C=C/CCC(=O)NC/C(=C/Cl)/[C@@]12[C@@H](O1)[C@H](CCC2=O)O)OC'
     adduct = '[M+C2H2O-H]-'
-    my_formula = Formula.formula_from_smiles(smiles_1, adduct)online
+    my_formula = Formula.formula_from_smiles(smiles_1, adduct)
     my_formula_2 = Formula.formula_from_smiles(smiles_2, adduct)
     my_formula_3 = Formula.formula_from_smiles(smiles_3, adduct)
     elements_expected_1 = {Element_type.H: 72, Element_type.C: 48, Element_type.N: 10, Element_type.O: 12}
