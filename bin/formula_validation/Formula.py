@@ -36,7 +36,6 @@ from IncorrectFormula import IncorrectFormula
 from NotFoundElement import NotFoundElement
 from Adduct import Adduct
 
-
 class Formula:
   __electron_weight=0.00054858
 
@@ -52,7 +51,7 @@ class Formula:
   get_monoisotopic_mass_with_adduct(): returns the monoisotopic mass of the formula +- the adduct
     """
   
-  def __init__(self, elements: dict[Union['Element_type',str], int], adduct: Union['Adduct', str]):
+  def __init__(self, elements: Dict[Union['Element_type',str], int], adduct: Union['Adduct', str]):
     """
     Args:
       element_type (dict of Element_type and int): dictionary containing elements and their apps in a formula. If an element appears more than once, its appearences will be updated. Example {'C': 48, 'H': 72, 'N': 10, 'O': 12}
@@ -150,7 +149,7 @@ class Formula:
     if mol is None:
       raise IncorrectFormula(smiles)
       
-  def get_elements(self) -> dict['Element_type',int]:
+  def get_elements(self) -> Dict['Element_type',int]:
     """
     Returns: A copy of the dictionary of the elements so the formula cannot be mutated
     """
@@ -343,7 +342,7 @@ def main():
     smiles_2 = 'CCC[C@@H](C)[C@@H]([C@H](C)[C@@H]1[C@H]([C@H](Cc2nc(cs2)C3=N[C@](CS3)(C4=N[C@](CS4)(C(=O)N[C@H]([C@H]([C@H](C(=O)O[C@H](C(=O)N[C@H](C(=O)O1)[C@@H](C)O)[C@@H](C)CC)C)O)[C@@H](C)CC)C)C)OC)C)O'
     smiles_3 = 'CCCCCCC[C@@H](C/C=C/CCC(=O)NC/C(=C/Cl)/[C@@]12[C@@H](O1)[C@H](CCC2=O)O)OC'
     adduct = '[M+C2H2O-H]-'
-    my_formula = Formula.formula_from_smiles(smiles_1, adduct)
+    my_formula = Formula.formula_from_smiles(smiles_1, adduct)online
     my_formula_2 = Formula.formula_from_smiles(smiles_2, adduct)
     my_formula_3 = Formula.formula_from_smiles(smiles_3, adduct)
     elements_expected_1 = {Element_type.H: 72, Element_type.C: 48, Element_type.N: 10, Element_type.O: 12}
