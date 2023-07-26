@@ -125,7 +125,7 @@ def clean_smiles(summary):
         DataFrame: The modified summary dataframe
     """
     summary.Smiles = summary.Smiles.astype(str)
-    #summary.Smiles = summary.Smiles.apply(lambda x: harmonize_smiles_rdkit(x))
+    summary.Smiles = summary.Smiles.apply(lambda x: harmonize_smiles_rdkit(x))
     return summary
 
 def propogate_GNPS_Inst_field(summary):
@@ -134,24 +134,25 @@ def propogate_GNPS_Inst_field(summary):
 
     # Fragmentation Info (Done)
     summary.msDissociationMethod = summary.msDissociationMethod.astype(str)
-    summary.loc[pd.Series([("in source cid" == x) for x in summary.GNPS_Inst]) & summary.msDissociationMethod == 'nan', 'msDissociationMethod'] = "is-cid"    
-    summary.loc[pd.Series([("hid" in x) for x in summary.GNPS_Inst]) & summary.msDissociationMethod == 'nan', 'msDissociationMethod'] = "hid"    
-    summary.loc[pd.Series([("cid" in x and not "is-cid" in x) for x in summary.GNPS_Inst]) & summary.msDissociationMethod == 'nan', 'msDissociationMethod'] = "cid"    
+    summary.loc[(pd.Series(["in source cid" == x for x in summary.GNPS_Inst]) & (summary.msDissociationMethod == 'nan')), 'msDissociationMethod'] = "is-cid"
+   
+    summary.loc[(pd.Series([("hid" in x) for x in summary.GNPS_Inst]) & (summary.msDissociationMethod == 'nan')), 'msDissociationMethod'] = "hid"    
+    summary.loc[(pd.Series([("cid" in x and not "is-cid" in x) for x in summary.GNPS_Inst]) & (summary.msDissociationMethod == 'nan')), 'msDissociationMethod'] = "cid"    
 
     # Ionisation Info (Not Done)
-    summary.loc[pd.Series(["esi" in x for x in  summary.GNPS_Inst]) & summary.msIonisation == 'nan', 'msIonisation'] = 'ESI'
-    summary.loc[pd.Series(["apci" in x for x in  summary.GNPS_Inst]) & summary.msIonisation == 'nan', 'msIonisation'] = 'APCI'
-    summary.loc[pd.Series([("appi" in x and not "dappi" in x) for x in summary.GNPS_Inst]) & summary.msIonisation == 'nan', 'msIonisation'] = 'APPI'
-    summary.loc[pd.Series(["dappi" in x for x in summary.GNPS_Inst]) & summary.msIonisation == 'nan', 'msIonisation'] = 'DAPPI'
+    summary.loc[(pd.Series(["esi" in x for x in  summary.GNPS_Inst]) & (summary.msIonisation == 'nan')), 'msIonisation'] = 'ESI'
+    summary.loc[(pd.Series(["apci" in x for x in  summary.GNPS_Inst]) & (summary.msIonisation == 'nan')), 'msIonisation'] = 'APCI'
+    summary.loc[(pd.Series([("appi" in x and not "dappi" in x) for x in summary.GNPS_Inst]) & (summary.msIonisation == 'nan')), 'msIonisation'] = 'APPI'
+    summary.loc[(pd.Series(["dappi" in x for x in summary.GNPS_Inst]) & (summary.msIonisation == 'nan')), 'msIonisation'] = 'DAPPI'
 
     # Mass Analyzer (Not Done)
-    summary.loc[pd.Series(["orbitrap" in x for x in summary.GNPS_Inst]) & summary.msMassAnalyzer == 'nan',"msMassAnalyzer"] = "orbitrap"
-    summary.loc[pd.Series([("quadrupole tof" in x or "qtof" in x or "q-tof" in x) and not "qq" in x for x in summary.GNPS_Inst]) & summary.msMassAnalyzer == 'nan',"msMassAnalyzer"] = "qtof"
-    summary.loc[pd.Series([("tof" in x) and not ("qq" in x or "qtof" in x or "q-tof" in x or "q tof" in x or "quadrupole tof" in x) for x in summary.GNPS_Inst]) & summary.msMassAnalyzer == 'nan',"msMassAnalyzer"] = "tof"
+    summary.loc[(pd.Series(["orbitrap" in x for x in summary.GNPS_Inst]) & (summary.msMassAnalyzer == 'nan')),"msMassAnalyzer"] = "orbitrap"
+    summary.loc[(pd.Series([("quadrupole tof" in x or "qtof" in x or "q-tof" in x) and not "qq" in x for x in summary.GNPS_Inst]) & (summary.msMassAnalyzer == 'nan')),"msMassAnalyzer"] = "qtof"
+    summary.loc[(pd.Series([("tof" in x) and not ("qq" in x or "qtof" in x or "q-tof" in x or "q tof" in x or "quadrupole tof" in x) for x in summary.GNPS_Inst]) & (summary.msMassAnalyzer == 'nan')),"msMassAnalyzer"] = "tof"
 
     # Manufacturer Info (Not Done)
-    summary.loc[pd.Series(["maxis" in x for x in summary.GNPS_Inst]) & summary.msManufacturer == "nan","msManufacturer"] = "Bruker Daltonics"
-    summary.loc[pd.Series(["q exactive" in x or "q-exactive" in x for x in summary.GNPS_Inst]) & summary.msManufacturer == "nan","msManufacturer"] = "Thermo"
+    summary.loc[(pd.Series(["maxis" in x for x in summary.GNPS_Inst]) & (summary.msManufacturer == "nan")),"msManufacturer"] = "Bruker Daltonics"
+    summary.loc[(pd.Series(["q exactive" in x or "q-exactive" in x for x in summary.GNPS_Inst]) & (summary.msManufacturer == "nan")),"msManufacturer"] = "Thermo"
     return summary
 
 def propogate_msModel_field(summary):
@@ -176,7 +177,10 @@ def add_columns_formula_analysis(summary):
     column_name_ppmBetweenExpAndThMass='ppmBetweenExpAndThMass'
     
     def helper(row):
-        return Formula.formula_from_smiles(row['Smiles'], row['Adduct']).ppm_difference_with_exp_mass(row['Precursor_MZ'])
+        try:
+            return Formula.formula_from_smiles(row['Smiles'], row['Adduct']).ppm_difference_with_exp_mass(row['Precursor_MZ'])
+        except IncorrectFormula as incFor:
+            return 'nan'
             
     summary[column_name_ppmBetweenExpAndThMass] = summary.apply(helper, axis=1)
 
