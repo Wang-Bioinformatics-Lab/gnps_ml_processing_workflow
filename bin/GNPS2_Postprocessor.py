@@ -241,10 +241,16 @@ def postprocess_files(csv_path, mgf_path, output_csv_path, output_parquet_path):
     summary.to_csv(output_csv_path, index=False)
 
 def main():
-    csv_path = "/home/alberto/Downloads/sample_csv.csv"
-    mgf_path = "/home/alberto/Downloads/sample_mgf.mgf"
-    cleaned_csv_path = "ALL_GNPS_cleaned.csv"
-    cleaned_parquet_path = "ALL_GNPS_cleaned.parquet"
+    parser = argparse.ArgumentParser(description='Postprocess GNPS files')
+    parser.add_argument('--input_csv_path', type=str, default="ALL_GNPS_merged.csv", help='Path to the csv file')
+    parser.add_argument('--input_mgf_path', type=str, default="ALL_GNPS_merged.mgf", help='Path to the mgf file')
+    parser.add_argument('--output_csv_path', type=str, default="ALL_GNPS_cleaned.csv", help='Path to the output csv file')
+    parser.add_argument('--output_parquet_path', type=str, default="ALL_GNPS_cleaned.parquet", help='Path to the output parquet file')
+    
+    csv_path                = str(args.input_csv_path)
+    mgf_path                = str(args.input_mgf_path)
+    cleaned_csv_path        = str(args.output_csv_path)
+    cleaned_parquet_path    = str(args.output_parquet_path)
 
     if not os.path.isfile(cleaned_csv_path):
         if not os.path.isfile(cleaned_parquet_path):
