@@ -13,10 +13,25 @@ from pandarallel import pandarallel
 
 PARALLEL_WORKERS = 8
 
-def sanity_checks(summary):
-    assert len(summary[(summary.msManufacturer == 'Thermo') & (summary.msMassAnalyzer == 'qtof')]) == 0
-    assert len(summary[(summary.msMassAnalyzer == 'orbitrap') & (summary.msManufacturer == 'Bruker Daltonics')]) == 0 
-    assert len(summary[(summary.Adduct == 'None') & (summary.Adduct == 'nan') & (summary.Adduct.isna())]) == 0
+import sys
+
+# Modify sys.path to include the parent directory
+parent_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), 'formula_validation'))
+sys.path.append(parent_dir)
+print(sys.path)
+
+# Import module2 using relative import
+from Formula import Formula
+from Adduct import Adduct
+from IncorrectFormula import IncorrectFormula
+from IncorrectAdduct import IncorrectAdduct
+
+# Now you can use module2 in your code
+
+# Restore sys.path to its original state if needed
+sys.path.remove(parent_dir)
+
+
 
 def basic_cleaning(summary):
     # scan
@@ -31,7 +46,7 @@ def basic_cleaning(summary):
     summary.loc[['esi' in x.lower() or 'electrospray' in x.lower() for x in summary.msIonisation], 'msIonisation'] = "ESI"
     summary.loc[['' == x or 'positive' == x.lower() or 'negative'  == x.lower() for x in summary.msIonisation], 'msIonisation'] = "nan"
     
-    # Adduct
+    # Adduct translation from chemical names to adduct formulas -> 'M+TFA-H': '[M+C2HF3O2-H]-'
     # Adduct Table Credit: Yasin El Abiead
     adduct_mapping = pickle.load(open('./adduct_mapping.pkl', 'rb'))
     summary.Adduct = summary.Adduct.apply(lambda x: adduct_mapping.get(x.strip()))
@@ -122,24 +137,25 @@ def propogate_GNPS_Inst_field(summary):
 
     # Fragmentation Info (Done)
     summary.msDissociationMethod = summary.msDissociationMethod.astype(str)
-    summary.loc[pd.Series([("in source cid" == x) for x in summary.GNPS_Inst]) & summary.msDissociationMethod == 'nan', 'msDissociationMethod'] = "is-cid"    
-    summary.loc[pd.Series([("hid" in x) for x in summary.GNPS_Inst]) & summary.msDissociationMethod == 'nan', 'msDissociationMethod'] = "hid"    
-    summary.loc[pd.Series([("cid" in x and not "is-cid" in x) for x in summary.GNPS_Inst]) & summary.msDissociationMethod == 'nan', 'msDissociationMethod'] = "cid"    
+    summary.loc[(pd.Series(["in source cid" == x for x in summary.GNPS_Inst]) & (summary.msDissociationMethod == 'nan')), 'msDissociationMethod'] = "is-cid"
+   
+    summary.loc[(pd.Series([("hid" in x) for x in summary.GNPS_Inst]) & (summary.msDissociationMethod == 'nan')), 'msDissociationMethod'] = "hid"    
+    summary.loc[(pd.Series([("cid" in x and not "is-cid" in x) for x in summary.GNPS_Inst]) & (summary.msDissociationMethod == 'nan')), 'msDissociationMethod'] = "cid"    
 
     # Ionisation Info (Not Done)
-    summary.loc[pd.Series(["esi" in x for x in  summary.GNPS_Inst]) & summary.msIonisation == 'nan', 'msIonisation'] = 'ESI'
-    summary.loc[pd.Series(["apci" in x for x in  summary.GNPS_Inst]) & summary.msIonisation == 'nan', 'msIonisation'] = 'APCI'
-    summary.loc[pd.Series([("appi" in x and not "dappi" in x) for x in summary.GNPS_Inst]) & summary.msIonisation == 'nan', 'msIonisation'] = 'APPI'
-    summary.loc[pd.Series(["dappi" in x for x in summary.GNPS_Inst]) & summary.msIonisation == 'nan', 'msIonisation'] = 'DAPPI'
+    summary.loc[(pd.Series(["esi" in x for x in  summary.GNPS_Inst]) & (summary.msIonisation == 'nan')), 'msIonisation'] = 'ESI'
+    summary.loc[(pd.Series(["apci" in x for x in  summary.GNPS_Inst]) & (summary.msIonisation == 'nan')), 'msIonisation'] = 'APCI'
+    summary.loc[(pd.Series([("appi" in x and not "dappi" in x) for x in summary.GNPS_Inst]) & (summary.msIonisation == 'nan')), 'msIonisation'] = 'APPI'
+    summary.loc[(pd.Series(["dappi" in x for x in summary.GNPS_Inst]) & (summary.msIonisation == 'nan')), 'msIonisation'] = 'DAPPI'
 
     # Mass Analyzer (Not Done)
-    summary.loc[pd.Series(["orbitrap" in x for x in summary.GNPS_Inst]) & summary.msMassAnalyzer == 'nan',"msMassAnalyzer"] = "orbitrap"
-    summary.loc[pd.Series([("quadrupole tof" in x or "qtof" in x or "q-tof" in x) and not "qq" in x for x in summary.GNPS_Inst]) & summary.msMassAnalyzer == 'nan',"msMassAnalyzer"] = "qtof"
-    summary.loc[pd.Series([("tof" in x) and not ("qq" in x or "qtof" in x or "q-tof" in x or "q tof" in x or "quadrupole tof" in x) for x in summary.GNPS_Inst]) & summary.msMassAnalyzer == 'nan',"msMassAnalyzer"] = "tof"
+    summary.loc[(pd.Series(["orbitrap" in x for x in summary.GNPS_Inst]) & (summary.msMassAnalyzer == 'nan')),"msMassAnalyzer"] = "orbitrap"
+    summary.loc[(pd.Series([("quadrupole tof" in x or "qtof" in x or "q-tof" in x) and not "qq" in x for x in summary.GNPS_Inst]) & (summary.msMassAnalyzer == 'nan')),"msMassAnalyzer"] = "qtof"
+    summary.loc[(pd.Series([("tof" in x) and not ("qq" in x or "qtof" in x or "q-tof" in x or "q tof" in x or "quadrupole tof" in x) for x in summary.GNPS_Inst]) & (summary.msMassAnalyzer == 'nan')),"msMassAnalyzer"] = "tof"
 
     # Manufacturer Info (Not Done)
-    summary.loc[pd.Series(["maxis" in x for x in summary.GNPS_Inst]) & summary.msManufacturer == "nan","msManufacturer"] = "Bruker Daltonics"
-    summary.loc[pd.Series(["q exactive" in x or "q-exactive" in x for x in summary.GNPS_Inst]) & summary.msManufacturer == "nan","msManufacturer"] = "Thermo"
+    summary.loc[(pd.Series(["maxis" in x for x in summary.GNPS_Inst]) & (summary.msManufacturer == "nan")),"msManufacturer"] = "Bruker Daltonics"
+    summary.loc[(pd.Series(["q exactive" in x or "q-exactive" in x for x in summary.GNPS_Inst]) & (summary.msManufacturer == "nan")),"msManufacturer"] = "Thermo"
     return summary
 
 def propogate_msModel_field(summary):
@@ -153,7 +169,25 @@ def propogate_msModel_field(summary):
 
     return summary
 
-def generate_parquet_file(input_mgf, spectrum_ids):
+
+def sanity_checks(summary):
+    assert len(summary[(summary.msManufacturer == 'Thermo') & (summary.msMassAnalyzer == 'qtof')]) == 0
+    assert len(summary[(summary.msMassAnalyzer == 'orbitrap') & (summary.msManufacturer == 'Bruker Daltonics')]) == 0 
+    assert len(summary[(summary.Adduct == 'None') & (summary.Adduct == 'nan') & (summary.Adduct.isna())]) == 0
+
+
+def add_columns_formula_analysis(summary): 
+    column_name_ppmBetweenExpAndThMass='ppmBetweenExpAndThMass'
+    
+    def helper(row):
+        try:
+            return Formula.formula_from_smiles(row['Smiles'], row['Adduct']).ppm_difference_with_exp_mass(row['Precursor_MZ'])
+        except IncorrectFormula as incFor:
+            return 'nan'
+            
+    summary[column_name_ppmBetweenExpAndThMass] = summary.apply(helper, axis=1)
+
+def generate_parquet_df(input_mgf, spectrum_ids):
     """
     Details on output format:
     Columns will be [level_0, index, i, i_norm, mz, precmz]
@@ -199,14 +233,16 @@ def postprocess_files(csv_path, mgf_path, output_csv_path, output_parquet_path):
     # Exploiting Some of the info in msModel
     summary = propogate_msModel_field(summary)
     sanity_checks(summary)
+
+    add_columns_formula_analysis(summary)
     
-    parquet_as_df = generate_parquet_file(mgf_path, summary.spectrum_id.astype('str'))
-    parquet_as_df.to_parquet(output_parquet_path)
+    #parquet_as_df = generate_parquet_df(mgf_path, summary.spectrum_id.astype('str'))
+    #parquet_as_df.to_parquet(output_parquet_path)
     summary.to_csv(output_csv_path, index=False)
 
 def main():
-    csv_path = "ALL_GNPS_merged.csv"
-    mgf_path = "ALL_GNPS_merged.mgf"
+    csv_path = "/home/alberto/Downloads/sample_csv.csv"
+    mgf_path = "/home/alberto/Downloads/sample_mgf.mgf"
     cleaned_csv_path = "ALL_GNPS_cleaned.csv"
     cleaned_parquet_path = "ALL_GNPS_cleaned.parquet"
 

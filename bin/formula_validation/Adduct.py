@@ -101,11 +101,11 @@ class Adduct:
     for symbol, number_subformulas, subformula_str in formulas:
       number_subformulas = int(number_subformulas) if number_subformulas else 1
       if symbol == '+':
-        subformula=Formula.get_formula_from_str(subformula_str, 'None')
+        subformula=Formula.formula_from_str(subformula_str, 'None')
         monoisotopic_weight_subformula = subformula.get_monoisotopic_mass()
         mass_of_adduct_to_add_or_subtract += monoisotopic_weight_subformula * number_subformulas
       elif symbol == '-': 
-        subformula=Formula.get_formula_from_str(subformula_str,'None')
+        subformula=Formula.formula_from_str(subformula_str,'None')
         monoisotopic_weight_subformula = subformula.get_monoisotopic_mass()
         mass_of_adduct_to_add_or_subtract -= monoisotopic_weight_subformula * number_subformulas
       else: 
