@@ -273,10 +273,10 @@ def main():
     # A regex that captures the values from 'params/params_{}_{}.npy'
     regex = r"params\/params_([^_]+)_([^\.]+)\.npy"
     match = re.search(regex, args.file)
-    p_idx = int(match.group(1))
+    section_index = int(match.group(1))
     start_scan = int(match.group(2))
     
-    helper(p_idx, start_scan, spectra, args.path_to_provenance)
+    helper(section_index, start_scan, spectra, args.path_to_provenance)
     
 if __name__ == '__main__':
     main()

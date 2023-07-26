@@ -24,16 +24,16 @@ def main():
         all_spectra_list = [spectrum for spectrum in all_spectra_list if spectrum['Smiles'] != 'n/a' and spectrum['Smiles'] != 'n\/a']
         print("Found {} entries with structures out of {} structures: {:4.2f}%".format(len(all_spectra_list), org_len, len(all_spectra_list)/org_len*100))
     
-    p = args.p
+    processors_numbers = args.p
     print("Recommended Parallelism:", max(1, int(len(all_spectra_list)/1000)))
-    num_sections = max(1, p)
+    num_sections = max(1, processors_numbers)
     indices = np.array_split(np.arange(1,len(all_spectra_list)+1), num_sections)
     scan_start = [x[0] for x in indices]
     splits = np.array_split(all_spectra_list, num_sections)
     
-    for p_idx in range(num_sections):
+    for section_idx in range(num_sections):
         # Save file name is params_splitNum_startScan.npy
-        np.save('params/params_{}_{}.npy'.format(p_idx, scan_start[p_idx]), splits[p_idx])
+        np.save('params/params_{}_{}.npy'.format(section_idx, scan_start[section_idx]), splits[section_idx])
         
 if __name__ == '__main__':
     main()

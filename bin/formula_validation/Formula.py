@@ -29,12 +29,12 @@ this Formula class.
 __author__    = "Alberto Gil de la Fuente"
 __copyright__   = "GPL License version 3"
 
+from typing import Union, Dict
 
 from Element import Element_type, element_weights
 from IncorrectFormula import IncorrectFormula
 from NotFoundElement import NotFoundElement
 from Adduct import Adduct
-from typing import Union
 
 class Formula:
   __electron_weight=0.00054858
@@ -51,7 +51,7 @@ class Formula:
   get_monoisotopic_mass_with_adduct(): returns the monoisotopic mass of the formula +- the adduct
     """
   
-  def __init__(self, elements: dict[Union['Element_type',str], int], adduct: Union['Adduct', str]):
+  def __init__(self, elements: Dict[Union['Element_type',str], int], adduct: Union['Adduct', str]):
     """
     Args:
       element_type (dict of Element_type and int): dictionary containing elements and their apps in a formula. If an element appears more than once, its appearences will be updated. Example {'C': 48, 'H': 72, 'N': 10, 'O': 12}
@@ -110,7 +110,7 @@ class Formula:
   def __hash__(self):
     return hash(frozenset(self.__elements.items()))
 
-  def get_formula_from_str(formula_str: str, adduct: str) -> 'Formula':
+  def formula_from_str(formula_str: str, adduct: str) -> 'Formula':
     """
     Args:
       formula_str (str): represents a molecular formula as a string of type [Element_type][NumberOfOccurences]: C4H5N6Na
@@ -131,7 +131,7 @@ class Formula:
       
     return Formula(elements, adduct)
   
-  def get_formula_from_smiles(smiles: str, adduct: str) -> 'Formula':
+  def formula_from_smiles(smiles: str, adduct: str) -> 'Formula':
     """
     Args:
       smiles (str): represents a molecular structure as a string. Example: CCCCCCC[C@@H](C/C=C/CCC(=O)NC/C(=C/Cl)/[C@@]12[C@@H](O1)[C@H](CCC2=O)O)OC
@@ -143,13 +143,40 @@ class Formula:
     """
     from rdkit import Chem
     from rdkit.Chem.rdMolDescriptors import CalcMolFormula
+    if smiles =='' or smiles=='nan' or smiles == 'None' or smiles == None:
+      raise IncorrectFormula(smiles)
+    elif smiles.startswith('InChI='):
+      return Formula.formula_from_inchi(smiles,adduct)
+    
     mol = Chem.MolFromSmiles(smiles)
-    formula = CalcMolFormula(mol)
-    return Formula.get_formula_from_str(formula, adduct)
     if mol is None:
       raise IncorrectFormula(smiles)
+    formula = CalcMolFormula(mol)
+    return Formula.formula_from_str(formula, adduct)
+    
+    
+  def formula_from_inchi(inchi: str, adduct: str) -> 'Formula':
+    """
+    Args:
+      inchi (str): represents a molecular structure as a string. Example: InChI=1S/C45H73N5O10S3/c1-14-17-24(6)34(52)26(8)37-25(7)30(58-13)18-31-46-29(19-61-31)39-49-45(12,21-62-39)43-50-44(11,20-63-43)42(57)48-32(22(4)15-2)35(53)27(9)40(55)59-36(23(5)16-3)38(54)47-33(28(10)51)41(56)60-37/h19,22-28,30,32-37,51-53H,14-18,20-21H2,1-13H3,(H,47,54)(H,48,57)/t22-,23-,24+,25-,26-,27+,28+,30-,32-,33-,34-,35-,36-,37-,44+,45+/m0/s1
+      adduct (str): adduct representing the adduct formed by the molecular formula expressed by the form '[M+C2H2O-H]-'
+    Returns:
+      Formula: according to the structure
+    Raises:
+      IncorrectFormula: if the SMILES does not represent a structure
+    """
+    from rdkit import Chem
+    from rdkit.Chem.rdMolDescriptors import CalcMolFormula
+    if not inchi.startswith('InChI='):
+      raise IncorrectFormula(inchi)
+  
+    mol = Chem.MolFromInchi(inchi)
+    if mol is None:
+      raise IncorrectFormula(smiles)
+    formula = CalcMolFormula(mol)
+    return Formula.formula_from_str(formula, adduct)
       
-  def get_elements(self) -> dict['Element_type',int]:
+  def get_elements(self) -> Dict['Element_type',int]:
     """
     Returns: A copy of the dictionary of the elements so the formula cannot be mutated
     """
@@ -232,6 +259,30 @@ class Formula:
       return False
   
 
+  def ppm_difference_with_exp_mass(self, reference_monoisotopic_mass: Union[float,int]) -> float:
+    """
+    Args:
+      reference_monoisotopic_mass (numeric): monoisotopic mass of reference
+      
+    Returns: the ppms between the monoisotopic mass of the formula taking into account the adduct and the experimental mass detected
+    Raise: a exception if reference_monoisotopic_mass or ppm are not numbers
+    """
+    print(self.get_monoisotopic_mass_with_adduct(), reference_monoisotopic_mass)
+    return Formula.absolute_to_ppm(self.get_monoisotopic_mass_with_adduct(), reference_monoisotopic_mass)
+
+  
+  def absolute_to_ppm(reference_monoisotopic_mass: Union[float,int], mass_to_compare: Union[float,int]) -> float:
+    """
+    Args:
+      reference_monoisotopic_mass (numeric): monoisotopic mass of reference
+      mass_to_compare(numeric): mass to compare
+    Returns: the ppms between the reference_monoisotopic_mass mass and mass_to_compare
+    Raise: a exception if reference_monoisotopic_mass or ppm are not numbers
+    """
+    
+    ppm_diff = abs((reference_monoisotopic_mass - mass_to_compare) / reference_monoisotopic_mass) * 1000000.0
+    return ppm_diff
+
 
   def ppm_to_absolute(reference_monoisotopic_mass: Union[float,int], ppm: Union[float,int] = 50) -> float:
     """
@@ -301,7 +352,7 @@ def main():
   try:
     my_formula_str = "H5C5N4ONaK"
     adduct = '[M+C2H2O-H]-'
-    my_formula = Formula.get_formula_from_str(my_formula_str, adduct)
+    my_formula = Formula.formula_from_str(my_formula_str, adduct)
     elements_expected = {Element_type.H: 5, Element_type.C: 5, Element_type.N: 4, Element_type.O: 1, Element_type.Na: 1, Element_type.K: 1}
     if my_formula.get_elements() == elements_expected:
       print("Test PASSED. The function to construct a formula representing a string has been implemented correctly.")
@@ -318,9 +369,9 @@ def main():
     smiles_2 = 'CCC[C@@H](C)[C@@H]([C@H](C)[C@@H]1[C@H]([C@H](Cc2nc(cs2)C3=N[C@](CS3)(C4=N[C@](CS4)(C(=O)N[C@H]([C@H]([C@H](C(=O)O[C@H](C(=O)N[C@H](C(=O)O1)[C@@H](C)O)[C@@H](C)CC)C)O)[C@@H](C)CC)C)C)OC)C)O'
     smiles_3 = 'CCCCCCC[C@@H](C/C=C/CCC(=O)NC/C(=C/Cl)/[C@@]12[C@@H](O1)[C@H](CCC2=O)O)OC'
     adduct = '[M+C2H2O-H]-'
-    my_formula = Formula.get_formula_from_smiles(smiles_1, adduct)
-    my_formula_2 = Formula.get_formula_from_smiles(smiles_2, adduct)
-    my_formula_3 = Formula.get_formula_from_smiles(smiles_3, adduct)
+    my_formula = Formula.formula_from_smiles(smiles_1, adduct)
+    my_formula_2 = Formula.formula_from_smiles(smiles_2, adduct)
+    my_formula_3 = Formula.formula_from_smiles(smiles_3, adduct)
     elements_expected_1 = {Element_type.H: 72, Element_type.C: 48, Element_type.N: 10, Element_type.O: 12}
     elements_expected_2 = {Element_type.H: 73, Element_type.C: 45, Element_type.N: 5, Element_type.O: 10, Element_type.S: 3}
     elements_expected_3 = {Element_type.H: 38, Element_type.C: 24, Element_type.N: 1, Element_type.O: 5, Element_type.Cl: 1}
@@ -354,7 +405,7 @@ def main():
   try:
     smiles_1 = 'CCCCCCC[C@@H](C/C=C/CCC(=O)NC/C(=C/Cl)/[C@@]12[C@@H](O1)[C@H](CCC2=O)O)OC'
     adduct = 'None'
-    my_formula = Formula.get_formula_from_smiles(smiles_1, adduct)
+    my_formula = Formula.formula_from_smiles(smiles_1, adduct)
     expected_value = 0.0228
     current_value = Formula.ppm_to_absolute(my_formula.get_monoisotopic_mass())
     if(math.isclose(current_value,expected_value,abs_tol=0.001)):
@@ -370,7 +421,7 @@ def main():
   try:
     smiles_1 = 'CCCCCCC[C@@H](C/C=C/CCC(=O)NC/C(=C/Cl)/[C@@]12[C@@H](O1)[C@H](CCC2=O)O)OC'
     adduct = '[M+C2H2O-H]-'
-    my_formula = Formula.get_formula_from_smiles(smiles_1, adduct)
+    my_formula = Formula.formula_from_smiles(smiles_1, adduct)
     expected_value = True
     external_mass=455.24
     current_value = my_formula.check_monoisotopic_mass(external_mass,50)
@@ -387,7 +438,7 @@ def main():
   try:
     smiles_1 = 'CCCCCCC[C@@H](C/C=C/CCC(=O)NC/C(=C/Cl)/[C@@]12[C@@H](O1)[C@H](CCC2=O)O)OC'
     adduct = '[M+C2H2O-H]-' # adduct weight = 41.00328858
-    my_formula = Formula.get_formula_from_smiles(smiles_1, adduct)
+    my_formula = Formula.formula_from_smiles(smiles_1, adduct)
     expected_value =496.24713858
     current_value = my_formula.get_monoisotopic_mass_with_adduct()
     if(math.isclose(current_value,expected_value,abs_tol=0.001)):
@@ -404,7 +455,7 @@ def main():
   try:
     smiles_1 = 'CCCCCCC[C@@H](C/C=C/CCC(=O)NC/C(=C/Cl)/[C@@]12[C@@H](O1)[C@H](CCC2=O)O)OC'
     adduct = '[M-2H2O+2H]2+' # adduct weight = 41.00328858
-    my_formula = Formula.get_formula_from_smiles(smiles_1, adduct)
+    my_formula = Formula.formula_from_smiles(smiles_1, adduct)
     expected_value =210.61863642
     current_value = my_formula.get_monoisotopic_mass_with_adduct()
     if(math.isclose(current_value,expected_value,abs_tol=0.001)):
@@ -420,7 +471,7 @@ def main():
   try:
     smiles_1 = 'CCCCCCC[C@@H](C/C=C/CCC(=O)NC/C(=C/Cl)/[C@@]12[C@@H](O1)[C@H](CCC2=O)O)OC'
     adduct = '[5M+Ca]2+' # adduct weight = 41.00328858
-    my_formula = Formula.get_formula_from_smiles(smiles_1, adduct)
+    my_formula = Formula.formula_from_smiles(smiles_1, adduct)
     expected_value = 1158.09037142
     current_value = my_formula.get_monoisotopic_mass_with_adduct()
     if(math.isclose(current_value,expected_value,abs_tol=0.001)):
@@ -429,6 +480,23 @@ def main():
       print("Test FAILED. Check the function to calculate the monoisotopic mass with an adduct in a double positive charge and multimer 5. Expected: " + str(expected_value) + " ACTUAL: " + str(current_value))
   except IncorrectFormula as incfor:
     print("Test FAILED. Check the function to calculate the monoisotopic mass with an adduct in a single positive charge and multimer 5. Expected: " + str(expected_value) + " ACTUAL: " + str(current_value))
+
+  print("=================================================================.")
+  print("Test Case 10: Calculating the ppm difference between a formula and an experimental value")
+  print("=================================================================.")
+  try:
+    smiles_1 = 'CCCCCCC[C@@H](C/C=C/CCC(=O)NC/C(=C/Cl)/[C@@]12[C@@H](O1)[C@H](CCC2=O)O)OC'
+    adduct = '[5M+Ca]2+' # adduct weight = 41.00328858
+    my_formula = Formula.formula_from_smiles(smiles_1, adduct)
+    experimental_mass = 1158.099
+    expected_value = 7.45
+    current_value = my_formula.ppm_difference_with_exp_mass(experimental_mass)
+    if(math.isclose(current_value,expected_value,abs_tol=0.01)):
+      print("Test PASSED. The function Calculating the ppm difference between a formula and an experimental value.")
+    else:
+      print("Test FAILED. Check the function Calculating the ppm difference between a formula and an experimental value. Expected: " + str(expected_value) + " ACTUAL: " + str(current_value))
+  except IncorrectFormula as incfor:
+    print("Test FAILED. Check the function Calculating the ppm difference between a formula and an experimental value. Expected: " + str(expected_value) + " ACTUAL: " + str(current_value))
 
 
 if __name__ == "__main__":
