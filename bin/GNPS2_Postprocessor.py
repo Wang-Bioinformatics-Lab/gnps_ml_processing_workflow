@@ -10,6 +10,7 @@ from tqdm import tqdm
 from utils import harmonize_smiles_rdkit
 from rdkit import Chem
 from pandarallel import pandarallel
+import argparse
 
 PARALLEL_WORKERS = 8
 
@@ -246,6 +247,7 @@ def main():
     parser.add_argument('--input_mgf_path', type=str, default="ALL_GNPS_merged.mgf", help='Path to the mgf file')
     parser.add_argument('--output_csv_path', type=str, default="ALL_GNPS_cleaned.csv", help='Path to the output csv file')
     parser.add_argument('--output_parquet_path', type=str, default="ALL_GNPS_cleaned.parquet", help='Path to the output parquet file')
+    args= parser.parse_args()
     
     csv_path                = str(args.input_csv_path)
     mgf_path                = str(args.input_mgf_path)
