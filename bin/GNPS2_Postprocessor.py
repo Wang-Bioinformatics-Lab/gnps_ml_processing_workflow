@@ -9,6 +9,9 @@ import re
 from tqdm import tqdm
 from utils import harmonize_smiles_rdkit
 from rdkit import Chem
+from pandarallel import pandarallel
+
+PARALLEL_WORKERS = 8
 
 def sanity_checks(summary):
     assert len(summary[(summary.msManufacturer == 'Thermo') & (summary.msMassAnalyzer == 'qtof')]) == 0
@@ -110,7 +113,7 @@ def clean_smiles(summary):
         DataFrame: The modified summary dataframe
     """
     summary.Smiles = summary.Smiles.astype(str)
-    summary.Smiles = summary.Smiles.apply(lambda x: harmonize_smiles_rdkit(x))
+    summary.Smiles = summary.Smiles.parallel_apply(lambda x: harmonize_smiles_rdkit(x) if x is not 'nan' else x)
     return summary
 
 def propogate_GNPS_Inst_field(summary):
@@ -179,6 +182,9 @@ def generate_parquet_file(input_mgf, spectrum_ids):
                        
 
 def postprocess_files(csv_path, mgf_path, output_csv_path, output_parquet_path):
+    
+    pandarallel.initialize(progress_bar=True, nb_workers=PARALLEL_WORKERS)
+    
     summary = pd.read_csv(csv_path)
 
     # Cleaning up files:
