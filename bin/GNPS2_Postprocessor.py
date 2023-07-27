@@ -10,6 +10,7 @@ from tqdm import tqdm
 from utils import harmonize_smiles_rdkit, INCHI_to_SMILES
 from rdkit import Chem
 from pandarallel import pandarallel
+from time import time
 import argparse
 
 PARALLEL_WORKERS = 8
@@ -58,7 +59,23 @@ def basic_cleaning(summary):
     # Adduct translation from chemical names to adduct formulas -> 'M+TFA-H': '[M+C2HF3O2-H]-'
     # Adduct Table Credit: Yasin El Abiead
     adduct_mapping = pickle.load(open('./adduct_mapping.pkl', 'rb'))
-    summary.Adduct = summary.Adduct.apply(lambda x: adduct_mapping.get(x.strip()))
+    def helper(adduct):
+        adduct = str(adduct).strip()
+        mapped_adduct = None
+        # Map the adduct if possible, if not, then we leave the orignal value
+        if adduct not in adduct_mapping.values():
+            # If the adduct is not in the values, attempt to map it:
+            mapped_adduct = adduct_mapping.get(adduct)
+            if mapped_adduct is not None:
+                adduct = mapped_adduct
+            
+        # Add 1 if not None and last is
+        if adduct is not None
+            if adduct[-2:] == "]+":
+                adduct = adduct[-2:] + "]1+"
+            
+        return adduct
+    summary.Adduct = summary.Adduct.apply(helper)
     summary = summary[summary.Adduct.notna()]    
 
     # Conversion of numerical columns to numerical types to protect against contamination
