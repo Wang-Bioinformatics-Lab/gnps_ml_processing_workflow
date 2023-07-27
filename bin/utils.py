@@ -378,3 +378,10 @@ def harmonize_smiles_rdkit(smiles, tautomer_limit = 900):
     except Exception as e:
         print(f"An error occurred with input {smiles}: {e}")
         return None
+    
+def INCHI_to_SMILES(inchi):
+    if inchi is None or inchi == 'nan': return None
+    try:
+        return Chem.MolToSmiles(Chem.MolFromInchi(inchi))
+    except:
+        return None
