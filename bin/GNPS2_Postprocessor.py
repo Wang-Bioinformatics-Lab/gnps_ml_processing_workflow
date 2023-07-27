@@ -10,7 +10,8 @@ from tqdm import tqdm
 from utils import harmonize_smiles_rdkit, INCHI_to_SMILES
 from rdkit import Chem
 from pandarallel import pandarallel
-from time import time
+import time
+import datetime
 import argparse
 
 PARALLEL_WORKERS = 8
@@ -41,15 +42,15 @@ def basic_cleaning(summary):
 
     # smiles
     summary.Smiles = summary.Smiles.astype(str).parallel_apply(lambda x: x.strip() )
-    summary.Smiles = summary.Smiles.parallel_apply(lambda x: 'nan' if x == '' or 'N/A' in x else x)
+    summary.Smiles = summary.Smiles.parallel_apply(lambda x: 'nan' if (x == '') or ('N/A' in x) else x)
     
     # INCHI
     summary.INCHI = summary.INCHI.astype(str).parallel_apply(lambda x: x.strip() )
-    summary.INCHI = summary.parallel_apply(lambda x: 'nan' if x == '' or 'N/A' in x else x)
+    summary.INCHI = summary.INCHI.parallel_apply(lambda x: 'nan' if (x == '') or ('N/A' in str(x)) else x)
     
     # In rare cases the user will use INCHI and not smiles, so we'll convert it to smiles
     mask = (summary.Smiles == 'nan') & (summary.INCHI != 'nan')
-    summary.loc[mask, 'Smiles'] = summary.loc[mask, 'Smiles'].parallel_apply(INCHI_to_SMILES, axis=1)
+    summary.loc[mask, 'Smiles'] = summary.loc[mask, 'Smiles'].parallel_apply(INCHI_to_SMILES)
     
     # ionization
     summary.msIonisation = summary.msIonisation.astype(str)
@@ -70,7 +71,7 @@ def basic_cleaning(summary):
                 adduct = mapped_adduct
             
         # Add 1 if not None and last is
-        if adduct is not None
+        if adduct is not None:
             if adduct[-2:] == "]+":
                 adduct = adduct[-2:] + "]1+"
             
