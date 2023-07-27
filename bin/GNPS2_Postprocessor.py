@@ -7,7 +7,7 @@ import pandas as pd
 from pyteomics.mgf import IndexedMGF
 import re
 from tqdm import tqdm
-from utils import harmonize_smiles_rdkit
+from utils import harmonize_smiles_rdkit, INCHI_to_SMILES
 from rdkit import Chem
 from pandarallel import pandarallel
 import argparse
@@ -39,8 +39,16 @@ def basic_cleaning(summary):
     summary.scan = summary.scan.astype('int')
 
     # smiles
-    summary.Smiles = summary.Smiles.astype(str).apply(lambda x: x.strip() )
-    summary.Smiles = summary.Smiles.apply(lambda x: 'nan' if x == '' or 'N/A' in x else x)
+    summary.Smiles = summary.Smiles.astype(str).parallel_apply(lambda x: x.strip() )
+    summary.Smiles = summary.Smiles.parallel_apply(lambda x: 'nan' if x == '' or 'N/A' in x else x)
+    
+    # INCHI
+    summary.INCHI = summary.INCHI.astype(str).parallel_apply(lambda x: x.strip() )
+    summary.INCHI = summary.parallel_apply(lambda x: 'nan' if x == '' or 'N/A' in x else x)
+    
+    # In rare cases the user will use INCHI and not smiles, so we'll convert it to smiles
+    mask = (summary.Smiles == 'nan') & (summary.INCHI != 'nan')
+    summary.loc[mask, 'Smiles'] = summary.loc[mask, 'Smiles'].parallel_apply(INCHI_to_SMILES, axis=1)
     
     # ionization
     summary.msIonisation = summary.msIonisation.astype(str)
@@ -174,7 +182,7 @@ def propogate_msModel_field(summary):
 def sanity_checks(summary):
     assert len(summary[(summary.msManufacturer == 'Thermo') & (summary.msMassAnalyzer == 'qtof')]) == 0
     assert len(summary[(summary.msMassAnalyzer == 'orbitrap') & (summary.msManufacturer == 'Bruker Daltonics')]) == 0 
-    assert len(summary[(summary.Adduct == 'None') & (summary.Adduct == 'nan') & (summary.Adduct.isna())]) == 0
+    # assert len(summary[(summary.Adduct == 'None') & (summary.Adduct == 'nan') & (summary.Adduct.isna())]) == 0 # Right now because of the adduct cleaning, there is a chance that we'll have nan adducts
 
 
 def add_columns_formula_analysis(summary): 
@@ -182,7 +190,8 @@ def add_columns_formula_analysis(summary):
     
     def helper(row):
         try:
-            return Formula.formula_from_smiles(row['Smiles'], row['Adduct']).ppm_difference_with_exp_mass(row['Precursor_MZ'])
+            if row['Smiles'] != 'nan':
+                return Formula.formula_from_smiles(row['Smiles'], row['Adduct']).ppm_difference_with_exp_mass(row['Precursor_MZ'])
         except IncorrectFormula as incFor:
             return 'nan'
             
@@ -223,19 +232,36 @@ def postprocess_files(csv_path, mgf_path, output_csv_path, output_parquet_path):
     summary = pd.read_csv(csv_path)
 
     # Cleaning up files:
+    print("Performing basic cleaning")
+    start = time.time()
     summary = basic_cleaning(summary)
+    print("Done in {} seconds".format(datetime.timedelta(seconds=time.time() - start)))
     
     # Clean smiles strings:
+    print("Cleaning up smiles strings")
+    start = time.time()
     summary = clean_smiles(summary)
+    print("Done in {} seconds".format(datetime.timedelta(seconds=time.time() - start)))
     
     # Exploiting GNPS_Inst annotations:
+    print("Attempting to propogate user instrument annotations")
+    start = time.time()
     summary = propogate_GNPS_Inst_field(summary)
+    print("Done in {} seconds".format(datetime.timedelta(seconds=time.time() - start)))
 
     # Exploiting Some of the info in msModel
+    print("Attempting to propogate msModel field")
+    start = time.time()
     summary = propogate_msModel_field(summary)
-    sanity_checks(summary)
+    print("Done in {} seconds".format(datetime.timedelta(seconds=time.time() - start)))
 
+    # Calculating ppm error
+    print("Calculating ppm error")
+    start = time.time()
     add_columns_formula_analysis(summary)
+    print("Done in {} seconds".format(datetime.timedelta(seconds=time.time() - start)))
+    
+    sanity_checks(summary)
     
     #parquet_as_df = generate_parquet_df(mgf_path, summary.spectrum_id.astype('str'))
     #parquet_as_df.to_parquet(output_parquet_path)
