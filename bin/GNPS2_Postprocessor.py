@@ -73,7 +73,9 @@ def basic_cleaning(summary):
         # Add 1 if not None and last is
         if adduct is not None:
             if adduct[-2:] == "]+":
-                adduct = adduct[-2:] + "]1+"
+                adduct = adduct[:-2] + "]1+"
+            elif adduct[-2:] == "]-":
+                adduct = adduct[:-2] + "]1-"
             
         return adduct
     summary.Adduct = summary.Adduct.apply(helper)
