@@ -74,7 +74,11 @@ def basic_cleaning(summary):
         if adduct is not None:
             if adduct[-2:] == "]+":
                 adduct = adduct[:-2] + "]1+"
+<<<<<<< HEAD
             elif adduct[-2:] == "]-":
+=======
+            elif adduct[-2:] == "]-"
+>>>>>>> 9c29293801c9f0de25920ef3ea19cfb448a3b08f
                 adduct = adduct[:-2] + "]1-"
             
         return adduct
