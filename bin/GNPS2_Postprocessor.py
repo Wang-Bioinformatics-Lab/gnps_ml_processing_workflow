@@ -214,6 +214,11 @@ def add_columns_formula_analysis(summary):
                 return Formula.formula_from_smiles(row['Smiles'], row['Adduct']).ppm_difference_with_exp_mass(row['Precursor_MZ'])
         except IncorrectFormula as incFor:
             return 'nan'
+        except IncorrectAdduct as incAdd:
+            return 'nan'
+        except Exception as e:
+            print(e, file=sys.stderr)
+            return 'nan'
             
     summary[column_name_ppmBetweenExpAndThMass] = summary.apply(helper, axis=1)
 
@@ -243,8 +248,6 @@ def generate_parquet_df(input_mgf, spectrum_ids):
     output.set_index('spectrum_id')
     return output
             
-                       
-
 def postprocess_files(csv_path, mgf_path, output_csv_path, output_parquet_path):
     
     pandarallel.initialize(progress_bar=True, nb_workers=PARALLEL_WORKERS)
@@ -283,8 +286,8 @@ def postprocess_files(csv_path, mgf_path, output_csv_path, output_parquet_path):
     
     sanity_checks(summary)
     
-    #parquet_as_df = generate_parquet_df(mgf_path, summary.spectrum_id.astype('str'))
-    #parquet_as_df.to_parquet(output_parquet_path)
+    parquet_as_df = generate_parquet_df(mgf_path, summary.spectrum_id.astype('str'))
+    parquet_as_df.to_parquet(output_parquet_path)
     summary.to_csv(output_csv_path, index=False)
 
 def main():
