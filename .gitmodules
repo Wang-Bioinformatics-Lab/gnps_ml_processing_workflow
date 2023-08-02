@@ -4,3 +4,6 @@
 [submodule "GNPS_PureNetworking_Workflow"]
 	path = GNPS_PureNetworking_Workflow
 	url = https://github.com/mwang87/GNPS_PureNetworking_Workflow.git
+[submodule "bin/formula_validation"]
+	path = bin/formula_validation
+	url = https://github.com/Wang-Bioinformatics-Lab/formula_validation.git
