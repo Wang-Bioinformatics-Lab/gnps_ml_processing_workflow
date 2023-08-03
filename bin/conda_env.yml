@@ -17,6 +17,7 @@ dependencies:
   - pyarrow
   - fastparquet
   - dask
+  - pip
   - pip:
     - obonet
     - vaex
