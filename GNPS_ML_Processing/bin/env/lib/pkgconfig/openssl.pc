@@ -1,0 +1,9 @@
+prefix=/home/user/SourceCode/GNPS_ML_Processing_Workflow/bin/env
+exec_prefix=${prefix}
+libdir=${exec_prefix}/lib
+includedir=${prefix}/include
+
+Name: OpenSSL
+Description: Secure Sockets Layer and cryptography libraries and tools
+Version: 1.1.1u
+Requires: libssl libcrypto

@@ -1,0 +1,30 @@
+channels:
+  - conda-forge
+  - defaults
+  - bioconda
+dependencies:
+  - python=3.8.8
+  - numpy
+  - pyteomics
+  - pandas
+  - cython
+  - tqdm
+  - gcc_linux-64
+  - pip:
+    - sortedcollections
+    - xmltodict
+    - requests
+    - git+https://github.com/YuanyueLi/SpectralEntropy.git
+#process:
+#  my_process:
+#    # ...#
+
+    # Clone the GitHub repository and add the directory to the PYTHONPATH
+ #   git:
+ #     url: https://github.com/mwang87/GNPS_sharedcode.git
+ #     path: GNPS_sharedcode
+
+    # Add the cloned directory to the PYTHONPATH
+#    env:
+#      #PYTHONPATH: "${PWD}/$(cat my_relative_path)"
+#      PYTHONPATH: "${PWD}/../GNPS_sharedcode"

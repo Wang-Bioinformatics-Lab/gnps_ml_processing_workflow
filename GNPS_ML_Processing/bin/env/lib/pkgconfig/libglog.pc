@@ -1,0 +1,11 @@
+prefix=/home/user/SourceCode/GNPS_ML_Processing_Workflow/bin/env
+exec_prefix=/home/user/SourceCode/GNPS_ML_Processing_Workflow/bin/env/bin
+libdir=/home/user/SourceCode/GNPS_ML_Processing_Workflow/bin/env/lib
+includedir=/home/user/SourceCode/GNPS_ML_Processing_Workflow/bin/env/include
+
+Name: libglog
+Description: Google Log (glog) C++ logging framework
+Version: 0.6.0
+Libs: -L${libdir} -lglog
+Libs.private: -lpthread -lgflags
+Cflags: -I${includedir}

@@ -1,0 +1,31 @@
+[console_scripts]
+vaex = vaex.__main__:main
+
+[gui_scripts]
+vaexgui = vaex.__main__:main
+
+[vaex.dataframe.accessor]
+geo = vaex.geo:DataFrameAccessorGeo
+struct = vaex.struct:DataFrameAccessorStruct
+
+[vaex.dataset.opener]
+arrow = vaex.arrow.opener:ArrowOpener
+csv = vaex.csv:DatasetCsvLazy
+feather = vaex.arrow.opener:FeatherOpener
+parquet = vaex.arrow.opener:ParquetOpener
+
+[vaex.file.scheme]
+arrow+s3 = vaex.file.s3arrow
+fsspec+gs = vaex.file.gcs
+fsspec+s3 = vaex.file.s3fs
+gs = vaex.file.gcs
+s3 = vaex.file.s3
+
+[vaex.memory.tracker]
+default = vaex.memory:MemoryTracker
+
+[vaex.progressbar]
+rich = vaex.progress:rich
+simple = vaex.progress:simple
+vaex = vaex.progress:simple
+widget = vaex.progress:widget

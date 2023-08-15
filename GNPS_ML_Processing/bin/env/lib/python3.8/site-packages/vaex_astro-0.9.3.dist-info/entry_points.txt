@@ -1,0 +1,12 @@
+[vaex.dataframe.accessor]
+astro = vaex.astro.transformations:DataFrameAccessorAstro
+
+[vaex.dataset.opener]
+fits = vaex.astro.fits:FitsBinTable
+gadget = vaex.astro.gadget:MemoryMappedGadget
+tap = vaex.astro.tap:DatasetTap
+votable = vaex.astro.votable:VOTable
+
+[vaex.plugin]
+astro = vaex.astro.legacy:add_plugin
+

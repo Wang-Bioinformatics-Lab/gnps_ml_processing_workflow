@@ -1,0 +1,35 @@
+name: gnps_ml_processing_workflow
+displayname: STUFF
+Views:
+-   name: Output Subset
+    displayname: Output Subset
+    viewname: summarylist
+    displaytype: datatable
+    parameters:
+        filename: nf_output/summary.csv
+        error_missingfile: "No File"
+        columns:
+            -   title: "Spectrum ID"
+                data: spectrum_id
+            -   title: "SMILES"
+                data: SMILES
+            -   title: "Collision Energy"
+                data: collision_energy
+            -   title: "Retention Time"
+                data: retention_time
+            -   title: "Adduct"
+                data: Adduct
+            -   title: "Model"
+                data: msModel
+            -   title: "Manufacturer"
+                data: msManufacturer        
+            -   title: "Mass Analyzer"
+                data: msMassAnalyzer
+            -   title: "Ionisation Method"
+                data: msIonisation       
+            -   title: "Dissociation Method"
+                data: msDissociationMethod       
+            -   title: "InChI "
+                data: INCHI
+            -   title: "InChIKey"
+                data: InChIKey_inchi

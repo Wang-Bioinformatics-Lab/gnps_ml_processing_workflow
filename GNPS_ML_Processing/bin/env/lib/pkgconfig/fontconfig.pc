@@ -1,0 +1,17 @@
+prefix=/home/user/SourceCode/GNPS_ML_Processing_Workflow/bin/env
+includedir=${prefix}/include
+libdir=${prefix}/lib
+
+sysconfdir=/home/user/SourceCode/GNPS_ML_Processing_Workflow/bin/env/etc
+localstatedir=/home/user/SourceCode/GNPS_ML_Processing_Workflow/bin/env/var
+confdir=/home/user/SourceCode/GNPS_ML_Processing_Workflow/bin/env/etc/fonts
+cachedir=/home/user/SourceCode/GNPS_ML_Processing_Workflow/bin/env/var/cache/fontconfig
+
+Name: Fontconfig
+Description: Font configuration and customization library
+Version: 2.14.2
+Requires: freetype2 >=  21.0.15
+Requires.private: expat
+Libs: -L${libdir} -lfontconfig
+Libs.private: -pthread
+Cflags: -I${includedir}

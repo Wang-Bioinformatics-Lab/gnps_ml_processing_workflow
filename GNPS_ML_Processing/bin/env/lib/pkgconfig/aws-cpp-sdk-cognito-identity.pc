@@ -1,0 +1,10 @@
+includedir=/home/user/SourceCode/GNPS_ML_Processing_Workflow/bin/env/include
+libdir=/home/user/SourceCode/GNPS_ML_Processing_Workflow/bin/env/lib
+
+Name: aws-cpp-sdk-cognito-identity
+Description: 
+Version: 1.9.379
+Cflags: -I${includedir} -fno-exceptions -std=c++11
+Libs: -L${libdir} -laws-cpp-sdk-cognito-identity 
+Libs.private: 
+Requires:  aws-cpp-sdk-core

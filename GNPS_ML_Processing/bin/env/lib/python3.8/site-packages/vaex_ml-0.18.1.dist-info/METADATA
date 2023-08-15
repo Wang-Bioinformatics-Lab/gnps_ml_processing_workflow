@@ -1,0 +1,20 @@
+Metadata-Version: 2.1
+Name: vaex-ml
+Version: 0.18.1
+Summary: Machine learning support for vaex
+Home-page: https://www.github.com/vaexio/vaex
+Author: Jovan Veljanoski
+Author-email: jovan.veljanoski@gmail.com
+License: MIT
+Platform: UNKNOWN
+Requires-Dist: vaex-core (<5,>=4.8.0)
+Requires-Dist: numba
+Requires-Dist: traitlets
+Requires-Dist: jinja2
+Provides-Extra: all
+Requires-Dist: tensorflow (>=2.1.0) ; extra == 'all'
+Requires-Dist: tensorflow-io (>=0.12.0) ; extra == 'all'
+
+UNKNOWN
+
+

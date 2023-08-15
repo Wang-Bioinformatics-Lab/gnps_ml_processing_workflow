@@ -1,0 +1,12 @@
+prefix=/home/user/SourceCode/GNPS_ML_Processing_Workflow/bin/env
+exec_prefix=${prefix}
+libdir=/home/user/SourceCode/GNPS_ML_Processing_Workflow/bin/env/lib
+includedir=/home/user/SourceCode/GNPS_ML_Processing_Workflow/bin/env/include
+
+Name: absl_random_internal_randen_slow
+Description: Abseil random_internal_randen_slow library
+URL: https://abseil.io/
+Version: 20220623
+Requires: absl_random_internal_platform = 20220623, absl_config = 20220623
+Libs: -L${libdir}   -labsl_random_internal_randen_slow -labsl_random_internal_randen_slow
+Cflags: -I${includedir} -DNOMINMAX

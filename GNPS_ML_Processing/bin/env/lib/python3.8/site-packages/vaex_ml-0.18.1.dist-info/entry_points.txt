@@ -1,0 +1,5 @@
+[vaex.dataframe.accessor]
+ml = vaex.ml:DataFrameAccessorML
+ml.metrics = vaex.ml.metrics:DataFrameAccessorMetrics
+ml.tensorflow = vaex.ml.tensorflow:DataFrameAccessorTensorflow
+

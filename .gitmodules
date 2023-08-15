@@ -1,9 +1,9 @@
-[submodule "GNPS2_DeploymentTooling"]
-	path = GNPS2_DeploymentTooling
+[submodule "GNPS_ML_Processing/GNPS2_DeploymentTooling"]
+	path = GNPS_ML_Processing/GNPS2_DeploymentTooling
 	url = https://github.com/Wang-Bioinformatics-Lab/GNPS2_DeploymentTooling.git
-[submodule "GNPS_PureNetworking_Workflow"]
-	path = GNPS_PureNetworking_Workflow
+[submodule "GNPS_ML_Processing/GNPS_PureNetworking_Workflow"]
+	path = GNPS_ML_Processing/GNPS_PureNetworking_Workflow
 	url = https://github.com/mwang87/GNPS_PureNetworking_Workflow.git
-[submodule "bin/formula_validation"]
-	path = bin/formula_validation
+[submodule "GNPS_ML_Processing/bin/formula_validation"]
+	path = GNPS_ML_Processing/bin/formula_validation
 	url = https://github.com/Wang-Bioinformatics-Lab/formula_validation.git

@@ -1,0 +1,133 @@
+{
+  "build": "h27087fc_1",
+  "build_number": 1,
+  "channel": "https://conda.anaconda.org/conda-forge/linux-64",
+  "constrains": [],
+  "depends": [
+    "libgcc-ng >=12",
+    "libstdcxx-ng >=12"
+  ],
+  "extracted_package_dir": "/home/user/anaconda3/pkgs/re2-2022.06.01-h27087fc_1",
+  "features": "",
+  "files": [
+    "include/re2/filtered_re2.h",
+    "include/re2/re2.h",
+    "include/re2/set.h",
+    "include/re2/stringpiece.h",
+    "lib/cmake/re2/re2Config.cmake",
+    "lib/cmake/re2/re2ConfigVersion.cmake",
+    "lib/cmake/re2/re2Targets-release.cmake",
+    "lib/cmake/re2/re2Targets.cmake",
+    "lib/libre2.so",
+    "lib/libre2.so.9",
+    "lib/libre2.so.9.0.0",
+    "lib/pkgconfig/re2.pc"
+  ],
+  "fn": "re2-2022.06.01-h27087fc_1.conda",
+  "license": "BSD-3-Clause",
+  "license_family": "BSD",
+  "link": {
+    "source": "/home/user/anaconda3/pkgs/re2-2022.06.01-h27087fc_1",
+    "type": 1
+  },
+  "md5": "68070cd09c67755f37e0db13f00a008b",
+  "name": "re2",
+  "package_tarball_full_path": "/home/user/anaconda3/pkgs/re2-2022.06.01-h27087fc_1.conda",
+  "paths_data": {
+    "paths": [
+      {
+        "_path": "include/re2/filtered_re2.h",
+        "path_type": "hardlink",
+        "sha256": "ffd01873f4e412adc1d638088f545f11a0a954d96e773ebfe5fb1fc49db29491",
+        "sha256_in_prefix": "ffd01873f4e412adc1d638088f545f11a0a954d96e773ebfe5fb1fc49db29491",
+        "size_in_bytes": 4247
+      },
+      {
+        "_path": "include/re2/re2.h",
+        "path_type": "hardlink",
+        "sha256": "686ed0ad1df0c81ec8b821dc5db5b8863efc3581afe3fd24ab76478e1ad78f6e",
+        "sha256_in_prefix": "686ed0ad1df0c81ec8b821dc5db5b8863efc3581afe3fd24ab76478e1ad78f6e",
+        "size_in_bytes": 39768
+      },
+      {
+        "_path": "include/re2/set.h",
+        "path_type": "hardlink",
+        "sha256": "7439551c49fb2c6d97f4779c988404aceaee0cac3a1f10f32af54d59a8360767",
+        "sha256_in_prefix": "7439551c49fb2c6d97f4779c988404aceaee0cac3a1f10f32af54d59a8360767",
+        "size_in_bytes": 2483
+      },
+      {
+        "_path": "include/re2/stringpiece.h",
+        "path_type": "hardlink",
+        "sha256": "4e40fb96813f7e0fb0b0ce790d66f0c60b275a2fe79c51d3dc37475aaa7539b0",
+        "sha256_in_prefix": "4e40fb96813f7e0fb0b0ce790d66f0c60b275a2fe79c51d3dc37475aaa7539b0",
+        "size_in_bytes": 6419
+      },
+      {
+        "_path": "lib/cmake/re2/re2Config.cmake",
+        "path_type": "hardlink",
+        "sha256": "6f852141496b7aa4698d5d92351307a824b2ef8b6f6ce17937615da174bedac0",
+        "sha256_in_prefix": "6f852141496b7aa4698d5d92351307a824b2ef8b6f6ce17937615da174bedac0",
+        "size_in_bytes": 1349
+      },
+      {
+        "_path": "lib/cmake/re2/re2ConfigVersion.cmake",
+        "path_type": "hardlink",
+        "sha256": "31290d8ef396af6cff4f1394bff91b5bf665eee25dd859b803dc745eff26b2ce",
+        "sha256_in_prefix": "31290d8ef396af6cff4f1394bff91b5bf665eee25dd859b803dc745eff26b2ce",
+        "size_in_bytes": 2878
+      },
+      {
+        "_path": "lib/cmake/re2/re2Targets-release.cmake",
+        "path_type": "hardlink",
+        "sha256": "d475bd5f70cc4ea39952ed2515e0458254488e244009d5df8cc7266e6812e903",
+        "sha256_in_prefix": "d475bd5f70cc4ea39952ed2515e0458254488e244009d5df8cc7266e6812e903",
+        "size_in_bytes": 811
+      },
+      {
+        "_path": "lib/cmake/re2/re2Targets.cmake",
+        "path_type": "hardlink",
+        "sha256": "6bf69da3a6ee8bfd8907f5299baa5070176a6dd32e7377a882777d53b4f02b88",
+        "sha256_in_prefix": "6bf69da3a6ee8bfd8907f5299baa5070176a6dd32e7377a882777d53b4f02b88",
+        "size_in_bytes": 4092
+      },
+      {
+        "_path": "lib/libre2.so",
+        "path_type": "softlink",
+        "sha256": "d9982d4f4ac6a20ce0badcbb277e959ef515c243da5e98f8a2dd078ba06d55cf",
+        "size_in_bytes": 498648
+      },
+      {
+        "_path": "lib/libre2.so.9",
+        "path_type": "softlink",
+        "sha256": "d9982d4f4ac6a20ce0badcbb277e959ef515c243da5e98f8a2dd078ba06d55cf",
+        "size_in_bytes": 498648
+      },
+      {
+        "_path": "lib/libre2.so.9.0.0",
+        "path_type": "hardlink",
+        "sha256": "d9982d4f4ac6a20ce0badcbb277e959ef515c243da5e98f8a2dd078ba06d55cf",
+        "sha256_in_prefix": "d9982d4f4ac6a20ce0badcbb277e959ef515c243da5e98f8a2dd078ba06d55cf",
+        "size_in_bytes": 498648
+      },
+      {
+        "_path": "lib/pkgconfig/re2.pc",
+        "file_mode": "text",
+        "path_type": "hardlink",
+        "prefix_placeholder": "/home/conda/feedstock_root/build_artifacts/re2_1668975627893/_h_env_placehold_placehold_placehold_placehold_placehold_placehold_placehold_placehold_placehold_placehold_placehold_placehold_placehold_placehold_placehold_placehold_placehold_placehold_placeho",
+        "sha256": "083e4d97809c410fde888133b1d8df5c60b5236b3a9e5fcae92bd089de0a9a65",
+        "sha256_in_prefix": "829d5572067b4ab3b0026915564b90183f02aa6cded420aba78c6201db56c736",
+        "size_in_bytes": 711
+      }
+    ],
+    "paths_version": 1
+  },
+  "requested_spec": "None",
+  "sha256": "24bd3f98530f6e3cbf4ea1bfcf99509d342ec2e301a40807b230abb18c7a5e55",
+  "size": 195975,
+  "subdir": "linux-64",
+  "timestamp": 1668975768124,
+  "track_features": "",
+  "url": "https://conda.anaconda.org/conda-forge/linux-64/re2-2022.06.01-h27087fc_1.conda",
+  "version": "2022.06.01"
+}

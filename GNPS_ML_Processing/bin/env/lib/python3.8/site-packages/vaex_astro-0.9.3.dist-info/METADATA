@@ -1,0 +1,15 @@
+Metadata-Version: 2.1
+Name: vaex-astro
+Version: 0.9.3
+Summary: Astronomy related transformations and FITS file support
+Home-page: https://www.github.com/maartenbreddels/vaex
+Author: Maarten A. Breddels
+Author-email: maartenbreddels@gmail.com
+License: MIT
+Platform: UNKNOWN
+Requires-Dist: vaex-core (<5,>=4.5.0)
+Requires-Dist: astropy
+
+UNKNOWN
+
+

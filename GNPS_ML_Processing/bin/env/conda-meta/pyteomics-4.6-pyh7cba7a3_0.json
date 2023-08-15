@@ -1,0 +1,600 @@
+{
+  "build": "pyh7cba7a3_0",
+  "build_number": 0,
+  "channel": "https://conda.anaconda.org/bioconda/noarch",
+  "constrains": [],
+  "depends": [
+    "lxml",
+    "matplotlib-base",
+    "numpy",
+    "pandas",
+    "python",
+    "sqlalchemy"
+  ],
+  "extracted_package_dir": "/home/user/anaconda3/pkgs/pyteomics-4.6-pyh7cba7a3_0",
+  "features": "",
+  "files": [
+    "lib/python3.8/site-packages/pyteomics-4.6-py3.10-nspkg.pth",
+    "lib/python3.8/site-packages/pyteomics-4.6-py3.10.egg-info/PKG-INFO",
+    "lib/python3.8/site-packages/pyteomics-4.6-py3.10.egg-info/SOURCES.txt",
+    "lib/python3.8/site-packages/pyteomics-4.6-py3.10.egg-info/dependency_links.txt",
+    "lib/python3.8/site-packages/pyteomics-4.6-py3.10.egg-info/namespace_packages.txt",
+    "lib/python3.8/site-packages/pyteomics-4.6-py3.10.egg-info/not-zip-safe",
+    "lib/python3.8/site-packages/pyteomics-4.6-py3.10.egg-info/requires.txt",
+    "lib/python3.8/site-packages/pyteomics-4.6-py3.10.egg-info/top_level.txt",
+    "lib/python3.8/site-packages/pyteomics/_schema_defaults.py",
+    "lib/python3.8/site-packages/pyteomics/achrom.py",
+    "lib/python3.8/site-packages/pyteomics/auxiliary/__init__.py",
+    "lib/python3.8/site-packages/pyteomics/auxiliary/constants.py",
+    "lib/python3.8/site-packages/pyteomics/auxiliary/file_helpers.py",
+    "lib/python3.8/site-packages/pyteomics/auxiliary/math.py",
+    "lib/python3.8/site-packages/pyteomics/auxiliary/patch.py",
+    "lib/python3.8/site-packages/pyteomics/auxiliary/structures.py",
+    "lib/python3.8/site-packages/pyteomics/auxiliary/target_decoy.py",
+    "lib/python3.8/site-packages/pyteomics/auxiliary/utils.py",
+    "lib/python3.8/site-packages/pyteomics/electrochem.py",
+    "lib/python3.8/site-packages/pyteomics/fasta.py",
+    "lib/python3.8/site-packages/pyteomics/mass/__init__.py",
+    "lib/python3.8/site-packages/pyteomics/mass/mass.py",
+    "lib/python3.8/site-packages/pyteomics/mass/unimod.py",
+    "lib/python3.8/site-packages/pyteomics/mgf.py",
+    "lib/python3.8/site-packages/pyteomics/ms1.py",
+    "lib/python3.8/site-packages/pyteomics/ms2.py",
+    "lib/python3.8/site-packages/pyteomics/mzid.py",
+    "lib/python3.8/site-packages/pyteomics/mzml.py",
+    "lib/python3.8/site-packages/pyteomics/mzmlb.py",
+    "lib/python3.8/site-packages/pyteomics/mztab.py",
+    "lib/python3.8/site-packages/pyteomics/mzxml.py",
+    "lib/python3.8/site-packages/pyteomics/openms/__init__.py",
+    "lib/python3.8/site-packages/pyteomics/openms/featurexml.py",
+    "lib/python3.8/site-packages/pyteomics/openms/idxml.py",
+    "lib/python3.8/site-packages/pyteomics/openms/trafoxml.py",
+    "lib/python3.8/site-packages/pyteomics/parser.py",
+    "lib/python3.8/site-packages/pyteomics/peff.py",
+    "lib/python3.8/site-packages/pyteomics/pepxml.py",
+    "lib/python3.8/site-packages/pyteomics/proforma.py",
+    "lib/python3.8/site-packages/pyteomics/protxml.py",
+    "lib/python3.8/site-packages/pyteomics/pylab_aux.py",
+    "lib/python3.8/site-packages/pyteomics/tandem.py",
+    "lib/python3.8/site-packages/pyteomics/traml.py",
+    "lib/python3.8/site-packages/pyteomics/usi.py",
+    "lib/python3.8/site-packages/pyteomics/version.py",
+    "lib/python3.8/site-packages/pyteomics/xml.py",
+    "lib/python3.8/site-packages/pyteomics/__pycache__/_schema_defaults.cpython-38.pyc",
+    "lib/python3.8/site-packages/pyteomics/__pycache__/achrom.cpython-38.pyc",
+    "lib/python3.8/site-packages/pyteomics/auxiliary/__pycache__/__init__.cpython-38.pyc",
+    "lib/python3.8/site-packages/pyteomics/auxiliary/__pycache__/constants.cpython-38.pyc",
+    "lib/python3.8/site-packages/pyteomics/auxiliary/__pycache__/file_helpers.cpython-38.pyc",
+    "lib/python3.8/site-packages/pyteomics/auxiliary/__pycache__/math.cpython-38.pyc",
+    "lib/python3.8/site-packages/pyteomics/auxiliary/__pycache__/patch.cpython-38.pyc",
+    "lib/python3.8/site-packages/pyteomics/auxiliary/__pycache__/structures.cpython-38.pyc",
+    "lib/python3.8/site-packages/pyteomics/auxiliary/__pycache__/target_decoy.cpython-38.pyc",
+    "lib/python3.8/site-packages/pyteomics/auxiliary/__pycache__/utils.cpython-38.pyc",
+    "lib/python3.8/site-packages/pyteomics/__pycache__/electrochem.cpython-38.pyc",
+    "lib/python3.8/site-packages/pyteomics/__pycache__/fasta.cpython-38.pyc",
+    "lib/python3.8/site-packages/pyteomics/mass/__pycache__/__init__.cpython-38.pyc",
+    "lib/python3.8/site-packages/pyteomics/mass/__pycache__/mass.cpython-38.pyc",
+    "lib/python3.8/site-packages/pyteomics/mass/__pycache__/unimod.cpython-38.pyc",
+    "lib/python3.8/site-packages/pyteomics/__pycache__/mgf.cpython-38.pyc",
+    "lib/python3.8/site-packages/pyteomics/__pycache__/ms1.cpython-38.pyc",
+    "lib/python3.8/site-packages/pyteomics/__pycache__/ms2.cpython-38.pyc",
+    "lib/python3.8/site-packages/pyteomics/__pycache__/mzid.cpython-38.pyc",
+    "lib/python3.8/site-packages/pyteomics/__pycache__/mzml.cpython-38.pyc",
+    "lib/python3.8/site-packages/pyteomics/__pycache__/mzmlb.cpython-38.pyc",
+    "lib/python3.8/site-packages/pyteomics/__pycache__/mztab.cpython-38.pyc",
+    "lib/python3.8/site-packages/pyteomics/__pycache__/mzxml.cpython-38.pyc",
+    "lib/python3.8/site-packages/pyteomics/openms/__pycache__/__init__.cpython-38.pyc",
+    "lib/python3.8/site-packages/pyteomics/openms/__pycache__/featurexml.cpython-38.pyc",
+    "lib/python3.8/site-packages/pyteomics/openms/__pycache__/idxml.cpython-38.pyc",
+    "lib/python3.8/site-packages/pyteomics/openms/__pycache__/trafoxml.cpython-38.pyc",
+    "lib/python3.8/site-packages/pyteomics/__pycache__/parser.cpython-38.pyc",
+    "lib/python3.8/site-packages/pyteomics/__pycache__/peff.cpython-38.pyc",
+    "lib/python3.8/site-packages/pyteomics/__pycache__/pepxml.cpython-38.pyc",
+    "lib/python3.8/site-packages/pyteomics/__pycache__/proforma.cpython-38.pyc",
+    "lib/python3.8/site-packages/pyteomics/__pycache__/protxml.cpython-38.pyc",
+    "lib/python3.8/site-packages/pyteomics/__pycache__/pylab_aux.cpython-38.pyc",
+    "lib/python3.8/site-packages/pyteomics/__pycache__/tandem.cpython-38.pyc",
+    "lib/python3.8/site-packages/pyteomics/__pycache__/traml.cpython-38.pyc",
+    "lib/python3.8/site-packages/pyteomics/__pycache__/usi.cpython-38.pyc",
+    "lib/python3.8/site-packages/pyteomics/__pycache__/version.cpython-38.pyc",
+    "lib/python3.8/site-packages/pyteomics/__pycache__/xml.cpython-38.pyc"
+  ],
+  "fn": "pyteomics-4.6-pyh7cba7a3_0.tar.bz2",
+  "license": "Apache-2.0",
+  "link": {
+    "source": "/home/user/anaconda3/pkgs/pyteomics-4.6-pyh7cba7a3_0",
+    "type": 1
+  },
+  "md5": "171a2f513cbec778327fbb2a00d5804f",
+  "name": "pyteomics",
+  "noarch": "python",
+  "package_tarball_full_path": "/home/user/anaconda3/pkgs/pyteomics-4.6-pyh7cba7a3_0.tar.bz2",
+  "package_type": "noarch_python",
+  "paths_data": {
+    "paths": [
+      {
+        "_path": "site-packages/pyteomics-4.6-py3.10-nspkg.pth",
+        "path_type": "hardlink",
+        "sha256": "ad80ad2337a83ad579e3a94343cc236e92c31cec3d0fdfc9ee4e216d8fee2d91",
+        "sha256_in_prefix": "ad80ad2337a83ad579e3a94343cc236e92c31cec3d0fdfc9ee4e216d8fee2d91",
+        "size_in_bytes": 554
+      },
+      {
+        "_path": "site-packages/pyteomics-4.6-py3.10.egg-info/PKG-INFO",
+        "path_type": "hardlink",
+        "sha256": "5d912bf162636f524efd88abab83ba529aa2a2711b72fd26afc99d9ff03fb5cd",
+        "sha256_in_prefix": "5d912bf162636f524efd88abab83ba529aa2a2711b72fd26afc99d9ff03fb5cd",
+        "size_in_bytes": 5624
+      },
+      {
+        "_path": "site-packages/pyteomics-4.6-py3.10.egg-info/SOURCES.txt",
+        "path_type": "hardlink",
+        "sha256": "de3784167c7d95207e82e9c00bbd30a8c2b430481185b8467a85a6ad6fa60188",
+        "sha256_in_prefix": "de3784167c7d95207e82e9c00bbd30a8c2b430481185b8467a85a6ad6fa60188",
+        "size_in_bytes": 1235
+      },
+      {
+        "_path": "site-packages/pyteomics-4.6-py3.10.egg-info/dependency_links.txt",
+        "path_type": "hardlink",
+        "sha256": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+        "sha256_in_prefix": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+        "size_in_bytes": 1
+      },
+      {
+        "_path": "site-packages/pyteomics-4.6-py3.10.egg-info/namespace_packages.txt",
+        "path_type": "hardlink",
+        "sha256": "98d79e8011e7373b75b65301a430268be77a1b30536cfce64ca0ac510917e068",
+        "sha256_in_prefix": "98d79e8011e7373b75b65301a430268be77a1b30536cfce64ca0ac510917e068",
+        "size_in_bytes": 10
+      },
+      {
+        "_path": "site-packages/pyteomics-4.6-py3.10.egg-info/not-zip-safe",
+        "path_type": "hardlink",
+        "sha256": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+        "sha256_in_prefix": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+        "size_in_bytes": 1
+      },
+      {
+        "_path": "site-packages/pyteomics-4.6-py3.10.egg-info/requires.txt",
+        "path_type": "hardlink",
+        "sha256": "ff2009c9e0adcf016ff102dd9d1aed1eca0c5ab837a4106123594a3c8bced406",
+        "sha256_in_prefix": "ff2009c9e0adcf016ff102dd9d1aed1eca0c5ab837a4106123594a3c8bced406",
+        "size_in_bytes": 255
+      },
+      {
+        "_path": "site-packages/pyteomics-4.6-py3.10.egg-info/top_level.txt",
+        "path_type": "hardlink",
+        "sha256": "98d79e8011e7373b75b65301a430268be77a1b30536cfce64ca0ac510917e068",
+        "sha256_in_prefix": "98d79e8011e7373b75b65301a430268be77a1b30536cfce64ca0ac510917e068",
+        "size_in_bytes": 10
+      },
+      {
+        "_path": "site-packages/pyteomics/_schema_defaults.py",
+        "path_type": "hardlink",
+        "sha256": "4b67cfcf5ff40dfc95c2d2ffd16b85d926fc8d9d02f54fb40e0b8665417745b6",
+        "sha256_in_prefix": "4b67cfcf5ff40dfc95c2d2ffd16b85d926fc8d9d02f54fb40e0b8665417745b6",
+        "size_in_bytes": 24735
+      },
+      {
+        "_path": "site-packages/pyteomics/achrom.py",
+        "path_type": "hardlink",
+        "sha256": "efb95047cdaa8fa46acd90d84256e01e3a5a3367d05eec9ee37d4fdb63d144cb",
+        "sha256_in_prefix": "efb95047cdaa8fa46acd90d84256e01e3a5a3367d05eec9ee37d4fdb63d144cb",
+        "size_in_bytes": 47949
+      },
+      {
+        "_path": "site-packages/pyteomics/auxiliary/__init__.py",
+        "path_type": "hardlink",
+        "sha256": "0f00ef96b36dc5d1fd27f011691c460a33d7afe981da14fd2da2b18cf0454e07",
+        "sha256_in_prefix": "0f00ef96b36dc5d1fd27f011691c460a33d7afe981da14fd2da2b18cf0454e07",
+        "size_in_bytes": 1323
+      },
+      {
+        "_path": "site-packages/pyteomics/auxiliary/constants.py",
+        "path_type": "hardlink",
+        "sha256": "3aee076c471b5477665e584b774b02d81d19e362a0fc63fdf95b3f4ee6a0744e",
+        "sha256_in_prefix": "3aee076c471b5477665e584b774b02d81d19e362a0fc63fdf95b3f4ee6a0744e",
+        "size_in_bytes": 83715
+      },
+      {
+        "_path": "site-packages/pyteomics/auxiliary/file_helpers.py",
+        "path_type": "hardlink",
+        "sha256": "46db23166461f10908b52345d5733be32208bb8af8090693597dc4209dffa2f8",
+        "sha256_in_prefix": "46db23166461f10908b52345d5733be32208bb8af8090693597dc4209dffa2f8",
+        "size_in_bytes": 40314
+      },
+      {
+        "_path": "site-packages/pyteomics/auxiliary/math.py",
+        "path_type": "hardlink",
+        "sha256": "026682b4e8bb4aecc4eed30edb50f22e20b8743dc345a3596918daf75410c460",
+        "sha256_in_prefix": "026682b4e8bb4aecc4eed30edb50f22e20b8743dc345a3596918daf75410c460",
+        "size_in_bytes": 3005
+      },
+      {
+        "_path": "site-packages/pyteomics/auxiliary/patch.py",
+        "path_type": "hardlink",
+        "sha256": "30b61fb6c26ad81af930e94330b2670d67c200a2713f19bfe79979883a046396",
+        "sha256_in_prefix": "30b61fb6c26ad81af930e94330b2670d67c200a2713f19bfe79979883a046396",
+        "size_in_bytes": 411
+      },
+      {
+        "_path": "site-packages/pyteomics/auxiliary/structures.py",
+        "path_type": "hardlink",
+        "sha256": "f067ef1281051a05429953e86d9f705159c959120d8c6c021bb857635392e048",
+        "sha256_in_prefix": "f067ef1281051a05429953e86d9f705159c959120d8c6c021bb857635392e048",
+        "size_in_bytes": 15295
+      },
+      {
+        "_path": "site-packages/pyteomics/auxiliary/target_decoy.py",
+        "path_type": "hardlink",
+        "sha256": "56f351c0797e91f2428020e4b56ef04eb780d85aa45503e895f32e9fc65f06bd",
+        "sha256_in_prefix": "56f351c0797e91f2428020e4b56ef04eb780d85aa45503e895f32e9fc65f06bd",
+        "size_in_bytes": 41484
+      },
+      {
+        "_path": "site-packages/pyteomics/auxiliary/utils.py",
+        "path_type": "hardlink",
+        "sha256": "0a88637961003b6cdb5f9c5c8cc7d46fd5eb9ff4d89f4cf502afebdaa86d80a7",
+        "sha256_in_prefix": "0a88637961003b6cdb5f9c5c8cc7d46fd5eb9ff4d89f4cf502afebdaa86d80a7",
+        "size_in_bytes": 10670
+      },
+      {
+        "_path": "site-packages/pyteomics/electrochem.py",
+        "path_type": "hardlink",
+        "sha256": "caa1cfdee27ae9f4b5a55d0003199166f611924c5e44c3ca909e669dc8755b73",
+        "sha256_in_prefix": "caa1cfdee27ae9f4b5a55d0003199166f611924c5e44c3ca909e669dc8755b73",
+        "size_in_bytes": 17340
+      },
+      {
+        "_path": "site-packages/pyteomics/fasta.py",
+        "path_type": "hardlink",
+        "sha256": "70cdb85d08e62ea8b846dc0caf91165a8d294b0d0fb214cfc7efca2ce68d642c",
+        "sha256_in_prefix": "70cdb85d08e62ea8b846dc0caf91165a8d294b0d0fb214cfc7efca2ce68d642c",
+        "size_in_bytes": 36665
+      },
+      {
+        "_path": "site-packages/pyteomics/mass/__init__.py",
+        "path_type": "hardlink",
+        "sha256": "47aedaad987a4a1fa671c6849d32a5594f5df71472e708faf3321ba39246bf84",
+        "sha256_in_prefix": "47aedaad987a4a1fa671c6849d32a5594f5df71472e708faf3321ba39246bf84",
+        "size_in_bytes": 112
+      },
+      {
+        "_path": "site-packages/pyteomics/mass/mass.py",
+        "path_type": "hardlink",
+        "sha256": "07b1c24d9e8d7289c566a62d4ab650ce118a98eb002a7f097ab9a8e376745510",
+        "sha256_in_prefix": "07b1c24d9e8d7289c566a62d4ab650ce118a98eb002a7f097ab9a8e376745510",
+        "size_in_bytes": 49128
+      },
+      {
+        "_path": "site-packages/pyteomics/mass/unimod.py",
+        "path_type": "hardlink",
+        "sha256": "0d578ac193bc3fb21ca4cd51ba8727bba15f199800d1c25a875458c1657e6a23",
+        "sha256_in_prefix": "0d578ac193bc3fb21ca4cd51ba8727bba15f199800d1c25a875458c1657e6a23",
+        "size_in_bytes": 25502
+      },
+      {
+        "_path": "site-packages/pyteomics/mgf.py",
+        "path_type": "hardlink",
+        "sha256": "755d45992ee18e24298591158bf2cc51e0b366d420104663524cceadcd04db9a",
+        "sha256_in_prefix": "755d45992ee18e24298591158bf2cc51e0b366d420104663524cceadcd04db9a",
+        "size_in_bytes": 33178
+      },
+      {
+        "_path": "site-packages/pyteomics/ms1.py",
+        "path_type": "hardlink",
+        "sha256": "6255ba7e65bb91005a4f6c269e006a34a6bb887b22a57b23ed956312643dc8a5",
+        "sha256_in_prefix": "6255ba7e65bb91005a4f6c269e006a34a6bb887b22a57b23ed956312643dc8a5",
+        "size_in_bytes": 18868
+      },
+      {
+        "_path": "site-packages/pyteomics/ms2.py",
+        "path_type": "hardlink",
+        "sha256": "af7fcb0d7ffbd66966c2ac3d4247ac3ec890adf9105e5d94a3dec8f0bf8fb882",
+        "sha256_in_prefix": "af7fcb0d7ffbd66966c2ac3d4247ac3ec890adf9105e5d94a3dec8f0bf8fb882",
+        "size_in_bytes": 16538
+      },
+      {
+        "_path": "site-packages/pyteomics/mzid.py",
+        "path_type": "hardlink",
+        "sha256": "e264b923fb144aefbbf3a8a26428e1abeea6a5c203abcfc2f064b41970046eab",
+        "sha256_in_prefix": "e264b923fb144aefbbf3a8a26428e1abeea6a5c203abcfc2f064b41970046eab",
+        "size_in_bytes": 17527
+      },
+      {
+        "_path": "site-packages/pyteomics/mzml.py",
+        "path_type": "hardlink",
+        "sha256": "d1fd4804dd5bc8551a861749fa4a322e43b214db0349a77a702985ed8d7fb3e9",
+        "sha256_in_prefix": "d1fd4804dd5bc8551a861749fa4a322e43b214db0349a77a702985ed8d7fb3e9",
+        "size_in_bytes": 21026
+      },
+      {
+        "_path": "site-packages/pyteomics/mzmlb.py",
+        "path_type": "hardlink",
+        "sha256": "9b5ca0b6eae51194ee6927493dc4bac067f5e25709d578bc2dc7585efdcfc46f",
+        "sha256_in_prefix": "9b5ca0b6eae51194ee6927493dc4bac067f5e25709d578bc2dc7585efdcfc46f",
+        "size_in_bytes": 19931
+      },
+      {
+        "_path": "site-packages/pyteomics/mztab.py",
+        "path_type": "hardlink",
+        "sha256": "21f658a0a3ec236d0607ac0d13efb6ede14a2f11c3c761e92661450000e2abd9",
+        "sha256_in_prefix": "21f658a0a3ec236d0607ac0d13efb6ede14a2f11c3c761e92661450000e2abd9",
+        "size_in_bytes": 27739
+      },
+      {
+        "_path": "site-packages/pyteomics/mzxml.py",
+        "path_type": "hardlink",
+        "sha256": "0fb756480ab7536e221b27f3c5a7701bd10f7086445545aeb50080dcff4dc22a",
+        "sha256_in_prefix": "0fb756480ab7536e221b27f3c5a7701bd10f7086445545aeb50080dcff4dc22a",
+        "size_in_bytes": 11911
+      },
+      {
+        "_path": "site-packages/pyteomics/openms/__init__.py",
+        "path_type": "hardlink",
+        "sha256": "5aac0bfc3b4ef6cb09474c87fbc020646e73221391fb029cdf5b49bbec6fcac6",
+        "sha256_in_prefix": "5aac0bfc3b4ef6cb09474c87fbc020646e73221391fb029cdf5b49bbec6fcac6",
+        "size_in_bytes": 42
+      },
+      {
+        "_path": "site-packages/pyteomics/openms/featurexml.py",
+        "path_type": "hardlink",
+        "sha256": "bf41c44cf03f30a3a1b4c6d03f39cf0bdc39889e34f350f37254fcea74dc6913",
+        "sha256_in_prefix": "bf41c44cf03f30a3a1b4c6d03f39cf0bdc39889e34f350f37254fcea74dc6913",
+        "size_in_bytes": 4043
+      },
+      {
+        "_path": "site-packages/pyteomics/openms/idxml.py",
+        "path_type": "hardlink",
+        "sha256": "e1e3bec8127755b74f55984ecba76940bbe6ef1b3f667cd764002e07b6aba961",
+        "sha256_in_prefix": "e1e3bec8127755b74f55984ecba76940bbe6ef1b3f667cd764002e07b6aba961",
+        "size_in_bytes": 15906
+      },
+      {
+        "_path": "site-packages/pyteomics/openms/trafoxml.py",
+        "path_type": "hardlink",
+        "sha256": "40c78d9f37fa303c6bc27428fcab60aadf5e7400b3937bda0caec2e4c14164f0",
+        "sha256_in_prefix": "40c78d9f37fa303c6bc27428fcab60aadf5e7400b3937bda0caec2e4c14164f0",
+        "size_in_bytes": 2621
+      },
+      {
+        "_path": "site-packages/pyteomics/parser.py",
+        "path_type": "hardlink",
+        "sha256": "a06a76d7274412c94773b1cc8aba9b1ef5d3c02f3933b2e7d088f1c7b5a86bc8",
+        "sha256_in_prefix": "a06a76d7274412c94773b1cc8aba9b1ef5d3c02f3933b2e7d088f1c7b5a86bc8",
+        "size_in_bytes": 41487
+      },
+      {
+        "_path": "site-packages/pyteomics/peff.py",
+        "path_type": "hardlink",
+        "sha256": "1f6dd57ca4a2a36f7900263b4b4990a9d91b9afa809e45b99584d9f526867560",
+        "sha256_in_prefix": "1f6dd57ca4a2a36f7900263b4b4990a9d91b9afa809e45b99584d9f526867560",
+        "size_in_bytes": 8927
+      },
+      {
+        "_path": "site-packages/pyteomics/pepxml.py",
+        "path_type": "hardlink",
+        "sha256": "33b4823110f037c607c730d84a76d2a7d4120c2bda0e6c6430c2285f20d5b971",
+        "sha256_in_prefix": "33b4823110f037c607c730d84a76d2a7d4120c2bda0e6c6430c2285f20d5b971",
+        "size_in_bytes": 24099
+      },
+      {
+        "_path": "site-packages/pyteomics/proforma.py",
+        "path_type": "hardlink",
+        "sha256": "3007972c132ffb62e841926caad500fe8364538bf46df03e420c0bc4f7f87730",
+        "sha256_in_prefix": "3007972c132ffb62e841926caad500fe8364538bf46df03e420c0bc4f7f87730",
+        "size_in_bytes": 77062
+      },
+      {
+        "_path": "site-packages/pyteomics/protxml.py",
+        "path_type": "hardlink",
+        "sha256": "6e0d0681f3ff3fb471fecd2d0789179603f57b8f925889f0508dcb58a52b072e",
+        "sha256_in_prefix": "6e0d0681f3ff3fb471fecd2d0789179603f57b8f925889f0508dcb58a52b072e",
+        "size_in_bytes": 11255
+      },
+      {
+        "_path": "site-packages/pyteomics/pylab_aux.py",
+        "path_type": "hardlink",
+        "sha256": "a71c7393589c98fb3b28a039fc27f0de1e4c7e6a860680d9ef382bc2c19354cd",
+        "sha256_in_prefix": "a71c7393589c98fb3b28a039fc27f0de1e4c7e6a860680d9ef382bc2c19354cd",
+        "size_in_bytes": 33492
+      },
+      {
+        "_path": "site-packages/pyteomics/tandem.py",
+        "path_type": "hardlink",
+        "sha256": "83a9d578a668df198b88e6f09c780abf01232a566ba080e8479003213d16be98",
+        "sha256_in_prefix": "83a9d578a668df198b88e6f09c780abf01232a566ba080e8479003213d16be98",
+        "size_in_bytes": 13835
+      },
+      {
+        "_path": "site-packages/pyteomics/traml.py",
+        "path_type": "hardlink",
+        "sha256": "4efac8568e5508091878111fdead933f63f9e09789f9d053668f70e2b3cea0a7",
+        "sha256_in_prefix": "4efac8568e5508091878111fdead933f63f9e09789f9d053668f70e2b3cea0a7",
+        "size_in_bytes": 8611
+      },
+      {
+        "_path": "site-packages/pyteomics/usi.py",
+        "path_type": "hardlink",
+        "sha256": "8b7c341765c0c6ac06dae400a375429bddbf72a49ee300e7756afe2f7a27f87e",
+        "sha256_in_prefix": "8b7c341765c0c6ac06dae400a375429bddbf72a49ee300e7756afe2f7a27f87e",
+        "size_in_bytes": 17738
+      },
+      {
+        "_path": "site-packages/pyteomics/version.py",
+        "path_type": "hardlink",
+        "sha256": "4dbc3af7d9bb80290f2fd76ee4f1f64ac57a80e9102d12045415a916c8c96381",
+        "sha256_in_prefix": "4dbc3af7d9bb80290f2fd76ee4f1f64ac57a80e9102d12045415a916c8c96381",
+        "size_in_bytes": 1958
+      },
+      {
+        "_path": "site-packages/pyteomics/xml.py",
+        "path_type": "hardlink",
+        "sha256": "7974fb4fbd13d7596a9eaffe4313d889305b4f454c201fd965aab51e91f6530a",
+        "sha256_in_prefix": "7974fb4fbd13d7596a9eaffe4313d889305b4f454c201fd965aab51e91f6530a",
+        "size_in_bytes": 48203
+      },
+      {
+        "_path": "lib/python3.8/site-packages/pyteomics/__pycache__/_schema_defaults.cpython-38.pyc",
+        "path_type": "pyc_file"
+      },
+      {
+        "_path": "lib/python3.8/site-packages/pyteomics/__pycache__/achrom.cpython-38.pyc",
+        "path_type": "pyc_file"
+      },
+      {
+        "_path": "lib/python3.8/site-packages/pyteomics/auxiliary/__pycache__/__init__.cpython-38.pyc",
+        "path_type": "pyc_file"
+      },
+      {
+        "_path": "lib/python3.8/site-packages/pyteomics/auxiliary/__pycache__/constants.cpython-38.pyc",
+        "path_type": "pyc_file"
+      },
+      {
+        "_path": "lib/python3.8/site-packages/pyteomics/auxiliary/__pycache__/file_helpers.cpython-38.pyc",
+        "path_type": "pyc_file"
+      },
+      {
+        "_path": "lib/python3.8/site-packages/pyteomics/auxiliary/__pycache__/math.cpython-38.pyc",
+        "path_type": "pyc_file"
+      },
+      {
+        "_path": "lib/python3.8/site-packages/pyteomics/auxiliary/__pycache__/patch.cpython-38.pyc",
+        "path_type": "pyc_file"
+      },
+      {
+        "_path": "lib/python3.8/site-packages/pyteomics/auxiliary/__pycache__/structures.cpython-38.pyc",
+        "path_type": "pyc_file"
+      },
+      {
+        "_path": "lib/python3.8/site-packages/pyteomics/auxiliary/__pycache__/target_decoy.cpython-38.pyc",
+        "path_type": "pyc_file"
+      },
+      {
+        "_path": "lib/python3.8/site-packages/pyteomics/auxiliary/__pycache__/utils.cpython-38.pyc",
+        "path_type": "pyc_file"
+      },
+      {
+        "_path": "lib/python3.8/site-packages/pyteomics/__pycache__/electrochem.cpython-38.pyc",
+        "path_type": "pyc_file"
+      },
+      {
+        "_path": "lib/python3.8/site-packages/pyteomics/__pycache__/fasta.cpython-38.pyc",
+        "path_type": "pyc_file"
+      },
+      {
+        "_path": "lib/python3.8/site-packages/pyteomics/mass/__pycache__/__init__.cpython-38.pyc",
+        "path_type": "pyc_file"
+      },
+      {
+        "_path": "lib/python3.8/site-packages/pyteomics/mass/__pycache__/mass.cpython-38.pyc",
+        "path_type": "pyc_file"
+      },
+      {
+        "_path": "lib/python3.8/site-packages/pyteomics/mass/__pycache__/unimod.cpython-38.pyc",
+        "path_type": "pyc_file"
+      },
+      {
+        "_path": "lib/python3.8/site-packages/pyteomics/__pycache__/mgf.cpython-38.pyc",
+        "path_type": "pyc_file"
+      },
+      {
+        "_path": "lib/python3.8/site-packages/pyteomics/__pycache__/ms1.cpython-38.pyc",
+        "path_type": "pyc_file"
+      },
+      {
+        "_path": "lib/python3.8/site-packages/pyteomics/__pycache__/ms2.cpython-38.pyc",
+        "path_type": "pyc_file"
+      },
+      {
+        "_path": "lib/python3.8/site-packages/pyteomics/__pycache__/mzid.cpython-38.pyc",
+        "path_type": "pyc_file"
+      },
+      {
+        "_path": "lib/python3.8/site-packages/pyteomics/__pycache__/mzml.cpython-38.pyc",
+        "path_type": "pyc_file"
+      },
+      {
+        "_path": "lib/python3.8/site-packages/pyteomics/__pycache__/mzmlb.cpython-38.pyc",
+        "path_type": "pyc_file"
+      },
+      {
+        "_path": "lib/python3.8/site-packages/pyteomics/__pycache__/mztab.cpython-38.pyc",
+        "path_type": "pyc_file"
+      },
+      {
+        "_path": "lib/python3.8/site-packages/pyteomics/__pycache__/mzxml.cpython-38.pyc",
+        "path_type": "pyc_file"
+      },
+      {
+        "_path": "lib/python3.8/site-packages/pyteomics/openms/__pycache__/__init__.cpython-38.pyc",
+        "path_type": "pyc_file"
+      },
+      {
+        "_path": "lib/python3.8/site-packages/pyteomics/openms/__pycache__/featurexml.cpython-38.pyc",
+        "path_type": "pyc_file"
+      },
+      {
+        "_path": "lib/python3.8/site-packages/pyteomics/openms/__pycache__/idxml.cpython-38.pyc",
+        "path_type": "pyc_file"
+      },
+      {
+        "_path": "lib/python3.8/site-packages/pyteomics/openms/__pycache__/trafoxml.cpython-38.pyc",
+        "path_type": "pyc_file"
+      },
+      {
+        "_path": "lib/python3.8/site-packages/pyteomics/__pycache__/parser.cpython-38.pyc",
+        "path_type": "pyc_file"
+      },
+      {
+        "_path": "lib/python3.8/site-packages/pyteomics/__pycache__/peff.cpython-38.pyc",
+        "path_type": "pyc_file"
+      },
+      {
+        "_path": "lib/python3.8/site-packages/pyteomics/__pycache__/pepxml.cpython-38.pyc",
+        "path_type": "pyc_file"
+      },
+      {
+        "_path": "lib/python3.8/site-packages/pyteomics/__pycache__/proforma.cpython-38.pyc",
+        "path_type": "pyc_file"
+      },
+      {
+        "_path": "lib/python3.8/site-packages/pyteomics/__pycache__/protxml.cpython-38.pyc",
+        "path_type": "pyc_file"
+      },
+      {
+        "_path": "lib/python3.8/site-packages/pyteomics/__pycache__/pylab_aux.cpython-38.pyc",
+        "path_type": "pyc_file"
+      },
+      {
+        "_path": "lib/python3.8/site-packages/pyteomics/__pycache__/tandem.cpython-38.pyc",
+        "path_type": "pyc_file"
+      },
+      {
+        "_path": "lib/python3.8/site-packages/pyteomics/__pycache__/traml.cpython-38.pyc",
+        "path_type": "pyc_file"
+      },
+      {
+        "_path": "lib/python3.8/site-packages/pyteomics/__pycache__/usi.cpython-38.pyc",
+        "path_type": "pyc_file"
+      },
+      {
+        "_path": "lib/python3.8/site-packages/pyteomics/__pycache__/version.cpython-38.pyc",
+        "path_type": "pyc_file"
+      },
+      {
+        "_path": "lib/python3.8/site-packages/pyteomics/__pycache__/xml.cpython-38.pyc",
+        "path_type": "pyc_file"
+      }
+    ],
+    "paths_version": 1
+  },
+  "requested_spec": "pyteomics",
+  "sha256": "1641f5ffd528e37a33f87bdbc95503cc08d707f7e24b365de6f46308ee876531",
+  "size": 166808,
+  "subdir": "noarch",
+  "timestamp": 1682008099102,
+  "track_features": "",
+  "url": "https://conda.anaconda.org/bioconda/noarch/pyteomics-4.6-pyh7cba7a3_0.tar.bz2",
+  "version": "4.6"
+}

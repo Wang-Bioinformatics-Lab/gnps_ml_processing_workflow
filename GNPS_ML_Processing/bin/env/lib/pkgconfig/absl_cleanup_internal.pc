@@ -1,0 +1,12 @@
+prefix=/home/user/SourceCode/GNPS_ML_Processing_Workflow/bin/env
+exec_prefix=${prefix}
+libdir=/home/user/SourceCode/GNPS_ML_Processing_Workflow/bin/env/lib
+includedir=/home/user/SourceCode/GNPS_ML_Processing_Workflow/bin/env/include
+
+Name: absl_cleanup_internal
+Description: Abseil cleanup_internal library
+URL: https://abseil.io/
+Version: 20220623
+Requires: absl_base_internal = 20220623, absl_core_headers = 20220623, absl_utility = 20220623
+Libs: -L${libdir}  
+Cflags: -I${includedir} -DNOMINMAX

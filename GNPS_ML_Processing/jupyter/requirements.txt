@@ -1,0 +1,16 @@
+pandas
+numpy
+pyteomics
+networkx
+requests
+tqdm
+beautifulsoup4
+lxml
+rdkit
+joblib
+pyarrow
+fastparquet
+obonet
+vaex
+pandarallel 
+dask

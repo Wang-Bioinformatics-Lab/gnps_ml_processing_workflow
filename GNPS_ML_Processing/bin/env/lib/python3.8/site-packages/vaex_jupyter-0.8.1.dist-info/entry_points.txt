@@ -1,0 +1,3 @@
+[vaex.dataframe.accessor]
+widget = vaex.jupyter:DataFrameAccessorWidget
+

@@ -1,0 +1,37 @@
+Metadata-Version: 2.1
+Name: ipydatawidgets
+Version: 4.3.5
+Summary: A set of widgets to help facilitate reuse of large datasets across widgets
+Home-page: https://github.com/vidartf/ipydatawidgets
+Author: Jupyter Development Team
+Author-email: jupyter@googlegroups.com
+License: BSD
+Keywords: Jupyter,Widgets,IPython
+Platform: Linux
+Platform: Mac OS X
+Platform: Windows
+Classifier: Intended Audience :: Developers
+Classifier: Intended Audience :: Science/Research
+Classifier: License :: OSI Approved :: BSD License
+Classifier: Programming Language :: Python
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3.5
+Classifier: Programming Language :: Python :: 3.6
+Classifier: Programming Language :: Python :: 3.7
+Classifier: Programming Language :: Python :: 3.8
+Classifier: Programming Language :: Python :: 3.9
+Classifier: Framework :: Jupyter
+Requires-Python: >=3.7
+License-File: LICENSE.txt
+Requires-Dist: ipywidgets (>=7.0.0)
+Requires-Dist: numpy
+Requires-Dist: traittypes (>=0.2.0)
+Provides-Extra: docs
+Requires-Dist: sphinx ; extra == 'docs'
+Requires-Dist: recommonmark ; extra == 'docs'
+Requires-Dist: sphinx-rtd-theme ; extra == 'docs'
+Provides-Extra: test
+Requires-Dist: pytest (>=4) ; extra == 'test'
+Requires-Dist: pytest-cov ; extra == 'test'
+Requires-Dist: nbval (>=0.9.2) ; extra == 'test'
+
