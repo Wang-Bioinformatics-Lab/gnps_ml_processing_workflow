@@ -1,8 +1,0 @@
-includedir=/home/user/SourceCode/GNPS_ML_Processing_Workflow/bin/env/include
-libdir=/home/user/SourceCode/GNPS_ML_Processing_Workflow/bin/env/lib
-
-Name: re2
-Description: RE2 is a fast, safe, thread-friendly regular expression engine.
-Version: 0.0.0
-Cflags: -pthread -I${includedir}
-Libs: -pthread -L${libdir} -lre2
