@@ -167,7 +167,7 @@ process calculate_similarities {
   path "similarity_calculations/*", emit: spectral_similarities
 
   """
-  nextflow run $baseDir/GNPS_PureNetworking_Workflow/workflow/workflow.nf \
+  nextflow run $TOOL_FOLDER/GNPS_PureNetworking_Workflow/workflow/workflow.nf \
                 --inputspectra $mgf \
                 --parallelism $params.parallelism \
                 --publishdir "similarity_calculations/${mgf.baseName}"

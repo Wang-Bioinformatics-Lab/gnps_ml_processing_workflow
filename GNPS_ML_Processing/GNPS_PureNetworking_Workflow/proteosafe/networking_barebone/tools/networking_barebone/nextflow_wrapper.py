@@ -1,1 +1,0 @@
-../../../../GNPS_sharedcode/nextflow_wrapper.py

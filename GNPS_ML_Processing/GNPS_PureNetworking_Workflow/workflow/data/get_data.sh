@@ -1,3 +1,0 @@
-wget --no-verbose --output-document=specs_ms.mgf "https://proteomics2.ucsd.edu/ProteoSAFe/DownloadResultFile?task=1ad7bc366aef45ce81d2dfcca0a9a5e7&file=spectra/specs_ms.mgf&block=main&process_html=false"
-wget --no-verbose --output-document=specs_ms_mouse.mgf "https://proteomics2.ucsd.edu/ProteoSAFe/DownloadResultFile?task=5a18a7a0b96447d7abdbb73fee09ecdb&file=spectra/specs_ms.mgf&block=main&process_html=false"
-wget --no-verbose --output-document=tiny_flav_pos.mgf "https://proteomics2.ucsd.edu/ProteoSAFe/DownloadResultFile?task=37b40ae6045b4f4cad91d1cbe0a89b32&file=spectra/&block=main&process_html=false"

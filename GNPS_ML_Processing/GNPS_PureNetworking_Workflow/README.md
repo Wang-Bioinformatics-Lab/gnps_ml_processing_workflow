@@ -1,1 +1,0 @@
-This is a template for nextflow workflows in ProteoSAFe at GNPS. 

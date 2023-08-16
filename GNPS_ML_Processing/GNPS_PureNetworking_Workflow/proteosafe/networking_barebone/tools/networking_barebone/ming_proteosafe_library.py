@@ -1,1 +1,0 @@
-../../../../GNPS_sharedcode/ming_proteosafe_library.py
