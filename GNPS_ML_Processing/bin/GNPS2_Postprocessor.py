@@ -7,14 +7,14 @@ import pandas as pd
 from pyteomics.mgf import IndexedMGF
 import re
 from tqdm import tqdm
-from utils import harmonize_smiles_rdkit, INCHI_to_SMILES
+from utils import harmonize_smiles_rdkit, INCHI_to_SMILES, synchronize_spectra, generate_parquet_df
 from rdkit import Chem
 from pandarallel import pandarallel
 import time
 import datetime
 import argparse
 
-PARALLEL_WORKERS = 8
+PARALLEL_WORKERS = 32
 
 import sys
 
@@ -31,6 +31,8 @@ from IncorrectAdduct import IncorrectAdduct
 
 # Restore sys.path to its original state if needed
 sys.path.remove(parent_dir)
+
+# os.environ['JOBLIB_TEMP_FOLDER'] = '/tmp' 
 
 def basic_cleaning(summary):
     # scan
@@ -207,7 +209,34 @@ def add_columns_formula_analysis(summary):
     def helper(row):
         try:
             if row['Smiles'] != 'nan':
-                return Formula.formula_from_smiles(row['Smiles'], row['Adduct']).ppm_difference_with_exp_mass(row['Precursor_MZ'])
+                return float(Formula.formula_from_smiles(row['Smiles'], row['Adduct']).ppm_difference_with_exp_mass(row['Precursor_MZ']))
+        except IncorrectFormula as incFor:
+            return np.nan
+        except IncorrectAdduct as incAdd:
+            return np.nan
+        except Exception as e:
+            print(e, file=sys.stderr)
+            return np.nan
+
+    summary[column_name_ppmBetweenExpAndThMass] = summary.parallel_apply(helper, axis=1).astype(float)
+    
+def add_explained_intensity(summary, spectra):
+    indexed_mgf = IndexedMGF(spectra,index_by_scans=True)
+    
+    column_name_ppmBetweenExpAndThMass='explainable_intensity'
+    
+    def helper(row):
+        try:
+            if row['Smiles'] != 'nan':
+                # Build a dictionary of mz, intensity
+                this_spectra = indexed_mgf[row['scan']]
+                if this_spectra['params']['title'] != row['spectrum_id']:
+                    raise ValueError(f"Spectrum ID mismatch: {this_spectra['params']['title']} and {row['spectrum_id']}")
+               
+                mzs = this_spectra['m/z array']
+                intensities = this_spectra['intensity array']
+                fragments_mz_intensities = dict(zip(mzs, intensities))
+                return Formula.formula_from_smiles(row['Smiles'], row['Adduct']).percentage_intensity_fragments_explained_by_formula(fragments_mz_intensities, ppm=50)
         except IncorrectFormula as incFor:
             return 'nan'
         except IncorrectAdduct as incAdd:
@@ -215,93 +244,11 @@ def add_columns_formula_analysis(summary):
         except Exception as e:
             print(e, file=sys.stderr)
             return 'nan'
-
-    summary[column_name_ppmBetweenExpAndThMass] = summary.parallel_apply(helper, axis=1)
-    
-# def add_explained_intensity(summary, spectra):
-#     indexed_mgf = IndexedMGF(spectra,index_by_scans=True)
-    
-#     column_name_ppmBetweenExpAndThMass='explainable_intensity'
-    
-#     def helper(row):
-#         try:
-#             if row['Smiles'] != 'nan':
-#                 # Build a dictionary of mz, intensity
-#                 this_spectra = indexed_mgf[row['Scan']]
-#                 if this_spectra['params']['title'] != row['spectrum_id']:
-#                     raise ValueError("Spectrum ID mismatch")
-               
-#                 mzs = this_spectra['m/z array']
-#                 intensities = this_spectra['intensity array']
-#                 fragments_mz_intensities = dict(zip(mzs, intensities))
-#                 return Formula.formula_from_smiles(row['Smiles'], row['Adduct']).percentage_intensity_fragments_explained_by_formula(fragment_mz=fragments_mz_intensities, ppm=50)
-#         except IncorrectFormula as incFor:
-#             return 'nan'
-#         except IncorrectAdduct as incAdd:
-#             return 'nan'
-#         except Exception as e:
-#             print(e, file=sys.stderr)
-#             return 'nan'
             
-#     summary.loc[summary['ppmBetweenExpAndThMass']<=50, column_name_ppmBetweenExpAndThMass] = summary.loc[summary['ppmBetweenExpAndThMass']<=50].parallel_apply(helper, axis=1)
-
-def synchronize_spectra(input_path, output_path, spectrum_ids, progress_bar=True):
-    """Reads an MGF file from input_path and generates a new_mgf file in output_path with only the spectra in spectrum_ids.
-
-    Args:
-        input_path (str): Path to the input mgf.
-        output_path (str): Path to save the output mgf.
-        spectrum_ids (list): List of spectrum ids to keep.
-    """   
-    scan_counter = 0
-    with open(output_path, 'w') as output_mgf:
-        input_mgf = IndexedMGF(input_path,index_by_scans=True)
-        if progress_bar:
-            print("Syncing MGF with summary")
-            input_mgf = tqdm(input_mgf)
-        for spectra in input_mgf:
-            if spectra['params']['title'] in spectrum_ids:
-                output_mgf.write("BEGIN IONS\n")
-                output_mgf.write("PEPMASS={}\n".format(spectra['params']['pepmass'][0]))
-                output_mgf.write("TITLE={}\n".format(spectra['params']['title']))
-                output_mgf.write("SCANS={}\n".format(scan_counter))
-
-                peaks = zip(spectra['m/z array'], spectra['intensity array'])
-                for peak in peaks:
-                    output_mgf.write("{} {}\n".format(peak[0], peak[1]))
-
-                output_mgf.write("END IONS\n")
-                scan_counter += 1
+    summary.loc[summary['ppmBetweenExpAndThMass']<=50, column_name_ppmBetweenExpAndThMass] = summary.loc[summary['ppmBetweenExpAndThMass']<=50].parallel_apply(helper, axis=1)   
             
-
-def generate_parquet_df(input_mgf):
-    """
-    Details on output format:
-    Columns will be [level_0, index, i, i_norm, mz, precmz]
-    Index will be spectrum_id
-    level_0 is the row index in file
-    index is the row index in the spectra
-    """
-    output = []
-    indexed_mgf = IndexedMGF(input_mgf,index_by_scans=True)
-    level_0 = 0
-    for m in tqdm(indexed_mgf):
-        spectrum_id = m['params']['title']
-        mz_array = m['m/z array']
-        intensity_array = m['intensity array']
-        precursor_mz = m['params']['pepmass']
-        # charge = m['charge']
-        for index, (mz, intensity) in enumerate(zip(mz_array, intensity_array)):
-            output.append({'spectrum_id':spectrum_id, 'level_0': level_0, 'index':index, 'i':intensity, 'mz':mz, 'prec_mz':precursor_mz})
-            level_0 += 1
-                
-    output = pd.DataFrame(output)
-    output.set_index('spectrum_id')
-    return output
-            
-def postprocess_files(csv_path, mgf_path, output_csv_path, output_parquet_path, cleaned_mgf_path):
-    
-    pandarallel.initialize(progress_bar=False, nb_workers=PARALLEL_WORKERS)
+def postprocess_files(csv_path, mgf_path, output_csv_path, output_parquet_path, cleaned_mgf_path):  
+    pandarallel.initialize(progress_bar=False, nb_workers=PARALLEL_WORKERS, use_memory_fs = False)
     
     summary = pd.read_csv(csv_path)
 
@@ -335,18 +282,24 @@ def postprocess_files(csv_path, mgf_path, output_csv_path, output_parquet_path, 
     add_columns_formula_analysis(summary)
     print("Done in {} seconds".format(datetime.timedelta(seconds=time.time() - start)), flush=True)
     
-    # # Calculate explained intensity
-    # print("Calculating explained intensity")
-    # start = time.time()
-    # add_explained_intensity(summary, mgf_path)
-    # print("Done in {} seconds".format(datetime.timedelta(seconds=time.time() - start)))
-    
-    
+    # Cleanup scan numbers, scan numbers will be reset in mgf by synchronize spectra
+    summary.scan = np.arange(0, len(summary))
+        
+    # Cleanup MGF file. Must be done before explained intensity calculations in order to make sure spectra are in order
+    print("Writing mgf file", flush=True)
+    start = time.time()
+    synchronize_spectra(mgf_path, cleaned_mgf_path, summary.spectrum_id.astype('str').values)
+    print("Done in {} seconds".format(datetime.timedelta(seconds=time.time() - start)), flush=True)
+
+    # Calculate explained intensity
+    print("Calculating explained intensity")
+    start = time.time()
+    add_explained_intensity(summary, mgf_path)
+    print("Done in {} seconds".format(datetime.timedelta(seconds=time.time() - start)))
+
     sanity_checks(summary)
     
     print("Writing output files...", flush=True)
-    print("Writing mgf file", flush=True)
-    synchronize_spectra(mgf_path, cleaned_mgf_path, summary.spectrum_id.astype('str').values)
     print("Writing parquet file", flush=True)
     parquet_as_df = generate_parquet_df(cleaned_mgf_path)
     parquet_as_df.to_parquet(output_parquet_path)

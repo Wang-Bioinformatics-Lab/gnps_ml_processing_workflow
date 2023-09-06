@@ -1,24 +1,49 @@
 import csv
-from rdkit.DataStructs.cDataStructs import BulkTanimotoSimilarity
+import importlib
 from rdkit import Chem
 from rdkit.Chem import MolFromSmiles
 from rdkit.Chem import AllChem
 from rdkit.Chem.AllChem import GetMorganFingerprintAsBitVect
+from rdkit.Chem import DataStructs
+from rdkit.DataStructs.cDataStructs import BulkTanimotoSimilarity
+from rdkit.Chem import MolStandardize, rdMolDescriptors, MolFromSmiles
 import pandas as pd
+from pyteomics.mgf import IndexedMGF
 from tqdm import tqdm
-import pandas as pd
 import networkx as nx
 import numpy as np
-from networkx.algorithms import community 
+from networkx.algorithms import community
 from typing import Tuple
-from rdkit.Chem import DataStructs
 import vaex
+import os
 import dask.dataframe as dd
-from rdkit import Chem
-from rdkit.Chem import MolStandardize, rdMolDescriptors, MolFromSmiles
+import tempfile
 from pandarallel import pandarallel
+from joblib import Parallel, delayed
 
-PARALLEL_WORKERS = 8 # Number of workers to use for parallel processing
+PARALLEL_WORKERS = 32 # Number of workers to use for parallel processing
+
+class Wrapper(object):
+    def __init__(self, method_name, module_name):
+        """Because boost functions are not picklable, we create a wrapper around the functions. 
+            This class takes two arguments: method_name and module_name and imports the module and 
+            wraps the method.
+            ---
+            Example Usage: Wrapper("MolFromSmiles", "rdkit.Chem")
+        Args:
+            method_name (str): Method to be imported
+            module_name (str): Module the method is located in.
+        """
+        self.method_name = method_name
+        # self.module_name = module_name
+        self.module = importlib.import_module(module_name)
+
+    @property
+    def method(self):
+        return getattr(self.module, self.method_name)
+    
+    def __call__(self, *args, **kwargs):
+        return self.method(*args, **kwargs)
 
 def split_cliques(num_nodes:int,ids:list,training_fraction: float=0.8, early_stopping=None):
     """ A function returning the indices of cliques in a graph that maximize the number of total datapoints in a training set.
@@ -169,6 +194,85 @@ def build_tanimoto_similarity_list(mgf_summary:pd.DataFrame,output_dir:str=None,
     if output_dir is not None: out.to_csv(output_dir, index_label=False)
     return out
 
+def _sim_helper(fps,
+                comparison_fps_lst,
+                indices,
+                truncate,
+                remove_duplicates,
+                fieldnames,
+                similarity_threshold,
+                idx_mapping):
+    """A short helper function that computes the similarities between fp and comparison fps 
+    in parallel.
+
+    Args:
+        fps (_type_): _description_
+        comparison_fps (_type_): _description_
+        idx (_type_): _description_
+
+    Returns:
+        _type_: _description_
+    """
+    temp_file = os.path.join(tempfile.gettempdir(), f"GNPS_PROCESSING/TEMP_SIMILARITY_FILE_{indices[0]}.csv")
+    wrapped_bulk_tanimoto_similarity = Wrapper('BulkTanimotoSimilarity', 'rdkit.DataStructs.cDataStructs')
+    try:
+        with open(temp_file, mode='w') as f:
+            temp_writer = csv.DictWriter(f, fieldnames=fieldnames)
+
+            for idx, fp, comparison_fps in zip(indices, fps, comparison_fps_lst):
+                if truncate is not None:
+                    n_bins, n_items_per_bin = truncate
+                    
+                    if type(n_bins) is not int or type(n_items_per_bin) is not int:
+                        raise ValueError("Expected arg 'truncate' to be None or a tuple of type (int,int).")
+                    bin_size = (1.0 - similarity_threshold) / (n_bins-1)    # Reserve the last bin for identical spectra (rest of histogram is left aligned)
+                    items_left_per_bin = np.full(n_bins, n_items_per_bin)
+                
+                if remove_duplicates:
+                    duplicates_list = []
+                    
+                sims = wrapped_bulk_tanimoto_similarity(fp, comparison_fps)
+                for j, this_sim in enumerate(sims):                  
+                    if this_sim >= similarity_threshold:
+                        if remove_duplicates and truncate is None:
+                            # If we've seen this exact tanimoto similarity before, its very like to be the same molecule
+                            if this_sim in duplicates_list:
+                                if this_sim != 1:     # If the similarity is one, it's likely the same molecule, but we may want differing spectra
+                                    continue
+                                else:
+                                    duplicates_list.append(this_sim)
+                        # Check if we have filled the bin for this entry.
+                        if truncate is not None:
+                            bin_index = int((this_sim - similarity_threshold) / bin_size)
+                            if items_left_per_bin[bin_index] <= 0:
+                                continue
+                            else:
+                                # If we're truncating, we're better off checking if the bin is full,
+                                # this will be faster than traversing the whole list
+                                if remove_duplicates:
+                                    # If we've seen this exact tanimoto similarity before, its very like to be the same molecule
+                                    if this_sim in duplicates_list:
+                                        if this_sim != 1:     # If the similarity is one, it's likely the same molecule, but we may want differing spectra
+                                            continue
+                                    else:
+                                        duplicates_list.append(this_sim)
+                            items_left_per_bin[bin_index] -= 1
+                        row = {
+                            'spectrumid1': idx_mapping[idx],
+                            'spectrumid2': idx_mapping[idx + 1 + j],  # i + 1 + j because we skip the diagonal
+                            'Tanimoto_Similarity': this_sim
+                        }
+                        temp_writer.writerow(row)
+                        if truncate is not None:
+                            if sum(items_left_per_bin) == 0:
+                                break
+                        
+        return temp_file
+    except Exception as e:
+        if os.path.isfile(temp_file):
+            os.remove(temp_file)
+        raise e
+
 def build_tanimoto_similarity_list_precomputed(mgf_summary:pd.DataFrame,
                                                output_file:str, 
                                                similarity_threshold=0.50, 
@@ -187,7 +291,7 @@ def build_tanimoto_similarity_list_precomputed(mgf_summary:pd.DataFrame,
         remove_duplicates bool: Remove all similarities with identical tanimoto scores, defaults to True.
     Returns:
         None: The output is written to output file. This file can be large and should be read with an out-of-core library.
-    """    
+    """
     if similarity_threshold < 0:
         raise ValueError("Expected arg 'similarity_threshold' to be between 0 and 1.")
     
@@ -207,55 +311,54 @@ def build_tanimoto_similarity_list_precomputed(mgf_summary:pd.DataFrame,
         
     else:
         raise ValueError("mgf_summary must be a pandas or dask dataframe")
-    print("Found {}  structures in {} files".format(num_structures, len(mgf_summary)))
+    print(f"Found {num_structures}  structures in {len(mgf_summary)} files")
 
-    print(mgf_summary[fingerprint_column_name][structure_mask].value_counts())
+    # print(mgf_summary[fingerprint_column_name][structure_mask].value_counts())
     
-    
-    if dask: fps.compute_chunk_sizes()
+    if dask:
+        fps.compute_chunk_sizes()
     # Indices are now non contiguous because the entries without structures are removed
     # This will map back to the original scan number  
     idx_mapping = {i: spectrum_id for i, spectrum_id in enumerate(mgf_summary.spectrum_id[structure_mask])}
-    N = len(fps)
-
-    if truncate is not None:
-        n_bins, n_items_per_bin = truncate
-        if type(n_bins) is not int or type(n_items_per_bin) is not int:
-            raise ValueError("Expected arg 'truncate' to be None or a tuple of type (int,int).")
-        bin_size = (1.0 - similarity_threshold) / (n_bins-1)    # Reserve the last bin for identical spectra (rest of histogram is left aligned)
-
-    with open(output_file, 'w', newline='') as csvfile:
-        fieldnames = ['spectrumid1', 'spectrumid2', 'Tanimoto_Similarity']
-        writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
-        writer.writeheader()
-        for i in tqdm(range(N)):
-            if truncate:
-                items_left_per_bin = np.full(n_bins, n_items_per_bin)
-            if remove_duplicates:
-                duplicates_list = []
-            sims = BulkTanimotoSimilarity(fps[i],fps[i+1:])
-            for j in range(0,len(sims)):                  
-                if sims[j] >= similarity_threshold:
-                    if remove_duplicates:
-                        # If we've seen this exact tanimoto similarity before, its very like to be the same molecule
-                        if sims[j] in duplicates_list and not sims[j] == 1:     # If the similarity is one, it's likely the same molecule, but we may want differing spectra
-                            continue
-                        else:
-                            duplicates_list.append(sims[j])
-                    # Check if we have filled the bin for this entry.
-                    if truncate:
-                        bin_index = int((sims[j] - similarity_threshold) / bin_size)
-                        if items_left_per_bin[bin_index] <= 0:
-                            continue
-                        else:
-                            items_left_per_bin[bin_index] -= 1
-                    row = {
-                        'spectrumid1': idx_mapping[i],
-                        'spectrumid2': idx_mapping[i + 1 + j],  # i + 1 + j because we skip the diagonal
-                        'Tanimoto_Similarity': sims[j]
-                    }
-                    writer.writerow(row)
-    return None
+    
+    # Cleanup variables to reduce memory overhead
+    del mgf_summary
+    
+    fieldnames = ['spectrumid1', 'spectrumid2', 'Tanimoto_Similarity']
+    
+    splits = np.array_split(np.arange(0,len(fps)), min(int(len(fps)/200), len(fps)))
+    # splits = [[i] for i in range(len(fps))]
+   
+    # Parallel Computation of Similarities
+    if not os.path.isdir(os.path.join(tempfile.gettempdir(), "GNPS_PROCESSING")):
+        os.makedirs(os.path.join(tempfile.gettempdir(), "GNPS_PROCESSING"))
+        
+    output_generator = Parallel(n_jobs=max(int(PARALLEL_WORKERS/2), 1),timeout=None, backend='loky')(delayed(_sim_helper)
+                                                                    ([fps[j] for j in splits[i]],
+                                                                    [fps[j+1:] for j in splits[i]],
+                                                                    [j for j in splits[i]],
+                                                                    truncate,
+                                                                    remove_duplicates,
+                                                                    fieldnames,
+                                                                    similarity_threshold,
+                                                                    idx_mapping)
+                                                                    for i in tqdm(range(len(splits))))
+    
+    temp_files = list(output_generator)
+    try:    
+        # Merge Files
+        with open(output_file, 'w', newline='') as csvfile:
+            writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+            writer.writeheader()
+            for temp_file_name in temp_files:
+                with open(temp_file_name, 'r') as temp_file:
+                    temp_file.seek(0)
+                    writer.writerows(temp_file.read())
+                    temp_file.close()
+    finally:
+        for temp_file_name in temp_files:
+            if os.path.isfile(temp_file_name):
+                os.remove(temp_file_name)
 
 def get_fingerprints(smiles_string):
     """Returns a list of fingerprints for a given smiles string"""
@@ -281,7 +384,7 @@ def _generate_fingerprints_pandas_helper(smiles):
                     'Morgan_4096_2': list(AllChem.GetMorganFingerprintAsBitVect(mol,2,useChirality=False,nBits=4096)), 
                     'Morgan_2048_3': list(AllChem.GetMorganFingerprintAsBitVect(mol,3,useChirality=False,nBits=2048)), 
                     'Morgan_4096_3':list(AllChem.GetMorganFingerprintAsBitVect(mol,3,useChirality=False,nBits=4096))}
-    return {'Morgan_2048_2': None, 
+    return {'Morgan_2048_2': None,
             'Morgan_4096_2': None, 
             'Morgan_2048_3': None, 
             'Morgan_4096_3': None}
@@ -418,3 +521,56 @@ def INCHI_to_SMILES(inchi):
         return Chem.MolToSmiles(Chem.MolFromInchi(inchi))
     except:
         return None
+    
+def synchronize_spectra(input_path, output_path, spectrum_ids, progress_bar=True):
+    """Reads an MGF file from input_path and generates a new_mgf file in output_path with only the spectra in spectrum_ids.
+
+    Args:
+        input_path (str): Path to the input mgf.
+        output_path (str): Path to save the output mgf.
+        spectrum_ids (list): List of spectrum ids to keep.
+    """   
+    scan_counter = 0
+    with open(output_path, 'w') as output_mgf:
+        input_mgf = IndexedMGF(input_path,index_by_scans=True)
+        if progress_bar:
+            print("Syncing MGF with summary")
+            input_mgf = tqdm(input_mgf)
+        for spectra in input_mgf:
+            if spectra['params']['title'] in spectrum_ids:
+                output_mgf.write("BEGIN IONS\n")
+                output_mgf.write("PEPMASS={}\n".format(spectra['params']['pepmass'][0]))
+                output_mgf.write("TITLE={}\n".format(spectra['params']['title']))
+                output_mgf.write("SCANS={}\n".format(scan_counter))
+
+                peaks = zip(spectra['m/z array'], spectra['intensity array'])
+                for peak in peaks:
+                    output_mgf.write("{} {}\n".format(peak[0], peak[1]))
+
+                output_mgf.write("END IONS\n")
+                scan_counter += 1
+                
+def generate_parquet_df(input_mgf):
+    """
+    Details on output format:
+    Columns will be [level_0, index, i, i_norm, mz, precmz]
+    Index will be spectrum_id
+    level_0 is the row index in file
+    index is the row index in the spectra
+    """
+    output = []
+    indexed_mgf = IndexedMGF(input_mgf,index_by_scans=True)
+    level_0 = 0
+    for m in tqdm(indexed_mgf):
+        spectrum_id = m['params']['title']
+        mz_array = m['m/z array']
+        intensity_array = m['intensity array']
+        precursor_mz = m['params']['pepmass']
+        # charge = m['charge']
+        for index, (mz, intensity) in enumerate(zip(mz_array, intensity_array)):
+            output.append({'spectrum_id':spectrum_id, 'level_0': level_0, 'index':index, 'i':intensity, 'mz':mz, 'prec_mz':precursor_mz})
+            level_0 += 1
+                
+    output = pd.DataFrame(output)
+    output.set_index('spectrum_id')
+    return output

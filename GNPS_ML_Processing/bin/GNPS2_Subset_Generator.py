@@ -4,7 +4,8 @@ import argparse
 import os
 import vaex
 import pickle
-from utils import build_tanimoto_similarity_list_precomputed, generate_fingerprints, harmonize_smiles_rdkit
+from utils import build_tanimoto_similarity_list_precomputed, generate_fingerprints, harmonize_smiles_rdkit, synchronize_spectra, generate_parquet_df
+from pyteomics.mgf import IndexedMGF
 import dask.dataframe as dd
     
 def MH_MNA_Translation(summary_path:str, parquet_path:str):
@@ -154,9 +155,45 @@ def Thermo_Bruker_Translation(summary_path:str, parquet_path:str):
     parquet_as_df = parquet_as_df[parquet_as_df.spectrum_id.isin(id_list)]
     parquet_as_df.export_parquet('./spectra/Thermo_Bruker_Translation.parquet')
   
-def Structural_Similarity_Prediction(summary_path:str, parquet_path:str):
+# def Structural_Similarity_Prediction(summary_path:str, parquet_path:str):
+#     # This dataset: spec1 + spec2 -> struct similarity
+#     parquet_as_df = vaex.open(parquet_path)
+            
+#     # df = df.loc[df.Adduct == 'M+H']
+#     # qtof = df.loc[(df.msMassAnalyzer == 'qtof') & (df.GNPS_Inst == 'qtof')]    
+#     # qtof = generate_fingerprints(qtof)
+#     # sim = build_tanimoto_similarity_list_precomputed(qtof, similarity_threshold=0.0)
+#     # Save to csv
+#     # qtof.to_csv('./summary/Structural_Similarity_Prediction.csv', index=False)
+#     # # Save to parquet
+#     # parquet_as_df[parquet_as_df.spectrum_id.isin(qtof.spectrum_id)].export_parquet('./spectra/Structural_Similarity_Prediction.parquet')
+    
+#     df = pd.read_csv(summary_path, dtype=   {'Smiles':str,
+#                                             'msDetector':str,
+#                                             'msDissociationMethod':str,
+#                                             'msManufacturer':str,
+#                                             'msMassAnalyzer':str,
+#                                             'msModel':str})
+#     df.Smiles = df.Smiles.astype(str)
+#     df = df[(df.Smiles.notnull()) & (df.Smiles != 'nan')]
+#     df = generate_fingerprints(df)
+
+#     # Compute and Save Similarities
+#     build_tanimoto_similarity_list_precomputed(df, './util/Structural_Similarity_Prediction_Pairs.csv', similarity_threshold=0.0, truncate=(20,10))
+    
+#     if type(df) == dd.DataFrame:
+#         final_ids = df.spectrum_id.values.compute()
+#     else:
+#         final_ids = df.spectrum_id.values
+
+#     # Save to csv
+#     df.to_csv('./summary/Structural_Similarity_Prediction.csv', index=False)
+#     # Save to parquet
+#     # Make sure to call compute here to load the values into memory
+#     parquet_as_df[parquet_as_df.spectrum_id.isin(final_ids)].export_parquet('./spectra/Structural_Similarity_Prediction.parquet')
+
+def Structural_Similarity_Prediction(summary_path:str, mgf_path:str):
     # This dataset: spec1 + spec2 -> struct similarity
-    parquet_as_df = vaex.open(parquet_path)
             
     # df = df.loc[df.Adduct == 'M+H']
     # qtof = df.loc[(df.msMassAnalyzer == 'qtof') & (df.GNPS_Inst == 'qtof')]    
@@ -176,20 +213,32 @@ def Structural_Similarity_Prediction(summary_path:str, parquet_path:str):
     df.Smiles = df.Smiles.astype(str)
     df = df[(df.Smiles.notnull()) & (df.Smiles != 'nan')]
     df = generate_fingerprints(df)
+    
+    # Save to csv
+    print("Writing structural similarity prediction subset to csv.", flush=True)
+    df.to_csv('./summary/Structural_Similarity_Prediction.csv', index=False)
 
     # Compute and Save Similarities
-    build_tanimoto_similarity_list_precomputed(df, './util/Structural_Similarity_Prediction_Pairs.csv', similarity_threshold=0.0, truncate=(20,10))
+    # Only needs smiles, spectrum_id, and fingerprints (helps reduce memory usage)
+    print("Computing structural similarity sim matrix.", flush=True)
+    min_df = df[['Smiles','spectrum_id','Morgan_2048_3']].copy()
+    del df
+    
+    build_tanimoto_similarity_list_precomputed(min_df, './util/Structural_Similarity_Prediction_Pairs.csv', similarity_threshold=0.0, truncate=(20,10))
     
     if type(df) == dd.DataFrame:
         final_ids = df.spectrum_id.values.compute()
     else:
         final_ids = df.spectrum_id.values
 
-    # Save to csv
-    df.to_csv('./summary/Structural_Similarity_Prediction.csv', index=False)
+    
     # Save to parquet
     # Make sure to call compute here to load the values into memory
-    parquet_as_df[parquet_as_df.spectrum_id.isin(final_ids)].export_parquet('./spectra/Structural_Similarity_Prediction.parquet')
+    # parquet_as_df[parquet_as_df.spectrum_id.isin(final_ids)].export_parquet('./spectra/Structural_Similarity_Prediction.parquet')
+    synchronize_spectra(mgf_path, './spectra/Structural_Similarity_Prediction.mgf', final_ids, progress_bar=True)
+    parquet_as_df = generate_parquet_df('./spectra/Structural_Similarity_Prediction.mgf')
+    parquet_as_df.to_parquet('./spectra/Structural_Similarity_Prediction.parquet')
+    
 
 def Spectral_Similarity_Prediction(summary_path:str, parquet_path:str):
     # This dataset: struct1 + struct2 -> spectral similarity
@@ -294,6 +343,7 @@ def main():
     
     csv_path     = "ALL_GNPS_cleaned.csv"
     parquet_path = "ALL_GNPS_cleaned.parquet"
+    mgf_path     = "ALL_GNPS_cleaned.mgf"
     
     if not os.path.isdir('./spectra'): os.makedirs('./spectra', exist_ok=True)
     if not os.path.isdir('./summary'): os.makedirs('./summary', exist_ok=True)
@@ -313,12 +363,11 @@ def main():
     elif args.subset == 'Structural_Modification':
         Structural_Modification(csv_path, parquet_path)
     elif args.subset == 'Structural_Similarity_Prediction':
-        Structural_Similarity_Prediction(csv_path, parquet_path)
+        Structural_Similarity_Prediction(csv_path, mgf_path)
     elif args.subset == 'Spectral_Similarity_Prediction':
         Spectral_Similarity_Prediction(csv_path, parquet_path)
     elif args.subset == 'GNPS_default':
         Bruker_Fragmentation_Prediction(csv_path, parquet_path)
-        MH_MNA_Translation(csv_path, parquet_path)
         Fingerprint_Prediction(csv_path, parquet_path)
         Orbitrap_Fragmentation_Prediction(csv_path, parquet_path)
         Thermo_Bruker_Translation(csv_path, parquet_path)
