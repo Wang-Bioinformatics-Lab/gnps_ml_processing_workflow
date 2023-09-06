@@ -17,3 +17,4 @@ GNPS_ML_Processing/bin/.pytest_cache*
 GNPS_ML_Processing/nf_output_validated_instrument/
 GNPS_ML_Processing/bin/*__pycache__*
 GNPS_ML_Processing/spectral_similarities
+*nxf-tmp*
