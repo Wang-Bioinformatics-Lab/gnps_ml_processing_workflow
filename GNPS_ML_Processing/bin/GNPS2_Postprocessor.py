@@ -18,21 +18,12 @@ PARALLEL_WORKERS = 32
 
 import sys
 
-# Modify sys.path to include the parent directory
-parent_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), 'formula_validation'))
-sys.path.append(parent_dir)
-print(sys.path)
+from formula_validation.Formula import Formula
+from formula_validation.Adduct import Adduct
+from formula_validation.IncorrectFormula import IncorrectFormula
+from formula_validation.IncorrectAdduct import IncorrectAdduct
 
-# Import module2 using relative import
-from Formula import Formula
-from Adduct import Adduct
-from IncorrectFormula import IncorrectFormula
-from IncorrectAdduct import IncorrectAdduct
-
-# Restore sys.path to its original state if needed
-sys.path.remove(parent_dir)
-
-# os.environ['JOBLIB_TEMP_FOLDER'] = '/tmp' 
+# os.environ['JOBLIB_TEMP_FOLDER'] = '/tmp'
 
 def basic_cleaning(summary):
     # scan
@@ -208,8 +199,13 @@ def add_columns_formula_analysis(summary):
     
     def helper(row):
         try:
+            smiles = str(row['Smiles'])
             if row['Smiles'] != 'nan':
-                return float(Formula.formula_from_smiles(row['Smiles'], row['Adduct']).ppm_difference_with_exp_mass(row['Precursor_MZ']))
+                formula = Formula.formula_from_smiles(smiles, row['Adduct'], no_api=False)  # Disabling API can improve speed 
+                if formula is not None:
+                    return float(formula.ppm_difference_with_exp_mass(row['Precursor_MZ']))
+                else:
+                    return np.nan
         except IncorrectFormula as incFor:
             return np.nan
         except IncorrectAdduct as incAdd:
@@ -227,7 +223,8 @@ def add_explained_intensity(summary, spectra):
     
     def helper(row):
         try:
-            if row['Smiles'] != 'nan':
+            smiles = str(row['Smiles'])
+            if smiles != 'nan':
                 # Build a dictionary of mz, intensity
                 this_spectra = indexed_mgf[row['scan']]
                 if this_spectra['params']['title'] != row['spectrum_id']:
@@ -236,7 +233,7 @@ def add_explained_intensity(summary, spectra):
                 mzs = this_spectra['m/z array']
                 intensities = this_spectra['intensity array']
                 fragments_mz_intensities = dict(zip(mzs, intensities))
-                return Formula.formula_from_smiles(row['Smiles'], row['Adduct']).percentage_intensity_fragments_explained_by_formula(fragments_mz_intensities, ppm=50)
+                return Formula.formula_from_smiles(smiles, row['Adduct'], metadata={'ccms_id':row['spectrum_id']}).percentage_intensity_fragments_explained_by_formula(fragments_mz_intensities, ppm=50)
         except IncorrectFormula as incFor:
             return 'nan'
         except IncorrectAdduct as incAdd:
@@ -245,9 +242,10 @@ def add_explained_intensity(summary, spectra):
             print(e, file=sys.stderr)
             return 'nan'
             
-    summary.loc[summary['ppmBetweenExpAndThMass']<=50, column_name_ppmBetweenExpAndThMass] = summary.loc[summary['ppmBetweenExpAndThMass']<=50].parallel_apply(helper, axis=1)   
+    filter = (summary['ppmBetweenExpAndThMass'].notna() & summary['ppmBetweenExpAndThMass']<=50)
+    summary.loc[filter, column_name_ppmBetweenExpAndThMass] = summary.loc[filter].parallel_apply(helper, axis=1)
             
-def postprocess_files(csv_path, mgf_path, output_csv_path, output_parquet_path, cleaned_mgf_path):  
+def postprocess_files(csv_path, mgf_path, output_csv_path, output_parquet_path, cleaned_mgf_path):
     pandarallel.initialize(progress_bar=False, nb_workers=PARALLEL_WORKERS, use_memory_fs = False)
     
     summary = pd.read_csv(csv_path)
