@@ -487,6 +487,7 @@ def synchronize_spectra(input_path, output_path, spectrum_ids, progress_bar=True
             if spectra['params']['title'] in spectrum_ids:
                 output_mgf.write("BEGIN IONS\n")
                 output_mgf.write("PEPMASS={}\n".format(spectra['params']['pepmass'][0]))
+                output_mgf.write("CHARGE={}\n".format(spectra['params']["charge"]))
                 output_mgf.write("TITLE={}\n".format(spectra['params']['title']))
                 output_mgf.write("SCANS={}\n".format(scan_counter))
 
