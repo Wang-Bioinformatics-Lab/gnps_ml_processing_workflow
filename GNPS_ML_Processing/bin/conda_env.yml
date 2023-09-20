@@ -1,3 +1,4 @@
+name: gnps_ml_processing_env2
 channels:
   - conda-forge
   - defaults
@@ -17,10 +18,12 @@ dependencies:
   - pyarrow
   - fastparquet
   - dask
+  - r-devtools
+  - rpy2
   - pip
   - pip:
     - obonet
     - vaex
     - pandarallel 
     - dask
-    # - rpy2
+    - formula_validation
