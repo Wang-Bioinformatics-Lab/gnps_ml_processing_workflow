@@ -1,4 +1,5 @@
 import argparse
+import pathlib
 import pyteomics.mgf
 import pandas as pd
 from tqdm import tqdm
@@ -6,6 +7,7 @@ from joblib import Parallel, delayed
 from glob import glob
 import vaex
 import re
+from utils import synchronize_spectra
 
 def generate_mgf(parquet_file, output_path):
     name = parquet_file[:-8]
@@ -56,9 +58,14 @@ def main():
     # slash_indices = [x.start() for x in re.finditer(r"/",args.input_path)]
     # if args.input_path != './ALL_GNPS_cleaned.parquet':
     #     generate_mgf(args.input_path, args.input_path[slash_indices[2]::-7]+"mgf")
-    print(args.input_path)
-    if 'ALL_GNPS_cleaned.parquet' not in args.input_path:
-        generate_mgf(args.input_path, args.input_path.split('/')[-1].split('.')[0]+".mgf")
+
+    # Get extension of args.input_path
+    ext = pathlib.Path(args.input_path).suffix
+    if ext == ".parquet":
+        if 'ALL_GNPS_cleaned.parquet' not in args.input_path:
+            generate_mgf(args.input_path, args.input_path.split('/')[-1].split('.')[0]+".mgf")
+    else:
+        raise IOError(f"Expected a parquet file bug got {ext}")
         
 if __name__ == '__main__':
     main()
