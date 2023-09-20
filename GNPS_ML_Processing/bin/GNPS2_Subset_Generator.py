@@ -1,4 +1,5 @@
 import re
+import time
 import pandas as pd
 import argparse
 import os
@@ -6,7 +7,7 @@ import vaex
 import pickle
 from utils import build_tanimoto_similarity_list_precomputed, generate_fingerprints, harmonize_smiles_rdkit, synchronize_spectra, generate_parquet_df
 from pyteomics.mgf import IndexedMGF
-import dask.dataframe as dd
+# import dask.dataframe as dd
     
 def MH_MNA_Translation(summary_path:str, parquet_path:str):
 
@@ -203,7 +204,7 @@ def Structural_Similarity_Prediction(summary_path:str, mgf_path:str):
     # qtof.to_csv('./summary/Structural_Similarity_Prediction.csv', index=False)
     # # Save to parquet
     # parquet_as_df[parquet_as_df.spectrum_id.isin(qtof.spectrum_id)].export_parquet('./spectra/Structural_Similarity_Prediction.parquet')
-    
+    print("Generating Structural Similarity Prediction subset.", flush=True)
     df = pd.read_csv(summary_path, dtype=   {'Smiles':str,
                                             'msDetector':str,
                                             'msDissociationMethod':str,
@@ -211,8 +212,13 @@ def Structural_Similarity_Prediction(summary_path:str, mgf_path:str):
                                             'msMassAnalyzer':str,
                                             'msModel':str})
     df.Smiles = df.Smiles.astype(str)
-    df = df[(df.Smiles.notnull()) & (df.Smiles != 'nan')]
+    df = df[(df.Smiles.notnull()) | (df.Smiles != 'nan')]
+    final_ids = df.spectrum_id.values
+    
+    print("Generating fingerprints.", flush=True)
+    start_time = time.time()
     df = generate_fingerprints(df)
+    print("Done in {:.2f} seconds.".format(time.time() - start_time), flush=True)
     
     # Save to csv
     print("Writing structural similarity prediction subset to csv.", flush=True)
@@ -221,23 +227,24 @@ def Structural_Similarity_Prediction(summary_path:str, mgf_path:str):
     # Compute and Save Similarities
     # Only needs smiles, spectrum_id, and fingerprints (helps reduce memory usage)
     print("Computing structural similarity sim matrix.", flush=True)
+    start_time = time.time()
     min_df = df[['Smiles','spectrum_id','Morgan_2048_3']].copy()
     del df
     
     build_tanimoto_similarity_list_precomputed(min_df, './util/Structural_Similarity_Prediction_Pairs.csv', similarity_threshold=0.0, truncate=(20,10))
+    print("Done in {:.2f} seconds.".format(time.time() - start_time), flush=True)
     
-    if type(df) == dd.DataFrame:
-        final_ids = df.spectrum_id.values.compute()
-    else:
-        final_ids = df.spectrum_id.values
-
-    
+   
     # Save to parquet
-    # Make sure to call compute here to load the values into memory
-    # parquet_as_df[parquet_as_df.spectrum_id.isin(final_ids)].export_parquet('./spectra/Structural_Similarity_Prediction.parquet')
+    print("Scynchronizing spectra.", flush=True)
+    start_time = time.time()
     synchronize_spectra(mgf_path, './spectra/Structural_Similarity_Prediction.mgf', final_ids, progress_bar=True)
+    print("Done in {:.2f} seconds.".format(time.time() - start_time), flush=True)
+    print("Generating parquet file.", flush=True)
+    start_time = time.time()
     parquet_as_df = generate_parquet_df('./spectra/Structural_Similarity_Prediction.mgf')
     parquet_as_df.to_parquet('./spectra/Structural_Similarity_Prediction.parquet')
+    print("Done in {:.2f} seconds.".format(time.time() - start_time), flush=True)
     
 
 def Spectral_Similarity_Prediction(summary_path:str, parquet_path:str):
