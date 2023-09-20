@@ -19,6 +19,10 @@ GNPS_ML_Processing/bin/.pytest_cache*
 GNPS_ML_Processing/nf_output_validated_instrument/
 GNPS_ML_Processing/bin/*__pycache__*
 GNPS_ML_Processing/spectral_similarities
+<<<<<<< HEAD
 .nextflow.log*
 .nextflow/
 work/
+=======
+*nxf-tmp*
+>>>>>>> 351693a29c4e17f7d3294f76c393e8c3eedf8242
