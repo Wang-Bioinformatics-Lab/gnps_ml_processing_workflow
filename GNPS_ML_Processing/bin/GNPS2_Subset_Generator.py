@@ -5,6 +5,7 @@ import argparse
 import os
 import vaex
 import pickle
+from GNPS_JSON_Export import generate_json_mgf
 from utils import build_tanimoto_similarity_list_precomputed, generate_fingerprints, harmonize_smiles_rdkit, synchronize_spectra, generate_parquet_df
 from pyteomics.mgf import IndexedMGF
 # import dask.dataframe as dd
@@ -222,7 +223,8 @@ def Structural_Similarity_Prediction(summary_path:str, mgf_path:str):
     
     # Save to csv
     print("Writing structural similarity prediction subset to csv.", flush=True)
-    df.to_csv('./summary/Structural_Similarity_Prediction.csv', index=False)
+    csv_path = './summary/Structural_Similarity_Prediction.csv'
+    df.to_csv(csv_path, index=False)
 
     # Compute and Save Similarities
     # Only needs smiles, spectrum_id, and fingerprints (helps reduce memory usage)
@@ -238,12 +240,20 @@ def Structural_Similarity_Prediction(summary_path:str, mgf_path:str):
     # Save to parquet
     print("Scynchronizing spectra.", flush=True)
     start_time = time.time()
-    synchronize_spectra(mgf_path, './spectra/Structural_Similarity_Prediction.mgf', final_ids, progress_bar=True)
+    mgf_path = './spectra/Structural_Similarity_Prediction.mgf'
+    synchronize_spectra(mgf_path, mgf_path, final_ids, progress_bar=True)
     print("Done in {:.2f} seconds.".format(time.time() - start_time), flush=True)
     print("Generating parquet file.", flush=True)
     start_time = time.time()
-    parquet_as_df = generate_parquet_df('./spectra/Structural_Similarity_Prediction.mgf')
+    parquet_as_df = generate_parquet_df(mgf_path)
     parquet_as_df.to_parquet('./spectra/Structural_Similarity_Prediction.parquet')
+    print("Done in {:.2f} seconds.".format(time.time() - start_time), flush=True)
+    
+    # Save to json
+    print("Generating json output.", flush=True)
+    start_time = time.time()
+    json_path = 'json_outputs/Structural_Similarity_Prediction.json'
+    generate_json_mgf(mgf_path, csv_path, json_path, progress_bar=False)
     print("Done in {:.2f} seconds.".format(time.time() - start_time), flush=True)
     
 

@@ -2,12 +2,12 @@
 nextflow.enable.dsl=2
 
 // params.subset = "Orbitrap_Fragmentation_Prediction"
-params.split  = true
+params.split  = false
 
 params.subset = "Structural_Similarity_Prediction"
 // params.subset = "MH_MNA_Translation"
 // params.subset = "GNPS_default"
-// params.split  = false
+
 use_default_path = true
 
 params.spectra_parallelism = 100
@@ -137,6 +137,7 @@ process generate_subset {
   path "summary/*"
   path "spectra/*.parquet", emit: output_parquet
   path "spectra/*.mgf", emit: output_mgf
+  path "json_outputs/*.json", emit: output_json, optional: true
   path "util/*", optional: true
 
   """
@@ -174,6 +175,7 @@ process generate_mgf {
 }
 
 process calculate_similarities_pure_networking {
+  // Currently, this process is not used and it is scheduled for deletion
   publishDir "./nf_output", mode: 'copy'
   
   input:
@@ -192,6 +194,8 @@ process calculate_similarities_pure_networking {
 }
 
 process calculate_similarities {
+  // Similarities using fasst search have not been implemented yet
+  conda "$TOOL_FOLDER/gnps_ml_processing_env2/"
   publishDir "./nf_output", mode: 'copy'
   
   input:
@@ -201,6 +205,7 @@ process calculate_similarities {
   path "similarity_calculations/*", emit: spectral_similarities
 
   """
+  exit()
   nextflow run $TOOL_FOLDER/GNPS_PureNetworking_Workflow/workflow/workflow.nf \
                 --inputspectra $mgf \
                 --parallelism $params.pure_networking_parallelism \
@@ -260,8 +265,6 @@ workflow {
   generate_subset(postprocess.out.cleaned_csv, postprocess.out.cleaned_parquet, postprocess.out.cleaned_mgf, export_full_json.out.dummy)    
 
   calculate_similarities(generate_subset.out.output_mgf)
-  // generate_mgf(generate_subset.out.output_parquet)
-  // calculate_similarities(generate_mgf.out.output_mgf)
 
   // For the spectral similarity prediction task, we need to calculate all pairs similarity in the training set
   if (params.subset == "GNPS_default" || params.subset == "Spectral_Similarity_Prediction") {
