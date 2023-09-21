@@ -4,8 +4,10 @@
 To run the workflow to test simply do
 
 ```
-nohup nextflow run nf_workflow.nf -bg &
+nohup nextflow run nf_workflow.nf --path_to_provenance=<your_path_to_gnps_library_provenance> -bg &
 ```
+
+(by default path_to_provenance is /home/user/LabData/GNPS_Library_Provenance/)
 
 You can specify a specific subset using one of the following:
 ['Bruker_Fragmentation_Prediction', 'MH_MNA_Translation', 'Orbitrap_Fragmentation_Prediction','Thermo_Bruker_Translation', 'Structural_Modification', 'Structural_Similarity_Prediction', 'Spectral_Similarity_Prediction']
@@ -13,7 +15,7 @@ You can specify a specific subset using one of the following:
 E.g: ```nohup nextflow run nf_workflow.nf --subset=MH_MNA_Translation -bg &```
 
 ## Memory Requirements
-Right now, the workflow requires at least 100 GB of memory to run.
+Right now, the workflow requires at least 100 GB of memory to run, 16 processors is recomended.
 
 To learn NextFlow checkout this documentation:
 
