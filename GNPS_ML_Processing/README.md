@@ -1,6 +1,11 @@
 # GNPS ML Export Workflow
 
 ## Running The Workflow
+Building the conda environment
+```
+mamba env create --file ./bin/conda_env.yml --prefix ./bin/gnps_ml_processing_env2/
+```
+
 To run the workflow to test simply do
 
 ```
