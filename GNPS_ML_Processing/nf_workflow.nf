@@ -2,12 +2,12 @@
 nextflow.enable.dsl=2
 
 // params.subset = "Orbitrap_Fragmentation_Prediction"
-params.split  = true
+params.split  = false
 
 params.subset = "Structural_Similarity_Prediction"
 // params.subset = "MH_MNA_Translation"
 // params.subset = "GNPS_default"
-// params.split  = false
+
 use_default_path = true
 
 params.spectra_parallelism = 100
@@ -19,12 +19,14 @@ params.OMETALINKING_YAML = "flow_filelinking.yaml"
 params.OMETAPARAM_YAML = "job_parameters.yaml"
 
 TOOL_FOLDER = "$baseDir/bin"
-GNPS_EXPORTS_FOLDER = "$baseDir/GNPS_ml_exports"
-
 params.parallelism = 12
+params.pure_networking_parallelism = 5000
+params.pure_networking_forks = 32
 
 process prep_params {
-  conda "$TOOL_FOLDER/conda_env.yml"
+  conda "$TOOL_FOLDER/gnps_ml_processing_env2/"
+
+  cache 'lenient'
 
   output:
   path 'params/params_*.npy', emit: export_params
@@ -35,7 +37,9 @@ process prep_params {
 }
 
 process export {
-    conda "$TOOL_FOLDER/conda_env.yml"
+    conda "$TOOL_FOLDER/gnps_ml_processing_env2/"
+
+    maxForks 16
 
     input: 
     each input_file
@@ -49,6 +53,7 @@ process export {
 }
 
 process merge_export {
+  conda "$TOOL_FOLDER/gnps_ml_processing_env2/"
 
   input:
   path temp_files
@@ -64,7 +69,9 @@ process merge_export {
 }
 
 process postprocess {
-  conda "$TOOL_FOLDER/conda_env.yml"
+  conda "$TOOL_FOLDER/gnps_ml_processing_env2/"
+
+  publishDir "./nf_output", mode: 'copy'
 
   cache true
 
@@ -78,16 +85,20 @@ process postprocess {
   path "ALL_GNPS_cleaned.parquet", emit: cleaned_parquet
   path "ALL_GNPS_cleaned.mgf", emit: cleaned_mgf
 
+  script:
+  """
+  Rscript -e 'install.packages("BiocManager", repos = "https://cloud.r-project.org")'
+  Rscript -e 'BiocManager::install("Rdisop")'
+  Rscript -e "devtools::install_github('mjhelf/MassTools')"
+  """
+
   """
   python3 $TOOL_FOLDER/GNPS2_Postprocessor.py 
   """
 }
 
 process export_full_json {
-
-
-
-  conda "$TOOL_FOLDER/conda_env.yml"
+  conda "$TOOL_FOLDER/gnps_ml_processing_env2/"
 
   cache true
 
@@ -96,31 +107,37 @@ process export_full_json {
   path cleaned_mgf
 
   output:
-  path "*.json", emit: cleaned_json
+  // path "*.json", emit: cleaned_json
+  path "json_outputs/*.json"
   val 1, emit: dummy
 
   """
   python3 $TOOL_FOLDER/GNPS2_JSON_Export.py --input_mgf_path ${cleaned_mgf}\
                                             --input_csv_path ${cleaned_csv}\
-                                            --output_path ${cleaned_csv.baseName}.json
+                                            --output_path "./json_outputs" \
+                                            --progress \
+                                            --per_library
   """
 }
 
 process generate_subset {
+  conda "$TOOL_FOLDER/gnps_ml_processing_env2/"
+ 
   publishDir "./nf_output", mode: 'copy'
 
-  conda "$TOOL_FOLDER/conda_env.yml"
-
-  cache false
+  cache true
 
   input:
   path cleaned_csv
   path cleaned_parquet
+  path cleaned_mgf
   val json_dummy          // Dummy input to force this process to run after the export_full_json process
 
   output:
   path "summary/*"
   path "spectra/*.parquet", emit: output_parquet
+  path "spectra/*.mgf", emit: output_mgf
+  path "json_outputs/*.json", emit: output_json, optional: true
   path "util/*", optional: true
 
   """
@@ -129,7 +146,7 @@ process generate_subset {
 }
 
 process generate_mgf {
-  conda "$TOOL_FOLDER/conda_env.yml"
+  conda "$TOOL_FOLDER/gnps_ml_processing_env2/"
 
   input:
   each parquet_file
@@ -157,7 +174,8 @@ process generate_mgf {
   """
 }
 
-process calculate_similarities {
+process calculate_similarities_pure_networking {
+  // Currently, this process is not used and it is scheduled for deletion
   publishDir "./nf_output", mode: 'copy'
   
   input:
@@ -169,13 +187,36 @@ process calculate_similarities {
   """
   nextflow run $TOOL_FOLDER/GNPS_PureNetworking_Workflow/workflow/workflow.nf \
                 --inputspectra $mgf \
-                --parallelism $params.parallelism \
+                --parallelism $params.pure_networking_parallelism \
+                --maxforks $params.pure_networking_forks \
+                --publishdir "similarity_calculations/${mgf.baseName}"
+  """
+}
+
+process calculate_similarities {
+  // Similarities using fasst search have not been implemented yet
+  conda "$TOOL_FOLDER/gnps_ml_processing_env2/"
+  publishDir "./nf_output", mode: 'copy'
+  
+  input:
+  each mgf
+
+  output:
+  path "similarity_calculations/*", emit: spectral_similarities
+
+  """
+  exit()
+  nextflow run $TOOL_FOLDER/GNPS_PureNetworking_Workflow/workflow/workflow.nf \
+                --inputspectra $mgf \
+                --parallelism $params.pure_networking_parallelism \
+                --maxforks $params.pure_networking_forks \
                 --publishdir "similarity_calculations/${mgf.baseName}"
   """
 }
 
 process split_subsets {
-  conda "$TOOL_FOLDER/conda_env.yml"
+  conda "$TOOL_FOLDER/gnps_ml_processing_env2/"
+
   publishDir "./nf_output", mode: 'copy'
 
   input:
@@ -221,10 +262,9 @@ workflow {
   adduct_mapping_ch = channel.fromPath("$TOOL_FOLDER/adduct_mapping.pkl")
   postprocess(merge_export.out.merged_csv, merge_export.out.merged_mgf, adduct_mapping_ch)
   export_full_json(postprocess.out.cleaned_csv, postprocess.out.cleaned_mgf)
-  generate_subset(postprocess.out.cleaned_csv, postprocess.out.cleaned_parquet, export_full_json.out.dummy)    
+  generate_subset(postprocess.out.cleaned_csv, postprocess.out.cleaned_parquet, postprocess.out.cleaned_mgf, export_full_json.out.dummy)    
 
-  generate_mgf(generate_subset.out.output_parquet)
-  calculate_similarities(generate_mgf.out.output_mgf)
+  calculate_similarities(generate_subset.out.output_mgf)
 
   // For the spectral similarity prediction task, we need to calculate all pairs similarity in the training set
   if (params.subset == "GNPS_default" || params.subset == "Spectral_Similarity_Prediction") {

@@ -1,6 +1,7 @@
 GNPS_ML_Processing/*.ipynb_checkpoints*
 GNPS_ML_Processing/*.env
 GNPS_ML_Processing/*credentials
+GNPS_ML_Processing/.nextflow/
 GNPS_ML_Processing/.nextflow.log
 GNPS_ML_Processing/.nextflow.log.*
 GNPS_ML_Processing/.nextglow.pid
@@ -12,8 +13,15 @@ GNPS_ML_Processing/work/
 GNPS_ML_Processing/GNPS_ml_exports/*
 GNPS_ML_Processing/nf_output/
 GNPS_ML_Processing/bin/env/
+GNPS_ML_Processing/bin/venv/
+GNPS_ML_Processing/bin/gnps_ml_processing_env2/
+GNPS_ML_Processing/bin/gnps_ml_processing_env/
 GNPS_ML_Processing/bin/.nextflow.log*
 GNPS_ML_Processing/bin/.pytest_cache*
 GNPS_ML_Processing/nf_output_validated_instrument/
 GNPS_ML_Processing/bin/*__pycache__*
 GNPS_ML_Processing/spectral_similarities
+.nextflow.log*
+.nextflow/
+work/
+*nxf-tmp*

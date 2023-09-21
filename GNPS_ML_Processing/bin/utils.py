@@ -1,24 +1,49 @@
 import csv
-from rdkit.DataStructs.cDataStructs import BulkTanimotoSimilarity
+import importlib
 from rdkit import Chem
 from rdkit.Chem import MolFromSmiles
 from rdkit.Chem import AllChem
 from rdkit.Chem.AllChem import GetMorganFingerprintAsBitVect
+from rdkit.Chem import DataStructs
+from rdkit.DataStructs.cDataStructs import BulkTanimotoSimilarity
+from rdkit.Chem import MolStandardize, rdMolDescriptors, MolFromSmiles
 import pandas as pd
+from pyteomics.mgf import IndexedMGF
 from tqdm import tqdm
-import pandas as pd
 import networkx as nx
 import numpy as np
-from networkx.algorithms import community 
+from networkx.algorithms import community
 from typing import Tuple
-from rdkit.Chem import DataStructs
 import vaex
-import dask.dataframe as dd
-from rdkit import Chem
-from rdkit.Chem import MolStandardize, rdMolDescriptors, MolFromSmiles
+import os
+# import dask.dataframe as dd
+import tempfile
 from pandarallel import pandarallel
+from joblib import Parallel, delayed
 
-PARALLEL_WORKERS = 8 # Number of workers to use for parallel processing
+PARALLEL_WORKERS = 32 # Number of workers to use for parallel processing
+
+class Wrapper(object):
+    def __init__(self, method_name, module_name):
+        """Because boost functions are not picklable, we create a wrapper around the functions. 
+            This class takes two arguments: method_name and module_name and imports the module and 
+            wraps the method.
+            ---
+            Example Usage: Wrapper("MolFromSmiles", "rdkit.Chem")
+        Args:
+            method_name (str): Method to be imported
+            module_name (str): Module the method is located in.
+        """
+        self.method_name = method_name
+        # self.module_name = module_name
+        self.module = importlib.import_module(module_name)
+
+    @property
+    def method(self):
+        return getattr(self.module, self.method_name)
+    
+    def __call__(self, *args, **kwargs):
+        return self.method(*args, **kwargs)
 
 def split_cliques(num_nodes:int,ids:list,training_fraction: float=0.8, early_stopping=None):
     """ A function returning the indices of cliques in a graph that maximize the number of total datapoints in a training set.
@@ -169,12 +194,84 @@ def build_tanimoto_similarity_list(mgf_summary:pd.DataFrame,output_dir:str=None,
     if output_dir is not None: out.to_csv(output_dir, index_label=False)
     return out
 
+def _sim_helper(fps,
+                comparison_fps_lst,
+                indices,
+                truncate,
+                fieldnames,
+                similarity_threshold,
+                idx_mapping,
+                output_file = None,
+                progress=False):
+    """A short helper function that computes the similarities between fp and comparison fps 
+    in parallel.
+
+    Args:
+        fps (_type_): _description_
+        comparison_fps (_type_): _description_
+        idx (_type_): _description_
+
+    Returns:
+        _type_: _description_
+    """
+    if output_file is None:
+        temp_file = os.path.join(tempfile.gettempdir(), f"GNPS_PROCESSING/TEMP_SIMILARITY_FILE_{indices[0]}.csv")
+    else: 
+        temp_file = output_file
+    # Wrapping for easy parallelization
+    wrapped_bulk_tanimoto_similarity = Wrapper('BulkTanimotoSimilarity', 'rdkit.DataStructs.cDataStructs')
+    try:
+        with open(temp_file, mode='w') as f:
+            temp_writer = csv.DictWriter(f, fieldnames=fieldnames)
+            
+            # Add optional progress bar
+            if progress:
+                loop_iterator = tqdm(zip(indices, fps, comparison_fps_lst))
+            else: 
+                loop_iterator =  zip(indices, fps, comparison_fps_lst)
+    
+            for idx, fp, comparison_fps in loop_iterator:
+                if truncate is not None:
+                    n_bins, n_items_per_bin = truncate
+                    
+                    if not isinstance(n_bins, int) or not isinstance(n_items_per_bin, int):
+                        raise ValueError("Expected arg 'truncate' to be None or a tuple of type (int,int).")
+                    bin_size = (1.0 - similarity_threshold) / (n_bins-1)    # Reserve the last bin for identical spectra (rest of histogram is left aligned)
+                    items_left_per_bin = np.full(n_bins, n_items_per_bin)
+                                   
+                sims = wrapped_bulk_tanimoto_similarity(fp, comparison_fps)
+                for j, this_sim in enumerate(sims):                  
+                    if this_sim >= similarity_threshold:
+                        # Check if we have filled the bin for this entry.
+                        if truncate is not None:
+                            bin_index = int((this_sim - similarity_threshold) / bin_size)
+                            if items_left_per_bin[bin_index] <= 0:
+                                continue
+                            items_left_per_bin[bin_index] -= 1
+                        for edge_from in idx_mapping[idx]:
+                            for edge_to in idx_mapping[idx + 1 + j]: # i + 1 + j because we skip the diagonal
+                                row = {
+                                    'spectrumid1': edge_from,
+                                    'spectrumid2': edge_to,  
+                                    'Tanimoto_Similarity': this_sim
+                                }
+                                temp_writer.writerow(row)
+                        if truncate is not None:
+                            if sum(items_left_per_bin) == 0:
+                                break
+                        
+        return temp_file
+    except Exception as suprise_exception:
+        # Perform file cleanup if needed
+        if os.path.isfile(temp_file):
+            os.remove(temp_file)
+        raise suprise_exception
+
 def build_tanimoto_similarity_list_precomputed(mgf_summary:pd.DataFrame,
                                                output_file:str, 
                                                similarity_threshold=0.50, 
                                                fingerprint_column_name='Morgan_2048_3', 
-                                               truncate=None,
-                                               remove_duplicates=True) -> pd.DataFrame:
+                                               truncate=None) -> pd.DataFrame:
     """This function computes the all pairs tanimoto similarity on an MGF summary dataframe.
 
     Args:
@@ -187,76 +284,48 @@ def build_tanimoto_similarity_list_precomputed(mgf_summary:pd.DataFrame,
         remove_duplicates bool: Remove all similarities with identical tanimoto scores, defaults to True.
     Returns:
         None: The output is written to output file. This file can be large and should be read with an out-of-core library.
-    """    
+    """
     if similarity_threshold < 0:
         raise ValueError("Expected arg 'similarity_threshold' to be between 0 and 1.")
     
-    dask = False
-    if type(mgf_summary) is pd.DataFrame:
-        structure_mask = ~ mgf_summary[fingerprint_column_name].isna()
-        num_structures = structure_mask.sum()
-        pandarallel.initialize(progress_bar=False, nb_workers=PARALLEL_WORKERS)
-        fps = mgf_summary[fingerprint_column_name][structure_mask].parallel_apply(lambda x: DataStructs.CreateFromBitString(''.join(str(y) for y in x))).values
-        
-        
-    elif type(mgf_summary) == dd.core.DataFrame:
-        dask=True
-        structure_mask = mgf_summary.Smiles.notnull() 
-        num_structures = structure_mask.sum().compute()
-        fps = mgf_summary[fingerprint_column_name][structure_mask].apply(lambda x: DataStructs.CreateFromBitString(''.join(str(y) for y in x))).values
-        
-    else:
-        raise ValueError("mgf_summary must be a pandas or dask dataframe")
-    print("Found {}  structures in {} files".format(num_structures, len(mgf_summary)))
+    if not isinstance(mgf_summary, pd.DataFrame):
+        raise ValueError(f"Expected a Pandas DataFrame but got {type(mgf_summary)}")
+    
+    org_len = len(mgf_summary)
+    
+    structure_mask = ~ mgf_summary[fingerprint_column_name].isna()
+    mgf_summary = mgf_summary[structure_mask]
+    
+    grouped_mgf_summary = mgf_summary.groupby('Smiles')    
+    mgf_summary = mgf_summary.drop_duplicates(subset='Smiles')
+    
 
-    print(mgf_summary[fingerprint_column_name][structure_mask].value_counts())
     
-    
-    if dask: fps.compute_chunk_sizes()
+    pandarallel.initialize(progress_bar=False, nb_workers=PARALLEL_WORKERS, verbose=0)
+    fps = mgf_summary[fingerprint_column_name].parallel_apply(lambda x: DataStructs.CreateFromBitString(''.join(str(y) for y in x))).values
+        
+    print(f"Found {len(mgf_summary)} unique structures in {org_len} files")
+
     # Indices are now non contiguous because the entries without structures are removed
-    # This will map back to the original scan number  
-    idx_mapping = {i: spectrum_id for i, spectrum_id in enumerate(mgf_summary.spectrum_id[structure_mask])}
-    N = len(fps)
-
-    if truncate is not None:
-        n_bins, n_items_per_bin = truncate
-        if type(n_bins) is not int or type(n_items_per_bin) is not int:
-            raise ValueError("Expected arg 'truncate' to be None or a tuple of type (int,int).")
-        bin_size = (1.0 - similarity_threshold) / (n_bins-1)    # Reserve the last bin for identical spectra (rest of histogram is left aligned)
-
-    with open(output_file, 'w', newline='') as csvfile:
-        fieldnames = ['spectrumid1', 'spectrumid2', 'Tanimoto_Similarity']
-        writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
-        writer.writeheader()
-        for i in tqdm(range(N)):
-            if truncate:
-                items_left_per_bin = np.full(n_bins, n_items_per_bin)
-            if remove_duplicates:
-                duplicates_list = []
-            sims = BulkTanimotoSimilarity(fps[i],fps[i+1:])
-            for j in range(0,len(sims)):                  
-                if sims[j] >= similarity_threshold:
-                    if remove_duplicates:
-                        # If we've seen this exact tanimoto similarity before, its very like to be the same molecule
-                        if sims[j] in duplicates_list and not sims[j] == 1:     # If the similarity is one, it's likely the same molecule, but we may want differing spectra
-                            continue
-                        else:
-                            duplicates_list.append(sims[j])
-                    # Check if we have filled the bin for this entry.
-                    if truncate:
-                        bin_index = int((sims[j] - similarity_threshold) / bin_size)
-                        if items_left_per_bin[bin_index] <= 0:
-                            continue
-                        else:
-                            items_left_per_bin[bin_index] -= 1
-                    row = {
-                        'spectrumid1': idx_mapping[i],
-                        'spectrumid2': idx_mapping[i + 1 + j],  # i + 1 + j because we skip the diagonal
-                        'Tanimoto_Similarity': sims[j]
-                    }
-                    writer.writerow(row)
-    return None
-
+    # This will map back to the original spectrum_id
+    idx_mapping = {idx: group_df['spectrum_id'].values for idx, (_, group_df) in enumerate(grouped_mgf_summary)}
+    
+    # Cleanup variables to reduce memory overhead
+    del mgf_summary
+    del grouped_mgf_summary
+    
+    fieldnames = ['spectrumid1', 'spectrumid2', 'Tanimoto_Similarity']
+           
+    _ = _sim_helper([fps[j] for j in range(len(fps))],
+                [fps[j+1:] for j in range(len(fps))],
+                [j for j in range(len(fps))],
+                truncate,
+                fieldnames,
+                similarity_threshold,
+                idx_mapping,
+                output_file = output_file,
+                progress = True)
+    
 def get_fingerprints(smiles_string):
     """Returns a list of fingerprints for a given smiles string"""
     error_value = np.array([None, None, None, None], dtype=object)
@@ -277,43 +346,24 @@ def _generate_fingerprints_pandas_helper(smiles):
     if smiles is not None and smiles != 'nan':
         mol = Chem.MolFromSmiles(str(smiles), sanitize=True)
         if mol is not None:
-            return {'Morgan_2048_2': list(AllChem.GetMorganFingerprintAsBitVect(mol,2,useChirality=False,nBits=2048)), 
-                    'Morgan_4096_2': list(AllChem.GetMorganFingerprintAsBitVect(mol,2,useChirality=False,nBits=4096)), 
-                    'Morgan_2048_3': list(AllChem.GetMorganFingerprintAsBitVect(mol,3,useChirality=False,nBits=2048)), 
-                    'Morgan_4096_3':list(AllChem.GetMorganFingerprintAsBitVect(mol,3,useChirality=False,nBits=4096))}
-    return {'Morgan_2048_2': None, 
-            'Morgan_4096_2': None, 
-            'Morgan_2048_3': None, 
-            'Morgan_4096_3': None}
+            return smiles, {'Morgan_2048_2': list(AllChem.GetMorganFingerprintAsBitVect(mol,2,useChirality=False,nBits=2048)), 
+                            'Morgan_4096_2': list(AllChem.GetMorganFingerprintAsBitVect(mol,2,useChirality=False,nBits=4096)), 
+                            'Morgan_2048_3': list(AllChem.GetMorganFingerprintAsBitVect(mol,3,useChirality=False,nBits=2048)), 
+                            'Morgan_4096_3':list(AllChem.GetMorganFingerprintAsBitVect(mol,3,useChirality=False,nBits=4096))}
+    return smiles, {'Morgan_2048_2': None,
+                    'Morgan_4096_2': None, 
+                    'Morgan_2048_3': None, 
+                    'Morgan_4096_3': None}
 
-def _generate_fingerprints_pandas(summary, mode='regular'):
-    # Here, we offer two different modes. The idea of the 'low_mem' mode is that it calculates the molecule inside the apply.add()
-    # function, which is then discarded. This is useful if you have a large dataframe and don't want to keep the molecules in memory.
-    
-    if mode == 'regular':
-        summary = summary.assign(mol=None)
-        summary.loc[summary.Smiles != 'nan', 'mol'] = summary.loc[summary.Smiles != 'nan', 'Smiles'].apply(lambda x: Chem.MolFromSmiles(x, sanitize=True))
-        smiles_parsing_success = [x is not None for x in summary.mol]
-        summary.loc[smiles_parsing_success,'Morgan_2048_2'] = summary.loc[smiles_parsing_success,'mol'].apply( \
-            lambda x: list(AllChem.GetMorganFingerprintAsBitVect(x,2,useChirality=False,nBits=2048)))
-        summary.loc[smiles_parsing_success,'Morgan_4096_2'] = summary.loc[smiles_parsing_success,'mol'].apply( \
-            lambda x: list(AllChem.GetMorganFingerprintAsBitVect(x,2,useChirality=False,nBits=4096)))
-        summary.loc[smiles_parsing_success,'Morgan_2048_3'] = summary.loc[smiles_parsing_success,'mol'].apply( \
-            lambda x: list(AllChem.GetMorganFingerprintAsBitVect(x,3,useChirality=False,nBits=2048)))
-        summary.loc[smiles_parsing_success,'Morgan_4096_3'] = summary.loc[smiles_parsing_success,'mol'].apply( \
-            lambda x: list(AllChem.GetMorganFingerprintAsBitVect(x,3,useChirality=False,nBits=4096)))
-        # summary.loc[smiles_parsing_success,'RdKit_2048_5'] = summary.loc[smiles_parsing_success,'mol'].apply( \
-        #     lambda x: Chem.RDKFingerprint(x,minPath=5,fpSize=2048))
-        # summary.loc[smiles_parsing_success,'RdKit_4096_5'] = summary.loc[smiles_parsing_success,'mol'].apply( \
-        #     lambda x: Chem.RDKFingerprint(x,minPath=5,fpSize=4096))
-        summary.drop('mol', axis=1, inplace=True)
-    elif mode == 'low_mem':
-        pandarallel.initialize(progress_bar=False, nb_workers=PARALLEL_WORKERS)
-        # The low memory implementation will return a series of dictionaries when we call apply, so we'll make it a dataframe with from_records
-        summary[['Morgan_2048_2','Morgan_4096_2','Morgan_2048_3','Morgan_4096_3']] = pd.DataFrame.from_records(summary['Smiles'].parallel_apply(_generate_fingerprints_pandas_helper))
-        return summary
+def _generate_fingerprints_pandas(summary, progress=True):
+    if progress:
+        unique_smiles = tqdm(summary.Smiles.unique())
     else:
-        raise ValueError("Mode must be 'regular' or 'low_mem'")
+        unique_smiles = summary.Smiles.unique()
+    mapping_dict = dict(Parallel(n_jobs=-1)(delayed(_generate_fingerprints_pandas_helper)(smiles) for smiles in unique_smiles))
+    
+    summary[['Morgan_2048_2','Morgan_4096_2','Morgan_2048_3','Morgan_4096_3']] = pd.DataFrame.from_records(summary['Smiles'].map(mapping_dict))
+    return summary
 
 def _generate_fingerprints_dask(summary):
     # summary = dd.read_csv(summary, dtype={'Smiles':str,'msDetector':str,'msDissociationMethod':str,'msManufacturer':str,'msMassAnalyzer':str,'msModel':str})
@@ -345,7 +395,7 @@ def generate_fingerprints(summary):
     # Check to make sure that the columns are not already present
     if not all([x in summary.columns for x in columns_to_add]):
         if type(summary) is pd.DataFrame:
-            return _generate_fingerprints_pandas(summary, mode='low_mem')
+            return _generate_fingerprints_pandas(summary)
         elif type(summary) is vaex.dataframe.DataFrameLocal:
             raise NotImplementedError("Vaex not yet implemented")
             # We'll assume it's vaex
@@ -362,10 +412,10 @@ def generate_fingerprints(summary):
             # summary['Morgan_4096_3'] = summary.apply((lambda x: x[3]), arguments=[summary.fingerprints])
             # summary.drop('fingerprints', inplace=True)
             # summary.execute()
-        elif type(summary) == dd.core.DataFrame:    
-            if summary.Smiles.isnull().any().compute():
-                raise ValueError("Smiles column contains null values")        
-            _generate_fingerprints_dask(summary)
+        # elif type(summary) == dd.core.DataFrame:    
+        #     if summary.Smiles.isnull().any().compute():
+        #         raise ValueError("Smiles column contains null values")        
+        #     _generate_fingerprints_dask(summary)
         
         else: 
             raise ValueError("Summary is not a pandas or dask dataframe but got type {}".format(type(summary)))
@@ -418,3 +468,57 @@ def INCHI_to_SMILES(inchi):
         return Chem.MolToSmiles(Chem.MolFromInchi(inchi))
     except:
         return None
+    
+def synchronize_spectra(input_path, output_path, spectrum_ids, progress_bar=True):
+    """Reads an MGF file from input_path and generates a new_mgf file in output_path with only the spectra in spectrum_ids.
+
+    Args:
+        input_path (str): Path to the input mgf.
+        output_path (str): Path to save the output mgf.
+        spectrum_ids (list): List of spectrum ids to keep.
+    """   
+    scan_counter = 0
+    with open(output_path, 'w') as output_mgf:
+        input_mgf = IndexedMGF(input_path,index_by_scans=True)
+        if progress_bar:
+            print("Syncing MGF with summary")
+            input_mgf = tqdm(input_mgf)
+        for spectra in input_mgf:
+            if spectra['params']['title'] in spectrum_ids:
+                output_mgf.write("BEGIN IONS\n")
+                output_mgf.write("PEPMASS={}\n".format(spectra['params']['pepmass'][0]))
+                output_mgf.write("CHARGE={}\n".format(spectra['params']["charge"]))
+                output_mgf.write("TITLE={}\n".format(spectra['params']['title']))
+                output_mgf.write("SCANS={}\n".format(scan_counter))
+
+                peaks = zip(spectra['m/z array'], spectra['intensity array'])
+                for peak in peaks:
+                    output_mgf.write("{} {}\n".format(peak[0], peak[1]))
+
+                output_mgf.write("END IONS\n")
+                scan_counter += 1
+                
+def generate_parquet_df(input_mgf):
+    """
+    Details on output format:
+    Columns will be [level_0, index, i, i_norm, mz, precmz]
+    Index will be spectrum_id
+    level_0 is the row index in file
+    index is the row index in the spectra
+    """
+    output = []
+    indexed_mgf = IndexedMGF(input_mgf,index_by_scans=True)
+    level_0 = 0
+    for m in tqdm(indexed_mgf):
+        spectrum_id = m['params']['title']
+        mz_array = m['m/z array']
+        intensity_array = m['intensity array']
+        precursor_mz = m['params']['pepmass']
+        # charge = m['charge']
+        for index, (mz, intensity) in enumerate(zip(mz_array, intensity_array)):
+            output.append({'spectrum_id':spectrum_id, 'level_0': level_0, 'index':index, 'i':intensity, 'mz':mz, 'prec_mz':precursor_mz})
+            level_0 += 1
+                
+    output = pd.DataFrame(output)
+    output.set_index('spectrum_id')
+    return output
