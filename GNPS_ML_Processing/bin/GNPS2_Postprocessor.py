@@ -289,11 +289,15 @@ def postprocess_files(csv_path, mgf_path, output_csv_path, output_parquet_path, 
     synchronize_spectra(mgf_path, cleaned_mgf_path, summary.spectrum_id.astype('str').values)
     print("Done in {} seconds".format(datetime.timedelta(seconds=time.time() - start)), flush=True)
 
-    # Calculate explained intensity
-    print("Calculating explained intensity")
-    start = time.time()
-    add_explained_intensity(summary, mgf_path)
-    print("Done in {} seconds".format(datetime.timedelta(seconds=time.time() - start)))
+    # # Because calculating explained intensity is slow, we'll save an output file just in case
+    # print("Writing csv file", flush=True)
+    # summary.to_csv(output_csv_path, index=False)
+
+    # # Calculate explained intensity
+    # print("Calculating explained intensity")
+    # start = time.time()
+    # add_explained_intensity(summary, mgf_path)
+    # print("Done in {} seconds".format(datetime.timedelta(seconds=time.time() - start)))
 
     sanity_checks(summary)
     
