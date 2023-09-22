@@ -31,15 +31,38 @@ def basic_cleaning(summary):
 
     # smiles
     summary.Smiles = summary.Smiles.astype(str).parallel_apply(lambda x: x.strip() )
-    summary.Smiles = summary.Smiles.parallel_apply(lambda x: 'nan' if (x == '') or ('N/A' in x) else x)
+    summary.Smiles = summary.Smiles.parallel_apply(lambda x: '' if ('N/A' in x) else x)
     
     # INCHI
     summary.INCHI = summary.INCHI.astype(str).parallel_apply(lambda x: x.strip() )
-    summary.INCHI = summary.INCHI.parallel_apply(lambda x: 'nan' if (x == '') or ('N/A' in str(x)) else x)
+    summary.INCHI = summary.INCHI.parallel_apply(lambda x: '' if ('N/A' in str(x)) else x)
+    
+    # Check the INCHI and SMILES are equivalent
+    mask = (summary.Smiles != '') & (summary.INCHI != '')
+    equivalency_mask =  summary.loc[mask].parallel_apply(lambda x: Chem.inchi.MolToInchi(Chem.MolFromSmiles(x['Smiles'])) != x['INCHI'], axis=1)
+    if sum(equivalency_mask) > 0 :
+        print(f"Warning: {sum(equivalency_mask)} entries have INCHI and SMILES that are not equivalent, INCHI values will be used to replace SMILES")
+        
+    summary.loc[equivalency_mask, 'Smiles'] = summary.loc[equivalency_mask, 'INCHI'].parallel_apply(INCHI_to_SMILES)
     
     # In rare cases the user will use INCHI and not smiles, so we'll convert it to smiles
-    mask = (summary.Smiles == 'nan') & (summary.INCHI != 'nan')
+    mask = (summary.Smiles == '') & (summary.INCHI != '')
     summary.loc[mask, 'Smiles'] = summary.loc[mask, 'Smiles'].parallel_apply(INCHI_to_SMILES)
+    
+    # If no INCHI but we have SMILES, convert it to INCHI
+    mask = (summary.Smiles != '') & (summary.INCHI == '')
+    summary.loc[mask, 'INCHI'] = summary.loc[mask, 'Smiles'].parallel_apply(lambda x: Chem.inchi.MolToInchi(Chem.MolFromSmiles(x)))
+    
+    # Fill in INCHI key
+    summary.INCHIKey = summary.INCHIKey.astype(str).parallel_apply(lambda x: x.strip() )
+    summary.INCHIKey = summary.INCHIKey.parallel_apply(lambda x: '' if ('N/A' in str(x)) else x)
+    # Generate all inchi keys
+    all_keys = summary.loc['INCHI'].parallel_apply(lambda x: Chem.inchi.InchiToInchiKey(x))
+    # Check existing keys
+    incorrect_mask = (summary.INCHIKey == all_keys)
+    if sum(incorrect_mask) > 0 :
+        print(f"Warning: {sum(incorrect_mask)} entries have INCHI and INCHIKey that are not equivalent, new INCHIKeys will be generated based on INCHI")
+    summary.loc[incorrect_mask, 'INCHIKey'] = summary.loc[incorrect_mask, 'INCHI'].parallel_apply(lambda x: Chem.inchi.InchiToInchiKey(x))
     
     # ionization
     summary.msIonisation = summary.msIonisation.astype(str)
