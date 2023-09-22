@@ -24,7 +24,7 @@ params.pure_networking_parallelism = 5000
 params.pure_networking_forks = 32
 
 process prep_params {
-  conda "$TOOL_FOLDER/gnps_ml_processing_env2/"
+  conda "$TOOL_FOLDER/conda_env.yml"
 
   cache 'lenient'
 

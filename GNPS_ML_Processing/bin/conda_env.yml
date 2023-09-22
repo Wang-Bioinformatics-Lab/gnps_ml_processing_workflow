@@ -17,13 +17,8 @@ dependencies:
   - joblib
   - pyarrow
   - fastparquet
-  - dask
-  - r-devtools
-  - rpy2
   - pip
   - pip:
     - obonet
     - vaex
-    - pandarallel 
-    - dask
-    - formula_validation
+    - pandarallel
