@@ -34,7 +34,7 @@ In rare cases some spectra had INCHI values but no SMILES values. In such cases 
 
 SMILES tautamers have been unified to one single tautamer (not currently applied). In addition, unecessary charges are removed, salts have been removed (keeping the larger of the molecules), and stereochemisty is removed.
 
-Adduct values have all been unified in the following format: [M<+/-><Adduct>...<+/-><Adduct>]<Charge><+/->
+Adduct values have all been unified in the following format: [M\<+/-\>\<Adduct\>...\<+/-\>\<Adduct\>]\<Charge\><+/->
 
 The GNPS instrument field which contains the user specified information has been propogated to the msModel, msManufacturer, and other ms* columns wherever possible. 
 
