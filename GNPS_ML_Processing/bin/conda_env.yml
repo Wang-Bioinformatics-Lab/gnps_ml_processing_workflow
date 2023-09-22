@@ -5,16 +5,25 @@ channels:
   - bioconda
 dependencies:
   - python=3.8.8
+  - numpy
   - pandas
+  - tqdm
+  - joblib
+  - pyarrow
+  - fastparquet
+  - pyteomics
+  - networkx
   - requests
   - beautifulsoup4
   - networkx
-  - numpy
   - lxml
   - pip
   - pip:
     - obonet
-
+    - vaex
+    - pandarallel 
+    - dask
+    - rdkit
     #- pandarallel
   # - pyteomics
   # - tqdm
