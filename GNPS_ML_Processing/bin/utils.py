@@ -477,7 +477,7 @@ def synchronize_spectra(input_path, output_path, spectrum_ids, progress_bar=True
         output_path (str): Path to save the output mgf.
         spectrum_ids (list): List of spectrum ids to keep.
     """   
-    scan_counter = 0
+    scan_counter = 1
     with open(output_path, 'w') as output_mgf:
         input_mgf = IndexedMGF(input_path,index_by_scans=True)
         if progress_bar:

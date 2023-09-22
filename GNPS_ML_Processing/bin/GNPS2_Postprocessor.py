@@ -107,8 +107,18 @@ def basic_cleaning(summary):
         print(f"Of the {sum(mask)} entires, {sum(mask & (summary.Charge == 0))} have Charge of 0.")
     summary.loc[mask, 'Charge'] = adduct_charges[mask]
 
-    # Ion Mode
+    # Collision Energy
+    # Rather nicely, sometimes the collision energy is in the ion mode field
     summary.Ion_Mode = summary.Ion_Mode.apply(lambda x: str(x).strip().lower())
+    print("DEBUG")
+    print(f"COLLISION ENERGY NA {sum(summary.CollisionEnergy.isna())}")
+    print(f"ION MODE HAS EV {sum(summary.Ion_Mode == 'positive-20ev')}")
+    
+    mask = (summary.Ion_Mode == 'positive-20ev') & (summary.CollisionEnergy.isna())
+    print(f"BOTH {sum(mask)}")
+    summary.loc[mask, 'collision_energy'] = 20
+
+    # Ion Mode
     summary.loc[summary.Ion_Mode == 'positive-20ev','Ion_Mode'] = 'positive'
 
     # Manufacturer
@@ -313,7 +323,7 @@ def postprocess_files(csv_path, mgf_path, output_csv_path, output_parquet_path, 
     print("Done in {} seconds".format(datetime.timedelta(seconds=time.time() - start)), flush=True)
     
     # Cleanup scan numbers, scan numbers will be reset in mgf by synchronize spectra
-    summary.scan = np.arange(0, len(summary))
+    summary.scan = np.arange(1, len(summary)+ 1)
         
     # Cleanup MGF file. Must be done before explained intensity calculations in order to make sure spectra are in order
     print("Writing mgf file", flush=True)
