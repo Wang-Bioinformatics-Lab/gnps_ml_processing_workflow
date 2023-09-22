@@ -10,7 +10,7 @@ params.subset = "Structural_Similarity_Prediction"
 
 use_default_path = true
 
-params.spectra_parallelism = 100
+params.spectra_parallelism = 1000
 
 params.path_to_provenance = "/home/user/LabData/GNPS_Library_Provenance/"
 
@@ -23,21 +23,24 @@ params.parallelism = 12
 params.pure_networking_parallelism = 5000
 params.pure_networking_forks = 32
 
+// Splitting out the GNPS Libraries into smaller chunks
 process prep_params {
-  conda "$TOOL_FOLDER/gnps_ml_processing_env2/"
+  conda "$TOOL_FOLDER/conda_env.yml"
 
   cache 'lenient'
 
   output:
-  path 'params/params_*.npy', emit: export_params
+  path 'params/params_*.npy'
 
   """
-  python3 $TOOL_FOLDER/prep_params.py -p "$params.spectra_parallelism"  
+  python3 $TOOL_FOLDER/prep_params.py \
+  -p "$params.spectra_parallelism"
   """
 }
 
+// Pull additional data from Provenance File
 process export {
-    conda "$TOOL_FOLDER/gnps_ml_processing_env2/"
+    conda "$TOOL_FOLDER/conda_env.yml"
 
     maxForks 16
 
@@ -45,22 +48,26 @@ process export {
     each input_file
 
     output:
-    path 'temp/*', emit: temp_files
+    path 'temp/*'
 
     """
-    python3 $TOOL_FOLDER/GNPS2_Processor.py -f "$input_file" --path_to_provenance "$params.path_to_provenance"
+    python3 $TOOL_FOLDER/GNPS2_Processor.py \
+    -f "$input_file" \
+    --path_to_provenance "$params.path_to_provenance"
     """
 }
 
+// Merges all the exports together
 process merge_export {
-  conda "$TOOL_FOLDER/gnps_ml_processing_env2/"
+  //conda "$TOOL_FOLDER/gnps_ml_processing_env2/"
+  conda "$TOOL_FOLDER/conda_env.yml"
 
   input:
   path temp_files
 
   output:
-  path './ALL_GNPS_merged.mgf', emit: merged_csv
-  path './ALL_GNPS_merged.csv', emit: merged_mgf
+  path './ALL_GNPS_merged.mgf'
+  path './ALL_GNPS_merged.csv'
 
   """
   python3 $TOOL_FOLDER/merge_files.py 
@@ -68,8 +75,10 @@ process merge_export {
 
 }
 
+// Cleaning work - unifying the Controlled Vocabulary
 process postprocess {
-  conda "$TOOL_FOLDER/gnps_ml_processing_env2/"
+  //conda "$TOOL_FOLDER/gnps_ml_processing_env2/"
+  conda "$TOOL_FOLDER/conda_env.yml"
 
   publishDir "./nf_output", mode: 'copy'
 
@@ -85,20 +94,15 @@ process postprocess {
   path "ALL_GNPS_cleaned.parquet", emit: cleaned_parquet
   path "ALL_GNPS_cleaned.mgf", emit: cleaned_mgf
 
-  script:
   """
-  Rscript -e 'install.packages("BiocManager", repos = "https://cloud.r-project.org")'
-  Rscript -e 'BiocManager::install("Rdisop")'
-  Rscript -e "devtools::install_github('mjhelf/MassTools')"
-  """
-
-  """
-  python3 $TOOL_FOLDER/GNPS2_Postprocessor.py 
+  python3 $TOOL_FOLDER/GNPS2_Postprocessor.py
   """
 }
 
+// Exports the output in JSON format
 process export_full_json {
-  conda "$TOOL_FOLDER/gnps_ml_processing_env2/"
+  //conda "$TOOL_FOLDER/gnps_ml_processing_env2/"
+  conda "$TOOL_FOLDER/conda_env.yml"
 
   cache true
 
@@ -195,7 +199,9 @@ process calculate_similarities_pure_networking {
 
 process calculate_similarities {
   // Similarities using fasst search have not been implemented yet
-  conda "$TOOL_FOLDER/gnps_ml_processing_env2/"
+  //conda "$TOOL_FOLDER/gnps_ml_processing_env2/"
+  conda "$TOOL_FOLDER/conda_env.yml"
+
   publishDir "./nf_output", mode: 'copy'
   
   input:
@@ -254,13 +260,14 @@ process publish_similarities_for_prediction {
 }
 
 workflow {
-  prep_params()
-  export(prep_params.out.export_params)
-  merge_export(export.out.temp_files.collect())
+  export_params = prep_params()
+  temp_files = export(export_params)
+  (merged_mgf, merged_csv) = merge_export(temp_files.collect())
 
   // A python dictionary that maps GNPS adducts to a unified set of adducts used in the GNPS2 workflow
   adduct_mapping_ch = channel.fromPath("$TOOL_FOLDER/adduct_mapping.pkl")
-  postprocess(merge_export.out.merged_csv, merge_export.out.merged_mgf, adduct_mapping_ch)
+
+  postprocess(merged_csv, merged_mgf, adduct_mapping_ch)
   export_full_json(postprocess.out.cleaned_csv, postprocess.out.cleaned_mgf)
   generate_subset(postprocess.out.cleaned_csv, postprocess.out.cleaned_parquet, postprocess.out.cleaned_mgf, export_full_json.out.dummy)    
 

@@ -6,24 +6,19 @@ channels:
 dependencies:
   - python=3.8.8
   - pandas
-  - numpy
-  - pyteomics
-  - networkx
   - requests
-  - tqdm
   - beautifulsoup4
+  - networkx
+  - numpy
   - lxml
-  - rdkit
-  - joblib
-  - pyarrow
-  - fastparquet
-  - dask
-  - r-devtools
-  - rpy2
   - pip
   - pip:
     - obonet
-    - vaex
-    - pandarallel 
-    - dask
-    - formula_validation
+
+    #- pandarallel
+  # - pyteomics
+  # - tqdm
+  # - rdkit
+  # - joblib
+  # - pyarrow
+  

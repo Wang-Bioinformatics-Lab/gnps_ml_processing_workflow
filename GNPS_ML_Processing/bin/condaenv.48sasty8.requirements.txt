@@ -1,5 +1,0 @@
-obonet
-vaex
-pandarallel
-dask
-rpy2

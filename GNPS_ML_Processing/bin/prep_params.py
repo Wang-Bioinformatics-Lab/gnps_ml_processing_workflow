@@ -14,7 +14,7 @@ def main():
 
     args = parser.parse_args()
 
-    gnps_url = "https://gnps-external.ucsd.edu/gnpslibrary/{}.json".format("ALL_GNPS")
+    gnps_url = "https://external.gnps2.org/gnpslibrary/{}.json".format("ALL_GNPS")
     all_spectra_list = requests.get(gnps_url).json()
 
     if not os.path.isdir('./params'): os.makedirs('./params',exist_ok=True)
