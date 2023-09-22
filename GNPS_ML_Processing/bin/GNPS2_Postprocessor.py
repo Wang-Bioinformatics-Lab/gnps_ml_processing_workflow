@@ -91,12 +91,21 @@ def basic_cleaning(summary):
             
         return adduct
     summary.Adduct = summary.Adduct.parallel_apply(helper)
-    summary = summary[summary.Adduct.notna()]    
+    summary = summary[summary.Adduct.notna()]
 
     # Conversion of numerical columns to numerical types to protect against contamination
     summary.Precursor_MZ = summary.Precursor_MZ.astype(float)
     summary.ExactMass = summary.ExactMass.astype(float)
     summary.Charge = summary.Charge.astype(int)
+    
+    # Charge
+    # Mask whether charge is equal to adduct charge
+    adduct_charges = summary.Adduct.apply(lambda x: int(x[-1] + x.split(']')[-1][:-1]))
+    mask = (summary.Charge == adduct_charges)
+    if sum(mask) > 0:
+        print(f"Warning: {sum(mask)} entries have Charge and Adduct Charge that are not equivalent, Charge will be used to replace Adduct Charge.")
+        print(f"Of the {sum(mask)} entires, {sum(mask & (summary.Charge == 0))} have Charge of 0.")
+    summary.loc[mask, 'Charge'] = adduct_charges[mask]
 
     # Ion Mode
     summary.Ion_Mode = summary.Ion_Mode.apply(lambda x: str(x).strip().lower())
