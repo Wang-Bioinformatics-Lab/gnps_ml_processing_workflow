@@ -29,7 +29,7 @@ process prep_params {
   cache 'lenient'
 
   output:
-  path 'params/params_*.npy', emit: export_params
+  path 'params/params_*.npy'
 
   """
   python3 $TOOL_FOLDER/prep_params.py -p "$params.spectra_parallelism"  
@@ -37,7 +37,7 @@ process prep_params {
 }
 
 process export {
-    conda "$TOOL_FOLDER/gnps_ml_processing_env2/"
+    conda "$TOOL_FOLDER/conda_env.yml"
 
     maxForks 16
 
@@ -45,7 +45,7 @@ process export {
     each input_file
 
     output:
-    path 'temp/*', emit: temp_files
+    path 'temp/*'
 
     """
     python3 $TOOL_FOLDER/GNPS2_Processor.py -f "$input_file" --path_to_provenance "$params.path_to_provenance"
@@ -53,14 +53,15 @@ process export {
 }
 
 process merge_export {
-  conda "$TOOL_FOLDER/gnps_ml_processing_env2/"
+  //conda "$TOOL_FOLDER/gnps_ml_processing_env2/"
+  conda "$TOOL_FOLDER/conda_env.yml"
 
   input:
   path temp_files
 
   output:
-  path './ALL_GNPS_merged.mgf', emit: merged_csv
-  path './ALL_GNPS_merged.csv', emit: merged_mgf
+  path './ALL_GNPS_merged.mgf'
+  path './ALL_GNPS_merged.csv'
 
   """
   python3 $TOOL_FOLDER/merge_files.py 
@@ -69,7 +70,8 @@ process merge_export {
 }
 
 process postprocess {
-  conda "$TOOL_FOLDER/gnps_ml_processing_env2/"
+  //conda "$TOOL_FOLDER/gnps_ml_processing_env2/"
+  conda "$TOOL_FOLDER/conda_env.yml"
 
   publishDir "./nf_output", mode: 'copy'
 
@@ -98,7 +100,8 @@ process postprocess {
 }
 
 process export_full_json {
-  conda "$TOOL_FOLDER/gnps_ml_processing_env2/"
+  //conda "$TOOL_FOLDER/gnps_ml_processing_env2/"
+  conda "$TOOL_FOLDER/conda_env.yml"
 
   cache true
 
@@ -195,7 +198,9 @@ process calculate_similarities_pure_networking {
 
 process calculate_similarities {
   // Similarities using fasst search have not been implemented yet
-  conda "$TOOL_FOLDER/gnps_ml_processing_env2/"
+  //conda "$TOOL_FOLDER/gnps_ml_processing_env2/"
+  conda "$TOOL_FOLDER/conda_env.yml"
+
   publishDir "./nf_output", mode: 'copy'
   
   input:
@@ -254,13 +259,14 @@ process publish_similarities_for_prediction {
 }
 
 workflow {
-  prep_params()
-  export(prep_params.out.export_params)
-  merge_export(export.out.temp_files.collect())
+  export_params = prep_params()
+  temp_files = export(export_params)
+  (merged_mgf, merged_csv) = merge_export(temp_files.collect())
 
   // A python dictionary that maps GNPS adducts to a unified set of adducts used in the GNPS2 workflow
   adduct_mapping_ch = channel.fromPath("$TOOL_FOLDER/adduct_mapping.pkl")
-  postprocess(merge_export.out.merged_csv, merge_export.out.merged_mgf, adduct_mapping_ch)
+  
+  postprocess(merged_csv, merged_mgf, adduct_mapping_ch)
   export_full_json(postprocess.out.cleaned_csv, postprocess.out.cleaned_mgf)
   generate_subset(postprocess.out.cleaned_csv, postprocess.out.cleaned_parquet, postprocess.out.cleaned_mgf, export_full_json.out.dummy)    
 
