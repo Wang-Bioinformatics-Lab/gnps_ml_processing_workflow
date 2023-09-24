@@ -425,7 +425,7 @@ def generate_fingerprints(summary):
 
 # Code Credit: Yasin El Abiead
 def harmonize_smiles_rdkit(smiles, tautomer_limit = 900, skip_tautomerization=False):
-    if smiles is None or smiles == 'nan' or smiles == 'None': return None
+    if smiles is None or smiles == 'nan' or smiles == 'None' or smiles == '': return ''
     try:
         smiles = str(smiles)
         # take the largest covalently bound molecule
@@ -434,7 +434,7 @@ def harmonize_smiles_rdkit(smiles, tautomer_limit = 900, skip_tautomerization=Fa
 
         if mol is None:
             # The files failed to parse, it should be removed
-            return None
+            return ''
         
         monomass = rdMolDescriptors.CalcExactMolWt(mol)
         if not skip_tautomerization:
@@ -460,14 +460,17 @@ def harmonize_smiles_rdkit(smiles, tautomer_limit = 900, skip_tautomerization=Fa
 
     except Exception as e:
         print(f"An error occurred with input {smiles}: {e}")
-        return None
+        return ''
     
 def INCHI_to_SMILES(inchi):
-    if inchi is None or inchi == 'nan': return None
+    if inchi is None or inchi == 'nan': return ''
     try:
-        return Chem.MolToSmiles(Chem.MolFromInchi(inchi))
+        mol = Chem.MolFromInchi(inchi)
+        if mol is None:
+            return ''
+        return Chem.MolToSmiles(mol)
     except:
-        return None
+        return ''
     
 def synchronize_spectra(input_path, output_path, spectrum_ids, progress_bar=True):
     """Reads an MGF file from input_path and generates a new_mgf file in output_path with only the spectra in spectrum_ids.
