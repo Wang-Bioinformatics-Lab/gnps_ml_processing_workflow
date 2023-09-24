@@ -31,39 +31,15 @@ def basic_cleaning(summary):
 
     # smiles
     summary.Smiles = summary.Smiles.astype(str).parallel_apply(lambda x: x.strip() )
-    summary.Smiles = summary.Smiles.parallel_apply(lambda x: '' if ('N/A' in x) else x)
+    summary.Smiles = summary.Smiles.parallel_apply(lambda x: '' if ('N/A' in x) or ('nan' in x) else x)
+    
+    # check smiles validity
+    summary.Smiles = summary.Smiles.apply(lambda x: x if Chem.MolFromSmiles(x) is not None else '')
     
     # INCHI
     summary.INCHI = summary.INCHI.astype(str).parallel_apply(lambda x: x.strip() )
-    summary.INCHI = summary.INCHI.parallel_apply(lambda x: '' if ('N/A' in str(x)) else x)
-    
-    # Check the INCHI and SMILES are equivalent
-    mask = (summary.Smiles != '') & (summary.INCHI != '')
-    equivalency_mask =  summary.loc[mask].parallel_apply(lambda x: Chem.inchi.MolToInchi(Chem.MolFromSmiles(x['Smiles'])) != x['INCHI'], axis=1)
-    if sum(equivalency_mask) > 0 :
-        print(f"Warning: {sum(equivalency_mask)} entries have INCHI and SMILES that are not equivalent, INCHI values will be used to replace SMILES")
-        
-    summary.loc[equivalency_mask, 'Smiles'] = summary.loc[equivalency_mask, 'INCHI'].parallel_apply(INCHI_to_SMILES)
-    
-    # In rare cases the user will use INCHI and not smiles, so we'll convert it to smiles
-    mask = (summary.Smiles == '') & (summary.INCHI != '')
-    summary.loc[mask, 'Smiles'] = summary.loc[mask, 'Smiles'].parallel_apply(INCHI_to_SMILES)
-    
-    # If no INCHI but we have SMILES, convert it to INCHI
-    mask = (summary.Smiles != '') & (summary.INCHI == '')
-    summary.loc[mask, 'INCHI'] = summary.loc[mask, 'Smiles'].parallel_apply(lambda x: Chem.inchi.MolToInchi(Chem.MolFromSmiles(x)))
-    
-    # Fill in INCHI key
-    summary.INCHIKey = summary.INCHIKey.astype(str).parallel_apply(lambda x: x.strip() )
-    summary.INCHIKey = summary.INCHIKey.parallel_apply(lambda x: '' if ('N/A' in str(x)) else x)
-    # Generate all inchi keys
-    all_keys = summary.loc['INCHI'].parallel_apply(lambda x: Chem.inchi.InchiToInchiKey(x))
-    # Check existing keys
-    incorrect_mask = (summary.INCHIKey == all_keys)
-    if sum(incorrect_mask) > 0 :
-        print(f"Warning: {sum(incorrect_mask)} entries have INCHI and INCHIKey that are not equivalent, new INCHIKeys will be generated based on INCHI")
-    summary.loc[incorrect_mask, 'INCHIKey'] = summary.loc[incorrect_mask, 'INCHI'].parallel_apply(lambda x: Chem.inchi.InchiToInchiKey(x))
-    
+    summary.INCHI = summary.INCHI.parallel_apply(lambda x: '' if ('N/A' in x) or ('nan' in x) else x)
+
     # ionization
     summary.msIonisation = summary.msIonisation.astype(str)
     summary.loc[['esi' in x.lower() or 'electrospray' in x.lower() for x in summary.msIonisation], 'msIonisation'] = "ESI"
@@ -71,9 +47,11 @@ def basic_cleaning(summary):
     
     # Adduct translation from chemical names to adduct formulas -> 'M+TFA-H': '[M+C2HF3O2-H]-'
     # Adduct Table Credit: Yasin El Abiead
-    adduct_mapping = pickle.load(open('./adduct_mapping.pkl', 'rb'))
+    with open("./adduct_mapping.txt", "r") as data:
+        adduct_mapping = ast.literal_eval(data.read())
     def helper(adduct):
         adduct = str(adduct).strip()
+        adduct = adduct.replace(' ', '')
         mapped_adduct = None
         # Map the adduct if possible, if not, then we leave the orignal value
         if adduct not in adduct_mapping.values():
@@ -90,8 +68,17 @@ def basic_cleaning(summary):
                 adduct = adduct[:-2] + "]1-"
             
         return adduct
+        
     summary.Adduct = summary.Adduct.parallel_apply(helper)
     summary = summary[summary.Adduct.notna()]
+    
+    # Get a mask of non-matching adducts
+    pattern = r'\[(\d)*M([\+-].*?)\](\d)([\+-])'
+    mask = summary.Adduct.apply(lambda x: re.match(pattern, x) is None)
+    if sum(mask) > 0:
+        print(f"Warning: {sum(mask)} entries have Adducts that are not in the expected format, these will be removed.")
+        print(summary.Adduct.loc[mask].value_counts().head(10))
+    summary = summary.loc[~mask]
 
     # Conversion of numerical columns to numerical types to protect against contamination
     summary.Precursor_MZ = summary.Precursor_MZ.astype(float)
@@ -101,22 +88,28 @@ def basic_cleaning(summary):
     # Charge
     # Mask whether charge is equal to adduct charge
     adduct_charges = summary.Adduct.apply(lambda x: int(x[-1] + x.split(']')[-1][:-1]))
-    mask = (summary.Charge == adduct_charges)
+    mask = (summary.Charge != adduct_charges)
     if sum(mask) > 0:
-        print(f"Warning: {sum(mask)} entries have Charge and Adduct Charge that are not equivalent, Charge will be used to replace Adduct Charge.")
+        print(f"Warning: {sum(mask)} entries have Charge and Adduct Charge that are not equivalent, Adduct Charge will be prefered.")
         print(f"Of the {sum(mask)} entires, {sum(mask & (summary.Charge == 0))} have Charge of 0.")
     summary.loc[mask, 'Charge'] = adduct_charges[mask]
 
     # Collision Energy
-    # Rather nicely, sometimes the collision energy is in the ion mode field
-    summary.Ion_Mode = summary.Ion_Mode.apply(lambda x: str(x).strip().lower())
-    print("DEBUG")
-    print(f"COLLISION ENERGY NA {sum(summary.CollisionEnergy.isna())}")
-    print(f"ION MODE HAS EV {sum(summary.Ion_Mode == 'positive-20ev')}")
+    # Rather nicely, sometimes the collision energy is in the ion mode field, but we'll prefer the raw file data
+    summary.Ion_Mode = summary.Ion_Mode.apply(lambda x: str(x).strip().lower())   
+    mask = (summary.Ion_Mode == 'positive-20ev') & (summary.collision_energy.isna())
+    if sum(mask) > 0:
+        print(f"Imputing {sum(mask)} collision energies using the Ion_Mode field")
+        summary.loc[mask, 'collision_energy'] = 20
     
-    mask = (summary.Ion_Mode == 'positive-20ev') & (summary.CollisionEnergy.isna())
-    print(f"BOTH {sum(mask)}")
-    summary.loc[mask, 'collision_energy'] = 20
+    # Sometimes the collision energy is in the GNPS_inst field
+    pattern = re.compile(r'(\d+)eV')
+    extracted_eV = summary.GNPS_Inst.apply(lambda x: re.search(pattern, str(x)))
+    extracted_eV = extracted_eV.apply(lambda x: x.group(1) if x is not None else None)
+    mask = (extracted_eV.notna()) & (summary.collision_energy.isna())
+    if sum(mask) > 0:
+        print(f"Imputing {sum(mask)} collision energies using the GNPS_Inst field.")
+        summary.loc[mask, 'collision_energy'] = extracted_eV[mask]
 
     # Ion Mode
     summary.loc[summary.Ion_Mode == 'positive-20ev','Ion_Mode'] = 'positive'
@@ -188,34 +181,79 @@ def clean_smiles(summary):
         DataFrame: The modified summary dataframe
     """
     summary.Smiles = summary.Smiles.astype(str)
+    
+    
+    # Check the INCHI and SMILES are equivalent
+    mask = (summary.Smiles != '') & (summary.INCHI != '')
+    inchi_from_smiles = summary.loc[mask].apply(lambda x: Chem.inchi.MolToInchi(Chem.MolFromSmiles(x['Smiles'])), axis=1)
+    equivalency_mask = (inchi_from_smiles != summary.loc[mask, 'INCHI'])
+    if sum(equivalency_mask) > 0 :
+        print(f"Warning: {sum(equivalency_mask)} entries have INCHI and SMILES that are not equivalent, SMILES values will be used to replace INCHI")
+        summary.loc[mask, 'INCHI'].loc[equivalency_mask] = inchi_from_smiles.loc[equivalency_mask]
+    
+    # In rare cases the user will use INCHI and not smiles, so we'll convert it to smiles
+    mask = (summary.Smiles == '') & (summary.INCHI != '')
+    summary.loc[mask, 'Smiles'] = summary.loc[mask, 'Smiles'].apply(INCHI_to_SMILES)
     summary.Smiles = summary.Smiles.parallel_apply(lambda x: harmonize_smiles_rdkit(x, skip_tautomerization=True))
+    # If no INCHI but we have SMILES, convert it to INCHI
+    mask = (summary.Smiles != '') & (summary.INCHI == '')
+    summary.loc[mask, 'INCHI'] = summary.loc[mask, 'Smiles'].apply(lambda x: Chem.inchi.MolToInchi(Chem.MolFromSmiles(x)))
+    # Fill in INCHI key
+    summary.InChIKey_smiles = summary.InChIKey_smiles.astype(str).parallel_apply(lambda x: x.strip() )
+    summary.InChIKey_smiles = summary.InChIKey_smiles.parallel_apply(lambda x: '' if ('N/A' in str(x)) else x)
+    # Generate all inchi keys
+    all_keys = summary.loc[:, 'INCHI'].apply(lambda x: Chem.inchi.InchiToInchiKey(x) if x != '' else '')
+    # Check existing keys
+    incorrect_mask = (summary.InChIKey_smiles != all_keys)
+    if sum(incorrect_mask) > 0 :
+        print(f"Warning: {sum(incorrect_mask)} entries have INCHI and INCHIKey that are not equivalent, new INCHIKeys will be generated based on INCHI")
+        summary.loc[incorrect_mask, 'InChIKey_smiles'] = summary.loc[incorrect_mask, 'INCHI'].apply(lambda x: Chem.inchi.InchiToInchiKey(x))
+    
     return summary
 
 def propogate_GNPS_Inst_field(summary):
     summary.GNPS_Inst = summary.GNPS_Inst.astype('str')
     summary.GNPS_Inst = summary.GNPS_Inst.map(lambda x: x.strip().lower())
+    """
+    Whenever we create our own series using a list comprehension and use '&' to combine it with something like 
+    (summary.msDissociationMethod == 'nan'), we have to have a continuous, zero-indexed dataframe because the '&' 
+    joins on the index 
+    E.g.:
+    >>> a = pd.Series([False,True,True], index=[1,2,3])
+    >>> b = pd.Series([True,True,False], index=[2,3,4])
+    >>> a & b
+    1    False
+    2     True
+    3     True
+    4    False
+    dtype: bool
+    # Note that there are four entires, not three
+    
+    A safer solution is to use numpy arrays, which will ignore the index and that's what we'll do here
+    """
+    summary.reset_index(inplace=True)
 
     # Fragmentation Info (Done)
     summary.msDissociationMethod = summary.msDissociationMethod.astype(str)
-    summary.loc[(pd.Series(["in source cid" == x for x in summary.GNPS_Inst]) & (summary.msDissociationMethod == 'nan')), 'msDissociationMethod'] = "is-cid"
+    summary.loc[(np.array(["in source cid" == x for x in summary.GNPS_Inst]) & (summary.msDissociationMethod == 'nan')), 'msDissociationMethod'] = "is-cid"
    
-    summary.loc[(pd.Series([("hid" in x) for x in summary.GNPS_Inst]) & (summary.msDissociationMethod == 'nan')), 'msDissociationMethod'] = "hid"    
-    summary.loc[(pd.Series([("cid" in x and not "is-cid" in x) for x in summary.GNPS_Inst]) & (summary.msDissociationMethod == 'nan')), 'msDissociationMethod'] = "cid"    
+    summary.loc[(np.array([("hid" in x) for x in summary.GNPS_Inst]) & (summary.msDissociationMethod == 'nan')), 'msDissociationMethod'] = "hid"    
+    summary.loc[(np.array([("cid" in x and not "is-cid" in x) for x in summary.GNPS_Inst]) & (summary.msDissociationMethod == 'nan')), 'msDissociationMethod'] = "cid"    
 
     # Ionisation Info (Not Done)
-    summary.loc[(pd.Series(["esi" in x for x in  summary.GNPS_Inst]) & (summary.msIonisation == 'nan')), 'msIonisation'] = 'ESI'
-    summary.loc[(pd.Series(["apci" in x for x in  summary.GNPS_Inst]) & (summary.msIonisation == 'nan')), 'msIonisation'] = 'APCI'
-    summary.loc[(pd.Series([("appi" in x and not "dappi" in x) for x in summary.GNPS_Inst]) & (summary.msIonisation == 'nan')), 'msIonisation'] = 'APPI'
-    summary.loc[(pd.Series(["dappi" in x for x in summary.GNPS_Inst]) & (summary.msIonisation == 'nan')), 'msIonisation'] = 'DAPPI'
+    summary.loc[(np.array(["esi" in x for x in  summary.GNPS_Inst]) & (summary.msIonisation == 'nan')), 'msIonisation'] = 'ESI'
+    summary.loc[(np.array(["apci" in x for x in  summary.GNPS_Inst]) & (summary.msIonisation == 'nan')), 'msIonisation'] = 'APCI'
+    summary.loc[(np.array([("appi" in x and not "dappi" in x) for x in summary.GNPS_Inst]) & (summary.msIonisation == 'nan')), 'msIonisation'] = 'APPI'
+    summary.loc[(np.array(["dappi" in x for x in summary.GNPS_Inst]) & (summary.msIonisation == 'nan')), 'msIonisation'] = 'DAPPI'
 
     # Mass Analyzer (Not Done)
-    summary.loc[(pd.Series(["orbitrap" in x for x in summary.GNPS_Inst]) & (summary.msMassAnalyzer == 'nan')),"msMassAnalyzer"] = "orbitrap"
-    summary.loc[(pd.Series([("quadrupole tof" in x or "qtof" in x or "q-tof" in x) and not "qq" in x for x in summary.GNPS_Inst]) & (summary.msMassAnalyzer == 'nan')),"msMassAnalyzer"] = "qtof"
-    summary.loc[(pd.Series([("tof" in x) and not ("qq" in x or "qtof" in x or "q-tof" in x or "q tof" in x or "quadrupole tof" in x) for x in summary.GNPS_Inst]) & (summary.msMassAnalyzer == 'nan')),"msMassAnalyzer"] = "tof"
+    summary.loc[(np.array(["orbitrap" in x for x in summary.GNPS_Inst]) & (summary.msMassAnalyzer == 'nan')),"msMassAnalyzer"] = "orbitrap"
+    summary.loc[(np.array([("quadrupole tof" in x or "qtof" in x or "q-tof" in x) and not "qq" in x for x in summary.GNPS_Inst]) & (summary.msMassAnalyzer == 'nan')),"msMassAnalyzer"] = "qtof"
+    summary.loc[(np.array([("tof" in x) and not ("qq" in x or "qtof" in x or "q-tof" in x or "q tof" in x or "quadrupole tof" in x) for x in summary.GNPS_Inst]) & (summary.msMassAnalyzer == 'nan')),"msMassAnalyzer"] = "tof"
 
     # Manufacturer Info (Not Done)
-    summary.loc[(pd.Series(["maxis" in x for x in summary.GNPS_Inst]) & (summary.msManufacturer == "nan")),"msManufacturer"] = "Bruker Daltonics"
-    summary.loc[(pd.Series(["q exactive" in x or "q-exactive" in x for x in summary.GNPS_Inst]) & (summary.msManufacturer == "nan")),"msManufacturer"] = "Thermo"
+    summary.loc[(np.array([bool("maxis" in x) for x in summary.GNPS_Inst]) & (summary.msManufacturer == "nan")),"msManufacturer"] = "Bruker Daltonics"
+    summary.loc[(np.array(["q exactive" in x or "q-exactive" in x for x in summary.GNPS_Inst]) & (summary.msManufacturer == "nan")),"msManufacturer"] = "Thermo"
     return summary
 
 def propogate_msModel_field(summary):
@@ -231,8 +269,16 @@ def propogate_msModel_field(summary):
 
 
 def sanity_checks(summary):
-    assert len(summary[(summary.msManufacturer == 'Thermo') & (summary.msMassAnalyzer == 'qtof')]) == 0
-    assert len(summary[(summary.msMassAnalyzer == 'orbitrap') & (summary.msManufacturer == 'Bruker Daltonics')]) == 0 
+    test_df = summary[(summary.msManufacturer == 'Thermo') & (summary.msMassAnalyzer == 'qtof')]
+    if len(test_df) != 0:
+        pd.options.display.max_columns = None
+        print(test_df.head(10))
+        raise ValueError("There are {} entries with Thermo and qtof".format(len(test_df)))
+    test_df = summary[(summary.msMassAnalyzer == 'orbitrap') & (summary.msManufacturer == 'Bruker Daltonics')]
+    if len(test_df) != 0:
+        pd.options.display.max_columns = None
+        print(test_df.head(10))
+        raise ValueError("There are {} entries with Bruker Daltonics and orbitrap".format(len(test_df)))
     # assert len(summary[(summary.Adduct == 'None') & (summary.Adduct == 'nan') & (summary.Adduct.isna())]) == 0 # Right now because of the adduct cleaning, there is a chance that we'll have nan adducts
 
 
@@ -325,12 +371,15 @@ def postprocess_files(csv_path, mgf_path, output_csv_path, output_parquet_path, 
     # Cleanup scan numbers, scan numbers will be reset in mgf by synchronize spectra
     summary.scan = np.arange(1, len(summary)+ 1)
         
+    sanity_checks(summary)
+
+        
     # Cleanup MGF file. Must be done before explained intensity calculations in order to make sure spectra are in order
     print("Writing mgf file", flush=True)
     start = time.time()
     synchronize_spectra(mgf_path, cleaned_mgf_path, summary.spectrum_id.astype('str').values)
     print("Done in {} seconds".format(datetime.timedelta(seconds=time.time() - start)), flush=True)
-
+    
     # # Because calculating explained intensity is slow, we'll save an output file just in case
     # print("Writing csv file", flush=True)
     # summary.to_csv(output_csv_path, index=False)
@@ -340,8 +389,6 @@ def postprocess_files(csv_path, mgf_path, output_csv_path, output_parquet_path, 
     # start = time.time()
     # add_explained_intensity(summary, mgf_path)
     # print("Done in {} seconds".format(datetime.timedelta(seconds=time.time() - start)))
-
-    sanity_checks(summary)
     
     print("Writing output files...", flush=True)
     print("Writing parquet file", flush=True)
