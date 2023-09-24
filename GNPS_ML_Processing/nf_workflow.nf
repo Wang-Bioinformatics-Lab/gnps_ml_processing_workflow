@@ -10,7 +10,7 @@ params.subset = "Structural_Similarity_Prediction"
 
 use_default_path = true
 
-params.spectra_parallelism = 1000
+params.spectra_parallelism = 5000
 
 params.path_to_provenance = "/home/user/LabData/GNPS_Library_Provenance/"
 
@@ -49,7 +49,8 @@ process prep_params {
 process export {
     conda "$TOOL_FOLDER/gnps_ml_processing_env2"
 
-    maxForks 16
+    maxForks 8
+    errorStrategy 'retry'
 
     input: 
     each input_file
@@ -110,6 +111,8 @@ process postprocess {
 process export_full_json {
   //conda "$TOOL_FOLDER/gnps_ml_processing_env2/"
   conda "$TOOL_FOLDER/gnps_ml_processing_env2"
+
+  publishDir "./nf_output", mode: 'copy'
 
   cache true
 
@@ -273,7 +276,7 @@ workflow {
   (merged_mgf, merged_csv) = merge_export(temp_files.collect())
 
   // A python dictionary that maps GNPS adducts to a unified set of adducts used in the GNPS2 workflow
-  adduct_mapping_ch = channel.fromPath("$TOOL_FOLDER/adduct_mapping.pkl")
+  adduct_mapping_ch = channel.fromPath("$TOOL_FOLDER/adduct_mapping.txt")
 
   postprocess(merged_csv, merged_mgf, adduct_mapping_ch)
   export_full_json(postprocess.out.cleaned_csv, postprocess.out.cleaned_mgf)
