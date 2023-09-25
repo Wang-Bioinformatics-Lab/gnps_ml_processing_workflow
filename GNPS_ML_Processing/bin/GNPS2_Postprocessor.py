@@ -9,6 +9,7 @@ import re
 from tqdm import tqdm
 from utils import harmonize_smiles_rdkit, INCHI_to_SMILES, synchronize_spectra, generate_parquet_df
 from rdkit import Chem
+from rdkit.Chem import Descriptors
 from pandarallel import pandarallel
 import time
 import datetime
@@ -121,6 +122,15 @@ def basic_cleaning(summary):
 
     # Ion Mode
     summary.loc[summary.Ion_Mode == 'positive-20ev','Ion_Mode'] = 'positive'
+    # We'll infer any missing ion modes from the charge
+    mask = (summary.Ion_Mode == 'nan') & (summary.Charge > 0)
+    if sum(mask) > 0:
+        print(f"Imputing {sum(mask)} ion modes using the Charge field.")
+        summary.loc[mask, 'Ion_Mode'] = 'positive'
+    mask = (summary.Ion_Mode == 'nan') & (summary.Charge < 0)
+    if sum(mask) > 0:
+        print(f"Imputing {sum(mask)} ion modes using the Charge field.")
+        summary.loc[mask, 'Ion_Mode'] = 'negative'
 
     # Manufacturer
     summary.msManufacturer = summary.msManufacturer.astype('str')
@@ -224,6 +234,29 @@ def clean_smiles(summary):
     if sum(incorrect_mask) > 0 :
         print(f"Warning: {sum(incorrect_mask)} entries have INCHI and INCHIKey that are not equivalent, new INCHIKeys will be generated based on INCHI")
         summary.loc[incorrect_mask, 'InChIKey_smiles'] = summary.loc[incorrect_mask, 'INCHI'].apply(lambda x: Chem.inchi.InchiToInchiKey(x))
+    
+    return summary
+
+def validate_monoisotopic_masses(summary:pd.DataFrame):
+    """This function takes a pandas dataframe with a 'Smiles' column and validates that the ExactMass column is correct.
+        If the ExactMass column is incorrect, the function will attempt to correct it, printing a message indicating how many
+        masses were incorrect.
+
+    Args:
+        summary (pd.DataFrame): A summary dataframe containing a 'Smiles' column, and a 'ExactMass' column
+        
+    Returns:
+        pd.DataFrame: The modified summary dataframe
+    """
+    parsable_mask = summary.Smiles.apply(lambda x: Chem.MolFromSmiles(x) is not None if x != '' else None)
+    correct_masses = summary.loc[parsable_mask, 'Smiles'].parallel_apply(lambda x: Descriptors.ExactMolWt(Chem.MolFromSmiles(x)))
+    correct_mask = summary.loc[parsable_mask, 'ExactMass'] != correct_masses
+    
+    if sum(correct_mask) > 0:
+        print(f"Warning: {sum(correct_mask)} entries have ExactMasses that are not equivalent to the monoisotopic mass of the SMILES.")
+        print(f"Of the incorrect masses, {sum(summary.loc[parsable_mask, 'ExactMass'].loc[correct_mask]==0)} entries have an ExactMass of 0")
+        print("ExactMasses will be replaced with the monoisotopic mass of the SMILES")
+        summary.loc[parsable_mask, 'ExactMass'].loc[correct_mask] = correct_masses.loc[correct_mask]
     
     return summary
 
@@ -373,6 +406,13 @@ def postprocess_files(csv_path, mgf_path, output_csv_path, output_parquet_path, 
     start = time.time()
     summary = clean_smiles(summary)
     print("Done in {} seconds".format(datetime.timedelta(seconds=time.time() - start)), flush=True)
+    
+    # Clean up monoistopic masses:
+    print("Cleaning up monoisotopic masses", flush=True)
+    start = time.time()
+    raise NotImplementedError("This is not implemented yet")
+    print("Done in {} seconds".format(datetime.timedelta(seconds=time.time() - start)), flush=True)
+    
     
     # Exploiting GNPS_Inst annotations:
     print("Attempting to propogate user instrument annotations", flush=True)
