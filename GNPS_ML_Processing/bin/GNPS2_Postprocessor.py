@@ -30,6 +30,11 @@ def basic_cleaning(summary):
     # scan
     summary.scan = summary.scan.astype('int')
 
+    # Precursor MZ
+    # Drop all entries with precursor mz <= 1
+    summary.Precursor_MZ = summary.Precursor_MZ.astype('float')
+    summary = summary.loc[summary.Precursor_MZ > 1]
+
     # smiles
     summary.Smiles = summary.Smiles.astype(str).parallel_apply(lambda x: x.strip() )
     summary.Smiles = summary.Smiles.parallel_apply(lambda x: '' if ('N/A' in x) or ('nan' in x) else x)
