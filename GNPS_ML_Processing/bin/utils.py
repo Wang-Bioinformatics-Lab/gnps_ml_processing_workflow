@@ -523,5 +523,4 @@ def generate_parquet_df(input_mgf):
             level_0 += 1
                 
     output = pd.DataFrame(output)
-    output.set_index('spectrum_id')
     return output
