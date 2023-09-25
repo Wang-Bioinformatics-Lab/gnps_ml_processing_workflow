@@ -5,7 +5,7 @@ import argparse
 import os
 import vaex
 import pickle
-from GNPS_JSON_Export import generate_json_mgf
+from GNPS2_JSON_Export import generate_json_mgf
 from utils import build_tanimoto_similarity_list_precomputed, generate_fingerprints, harmonize_smiles_rdkit, synchronize_spectra, generate_parquet_df
 from pyteomics.mgf import IndexedMGF
 # import dask.dataframe as dd
