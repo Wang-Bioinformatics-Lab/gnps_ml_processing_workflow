@@ -37,8 +37,16 @@ def basic_cleaning(summary):
     summary.Smiles = summary.Smiles.apply(lambda x: x if Chem.MolFromSmiles(x) is not None else '')
     
     # INCHI
-    summary.INCHI = summary.INCHI.astype(str).parallel_apply(lambda x: x.strip() )
+    summary.INCHI = summary.INCHI.astype(str).parallel_apply(lambda x: x.strip().replace('"', '') )
     summary.INCHI = summary.INCHI.parallel_apply(lambda x: '' if ('N/A' in x) or ('nan' in x) else x)
+    
+    # InChIKey_SMILES
+    summary.InChIKey_smiles = summary.InChIKey_smiles.astype(str).parallel_apply(lambda x: x.strip() )
+    summary.InChIKey_smiles = summary.InChIKey_smiles.parallel_apply(lambda x: '' if ('N/A' in str(x)) else x)
+    
+    # InChIKey_InChI
+    summary.InChIKey_inchi = summary.InChIKey_inchi.astype(str).parallel_apply(lambda x: x.strip() )
+    summary.InChIKey_inchi = summary.InChIKey_inchi.parallel_apply(lambda x: '' if ('N/A' in str(x)) else x)
 
     # ionization
     summary.msIonisation = summary.msIonisation.astype(str)
@@ -117,6 +125,7 @@ def basic_cleaning(summary):
     # Manufacturer
     summary.msManufacturer = summary.msManufacturer.astype('str')
     summary.loc[['thermo' in x.lower() for x in summary.msManufacturer], 'msManufacturer'] = 'Thermo'
+    summary.msManufacturer = summary.msManufacturer.parallel_apply(lambda x: '' if ('n/a' in x) or ('nan' in x) else x)
 
     # msMassAnalyzer
     def transform_analyzer(x:str):
@@ -136,8 +145,8 @@ def basic_cleaning(summary):
     
     summary.msMassAnalyzer = summary.msMassAnalyzer.astype('str')
     summary.msMassAnalyzer = summary.msMassAnalyzer.str.lower()
+    summary.msMassAnalyzer = summary.msMassAnalyzer.parallel_apply(lambda x: '' if ('n/a' in x) or ('nan' in x) else x)
     
-    # summary.msMassAnalyzer = summary.msMassAnalyzer.str.strip('[]').str.strip("'").str.split(',')
     mask = (summary.msMassAnalyzer.notna()) & (summary.msMassAnalyzer != 'nan')
     def literal_eval_helper(x):
         """
@@ -156,6 +165,11 @@ def basic_cleaning(summary):
     # summary.loc[mask].apply(lambda x: [y == 'quadrupole tof' for y in x].any())
     # summary.loc[mask,'msMassAnalyzer'] = 'qtof' 
     # summary.loc[summary.msMassAnalyzer == 'fourier transform ion cyclotron resonance mass spectrometer','msMassAnalyzer'] = 'ftms'
+
+    # msIonisation
+    summary.msIonisation = summary.msIonisation.astype('str')
+    summary.msIonisation = summary.msIonisation.str.lower()
+    summary.msIonisation = summary.msIonisation.parallel_apply(lambda x: '' if ('n/a' in x) or ('nan' in x) else x) 
 
     # Detector
     '''A very specific set of files has MS:1000253 as the detector name which is used for mzML files, 
@@ -182,6 +196,14 @@ def clean_smiles(summary):
     """
     summary.Smiles = summary.Smiles.astype(str)
     
+    # Check INCHI is parsable
+    summary.loc[:, 'INCHI'] = summary.loc[:,'INCHI'].apply(lambda x: '' if Chem.inchi.MolFromInchi(x) is None else x if x != '' else '')
+       
+    # In rare cases the user will use INCHI and not smiles, so we'll convert it to smiles
+    mask = (summary.Smiles == '') & (summary.INCHI != '')
+    summary.loc[mask, 'Smiles'] = summary.loc[mask, 'Smiles'].apply(INCHI_to_SMILES)
+    
+    summary.Smiles = summary.Smiles.parallel_apply(lambda x: harmonize_smiles_rdkit(x, skip_tautomerization=True))
     
     # Check the INCHI and SMILES are equivalent
     mask = (summary.Smiles != '') & (summary.INCHI != '')
@@ -191,16 +213,10 @@ def clean_smiles(summary):
         print(f"Warning: {sum(equivalency_mask)} entries have INCHI and SMILES that are not equivalent, SMILES values will be used to replace INCHI")
         summary.loc[mask, 'INCHI'].loc[equivalency_mask] = inchi_from_smiles.loc[equivalency_mask]
     
-    # In rare cases the user will use INCHI and not smiles, so we'll convert it to smiles
-    mask = (summary.Smiles == '') & (summary.INCHI != '')
-    summary.loc[mask, 'Smiles'] = summary.loc[mask, 'Smiles'].apply(INCHI_to_SMILES)
-    summary.Smiles = summary.Smiles.parallel_apply(lambda x: harmonize_smiles_rdkit(x, skip_tautomerization=True))
     # If no INCHI but we have SMILES, convert it to INCHI
     mask = (summary.Smiles != '') & (summary.INCHI == '')
     summary.loc[mask, 'INCHI'] = summary.loc[mask, 'Smiles'].apply(lambda x: Chem.inchi.MolToInchi(Chem.MolFromSmiles(x)))
     # Fill in INCHI key
-    summary.InChIKey_smiles = summary.InChIKey_smiles.astype(str).parallel_apply(lambda x: x.strip() )
-    summary.InChIKey_smiles = summary.InChIKey_smiles.parallel_apply(lambda x: '' if ('N/A' in str(x)) else x)
     # Generate all inchi keys
     all_keys = summary.loc[:, 'INCHI'].apply(lambda x: Chem.inchi.InchiToInchiKey(x) if x != '' else '')
     # Check existing keys
@@ -231,35 +247,37 @@ def propogate_GNPS_Inst_field(summary):
     
     A safer solution is to use numpy arrays, which will ignore the index and that's what we'll do here
     """
-    summary.reset_index(inplace=True)
-
+    
     # Fragmentation Info (Done)
     summary.msDissociationMethod = summary.msDissociationMethod.astype(str)
-    summary.loc[(np.array(["in source cid" == x for x in summary.GNPS_Inst]) & (summary.msDissociationMethod == 'nan')), 'msDissociationMethod'] = "is-cid"
-   
-    summary.loc[(np.array([("hid" in x) for x in summary.GNPS_Inst]) & (summary.msDissociationMethod == 'nan')), 'msDissociationMethod'] = "hid"    
-    summary.loc[(np.array([("hcd" in x) for x in summary.GNPS_Inst]) & (summary.msDissociationMethod == 'nan')), 'msDissociationMethod'] = "hcd"    
-    summary.loc[(np.array([("cid" in x and not "is-cid" in x) for x in summary.GNPS_Inst]) & (summary.msDissociationMethod == 'nan')), 'msDissociationMethod'] = "cid"    
+    summary.loc[(np.array(["in source cid" == x for x in summary.GNPS_Inst]) & (summary.msDissociationMethod == '')), 'msDissociationMethod'] = "is-cid"
+    summary.loc[(np.array([("hid" in x) for x in summary.GNPS_Inst]) & (summary.msDissociationMethod == '')), 'msDissociationMethod'] = "hid"
+    summary.loc[(np.array([("hcd" in x) for x in summary.GNPS_Inst]) & (summary.msDissociationMethod == '')), 'msDissociationMethod'] = "hcd"
+    summary.loc[(np.array([("cid" in x and not "is-cid" in x) for x in summary.GNPS_Inst]) & (summary.msDissociationMethod == '')), 'msDissociationMethod'] = "cid"
 
     # Ionisation Info (Not Done)
-    summary.loc[(np.array(["esi" in x for x in  summary.GNPS_Inst]) & (summary.msIonisation == 'nan')), 'msIonisation'] = 'ESI'
-    summary.loc[(np.array(["apci" in x for x in  summary.GNPS_Inst]) & (summary.msIonisation == 'nan')), 'msIonisation'] = 'APCI'
-    summary.loc[(np.array([("appi" in x and not "dappi" in x) for x in summary.GNPS_Inst]) & (summary.msIonisation == 'nan')), 'msIonisation'] = 'APPI'
-    summary.loc[(np.array(["dappi" in x for x in summary.GNPS_Inst]) & (summary.msIonisation == 'nan')), 'msIonisation'] = 'DAPPI'
+    summary.loc[(np.array(["fab" in x for x in  summary.GNPS_Inst]) & (summary.msIonisation == '')), 'msIonisation'] = 'FAB'
+    summary.loc[(np.array(["esi" in x for x in  summary.GNPS_Inst]) & (summary.msIonisation == '')), 'msIonisation'] = 'ESI'
+    summary.loc[(np.array(["apci" in x for x in  summary.GNPS_Inst]) & (summary.msIonisation == '')), 'msIonisation'] = 'APCI'
+    summary.loc[(np.array(["api" in x for x in  summary.GNPS_Inst]) & (summary.msIonisation == '')), 'msIonisation'] = 'API'
+    summary.loc[(np.array([("appi" in x and not "dappi" in x) for x in summary.GNPS_Inst]) & (summary.msIonisation == '')), 'msIonisation'] = 'APPI'
+    summary.loc[(np.array(["dappi" in x for x in summary.GNPS_Inst]) & (summary.msIonisation == '')), 'msIonisation'] = 'DAPPI'
 
     # Mass Analyzer (Not Done)
-    summary.loc[(np.array(["orbitrap" in x for x in summary.GNPS_Inst]) & (summary.msMassAnalyzer == 'nan')),"msMassAnalyzer"] = "orbitrap"
-    summary.loc[(np.array([("quadrupole tof" in x or "qtof" in x or "q-tof" in x) and not "qq" in x for x in summary.GNPS_Inst]) & (summary.msMassAnalyzer == 'nan')),"msMassAnalyzer"] = "qtof"
-    summary.loc[(np.array([("tof" in x) and not ("qq" in x or "qtof" in x or "q-tof" in x or "q tof" in x or "quadrupole tof" in x) for x in summary.GNPS_Inst]) & (summary.msMassAnalyzer == 'nan')),"msMassAnalyzer"] = "tof"
-    summary.loc[(np.array([("qft" in x) for x in summary.GNPS_Inst]) & (summary.msMassAnalyzer == 'nan')),"msMassAnalyzer"] = "quadurpole"
-    summary.loc[(np.array([("ion trap" in x) or ('itms' in x) for x in summary.GNPS_Inst]) & (summary.msMassAnalyzer == 'nan')),"msMassAnalyzer"] = "ion trap"
-    summary.loc[(np.array([("itft" in x) or ("fticr" in x) for x in summary.GNPS_Inst]) & (summary.msMassAnalyzer == 'nan')),"msMassAnalyzer"] = "ftms"
-    summary.loc[(np.array([("lc-esi-q" == x) or ("lc-appi-qq" == x) or ("lcq" in x) or ("qqq" in x ) for x in summary.GNPS_Inst]) & (summary.msMassAnalyzer == 'nan')),"msMassAnalyzer"] = "quadurpole"
-    summary.loc[(np.array([("impact hd" == x) for x in summary.GNPS_Inst]) & (summary.msMassAnalyzer == 'nan')),"msMassAnalyzer"] = "qtof"
+    summary.loc[(np.array([("orbitrap" in x) or ("q-exactive" in x) for x in summary.GNPS_Inst]) & (summary.msMassAnalyzer == '')),"msMassAnalyzer"] = "orbitrap"
+    summary.loc[(np.array(["maxis" in x for x in summary.GNPS_Inst]) & (summary.msMassAnalyzer == '')),"msMassAnalyzer"] = "qtof"
+    summary.loc[(np.array([("quadrupole tof" in x or "qtof" in x or "q-tof" in x) and not "qq" in x for x in summary.GNPS_Inst]) & (summary.msMassAnalyzer == '')),"msMassAnalyzer"] = "qtof"
+    summary.loc[(np.array([("tof" in x) and not ("qq" in x or "qtof" in x or "q-tof" in x or "q tof" in x or "quadrupole tof" in x) for x in summary.GNPS_Inst]) & (summary.msMassAnalyzer == '')),"msMassAnalyzer"] = "tof"
+    summary.loc[(np.array([("itft" in x) or ("it-ft" in x) or ("qft" in x) or ("hybrid ft" in x) for x in summary.GNPS_Inst]) & (summary.msMassAnalyzer == '')),"msMassAnalyzer"] = "ftms"
+    summary.loc[(np.array([("fticr" in x) or ("ft-icr" in x) for x in summary.GNPS_Inst]) & (summary.msMassAnalyzer == '')),"msMassAnalyzer"] = "fticr"
+    summary.loc[(np.array([("lc-esi-q" == x) or ("lc-esi-qq" == x) or ("lc-appi-qq" == x) or ("qqq" in x ) or ("beqq" in x) for x in summary.GNPS_Inst]) & (summary.msMassAnalyzer == '')),"msMassAnalyzer"] = "quadrupole"
+    summary.loc[(np.array([("impact hd" == x) for x in summary.GNPS_Inst]) & (summary.msMassAnalyzer == '')),"msMassAnalyzer"] = "qtof"
+    summary.loc[(np.array([("ion trap" in x) or ('itms' in x) or ("lcq" in x) or ("qit" in x)  or ("lit" in x) or ("lc-esi-it" in x) for x in summary.GNPS_Inst]) & (summary.msMassAnalyzer == '')),"msMassAnalyzer"] = "ion trap"
   
     # Manufacturer Info (Not Done)
-    summary.loc[(np.array([bool("maxis" in x) for x in summary.GNPS_Inst]) & (summary.msManufacturer == "nan")),"msManufacturer"] = "Bruker Daltonics"
-    summary.loc[(np.array(["q exactive" in x or "q-exactive" in x for x in summary.GNPS_Inst]) & (summary.msManufacturer == "nan")),"msManufacturer"] = "Thermo"
+    summary.loc[(np.array([bool("maxis" in x) for x in summary.GNPS_Inst]) & (summary.msManufacturer == "")),"msManufacturer"] = "Bruker Daltonics"
+    summary.loc[(np.array([("orbitrap" in x) for x in summary.GNPS_Inst]) & (summary.msManufacturer == "")),"msManufacturer"] = "Thermo"
+    summary.loc[(np.array(["q exactive" in x or "q-exactive" in x for x in summary.GNPS_Inst]) & (summary.msManufacturer == "")),"msManufacturer"] = "Thermo"
     return summary
 
 def propogate_msModel_field(summary):
@@ -399,7 +417,7 @@ def postprocess_files(csv_path, mgf_path, output_csv_path, output_parquet_path, 
     print("Writing output files...", flush=True)
     print("Writing parquet file", flush=True)
     parquet_as_df = generate_parquet_df(cleaned_mgf_path)
-    parquet_as_df.to_parquet(output_parquet_path)
+    parquet_as_df.to_parquet(output_parquet_path, index=False)
     print("Writing csv file", flush=True)
     summary.to_csv(output_csv_path, index=False)
     print("Postprocessing complete!", flush=True)
@@ -425,3 +443,34 @@ def main():
             
 if __name__ == '__main__':
     main()
+    
+    
+def test_propogate_GNPS_Inst_field():
+    # pip install -U pytest
+    # Command to run: python -m pytest ./GNPS2_Postprocessor.py
+    
+    # This dataframe contains a manually annotated version of the unique GNPS_Inst values
+    # We should expect that the logic in our code exactly matches the manual annotation
+    test_df = pd.read_csv('../test_data/unique_GNPS_Inst_values.csv', dtype=str)
+    # Make all NaN values ''
+    test_df = test_df.fillna('')
+       
+    out = propogate_GNPS_Inst_field(test_df)
+    correct_cols = [col for col in out.columns if col.startswith('correct_')]
+    inconsistent_rows = pd.DataFrame(columns=out.columns)
+
+    for index, row in out.iterrows():
+        for col in correct_cols:
+            partner_col = col.replace('correct_', '')
+            if str(row[col]) != str(row[partner_col]):
+                print(f"'{str(row[col])}', '{str(row[partner_col])}'")
+                inconsistent_rows = inconsistent_rows._append(row, ignore_index=True)
+                break
+    
+    if len(inconsistent_rows) > 0:
+        print("The following rows are inconsistent:")
+        pd.set_option('display.max_rows', None)
+        pd.set_option('display.max_columns', None)
+        print(inconsistent_rows)
+        inconsistent_rows.to_csv('./GNPS_inst_test_output.csv')        
+        raise AssertionError("The GNPS_Inst field is not being propogated correctly")
