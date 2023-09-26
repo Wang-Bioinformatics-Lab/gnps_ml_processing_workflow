@@ -254,6 +254,7 @@ def helper(process_num, scan_start, all_spectra_list, path_to_provenance):
         summary_dict["InChIKey_inchi"] = spectrum.get("InChIKey_inchi")
         summary_dict["GNPS_Inst"] = spectrum.get("Instrument")
         summary_dict["GNPS_library_membership"] = spectrum.get("library_membership")
+        summary_dict["Compund_Name"] = spectrum.get("Compound_Name")    # Useful to build MONA api 
 
         w.writerow(summary_dict)
         
