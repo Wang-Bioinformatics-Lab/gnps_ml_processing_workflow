@@ -57,7 +57,7 @@ def basic_cleaning(summary):
     # ionization
     summary.msIonisation = summary.msIonisation.astype(str)
     summary.loc[['esi' in x.lower() or 'electrospray' in x.lower() for x in summary.msIonisation], 'msIonisation'] = "ESI"
-    summary.loc[['' == x or 'positive' == x.lower() or 'negative'  == x.lower() for x in summary.msIonisation], 'msIonisation'] = "nan"
+    summary.loc[['' == x or 'positive' == x.lower() or 'negative'  == x.lower() for x in summary.msIonisation], 'msIonisation'] = ""
     
     # Adduct translation from chemical names to adduct formulas -> 'M+TFA-H': '[M+C2HF3O2-H]-'
     # Adduct Table Credit: Yasin El Abiead
@@ -126,15 +126,16 @@ def basic_cleaning(summary):
         summary.loc[mask, 'collision_energy'] = extracted_eV[mask]
 
     # Ion Mode
+    summary.Ion_Mode = summary.Ion_Mode.parallel_apply(lambda x: '' if ('n/a' in x) or ('nan' in x) or ('unknown' in x) else x)
     summary.loc[summary.Ion_Mode == 'positive-20ev','Ion_Mode'] = 'positive'
     # We'll infer any missing ion modes from the charge
-    mask = (summary.Ion_Mode == 'nan') & (summary.Charge > 0)
+    mask = (summary.Ion_Mode == '') & (summary.Charge > 0)
     if sum(mask) > 0:
-        print(f"Imputing {sum(mask)} ion modes using the Charge field.")
+        print(f"Imputing {sum(mask)} positive ion modes using the Charge field.")
         summary.loc[mask, 'Ion_Mode'] = 'positive'
-    mask = (summary.Ion_Mode == 'nan') & (summary.Charge < 0)
+    mask = (summary.Ion_Mode == '') & (summary.Charge < 0)
     if sum(mask) > 0:
-        print(f"Imputing {sum(mask)} ion modes using the Charge field.")
+        print(f"Imputing {sum(mask)} negative ion modes using the Charge field.")
         summary.loc[mask, 'Ion_Mode'] = 'negative'
 
     # Manufacturer
@@ -143,13 +144,17 @@ def basic_cleaning(summary):
     summary.msManufacturer = summary.msManufacturer.parallel_apply(lambda x: '' if ('n/a' in x) or ('nan' in x) else x)
 
     # msMassAnalyzer
+    # This cleanup address lists of mass analyzers from mzML and mzXML files
     def transform_analyzer(x:str):
+        x = x.lower()
         if 'quadrupole tof' == x:
             return 'qtof'
         if 'fourier transform ion cyclotron resonance mass spectrometer' == x:
             return 'ftms'
-        if 'time-of-flight' == x:
+        if 'time-of-flight' == x or 'it-tof' == x:
             return 'tof'
+        if 'ion trap' in x or 'itms' in x or 'lcq' in x:
+            return 'ion trap'
         return x
     def merge_analyzer(x:list):
         if np.any(["orbitrap" in y for y in x]):
@@ -161,6 +166,16 @@ def basic_cleaning(summary):
     summary.msMassAnalyzer = summary.msMassAnalyzer.astype('str')
     summary.msMassAnalyzer = summary.msMassAnalyzer.str.lower()
     summary.msMassAnalyzer = summary.msMassAnalyzer.parallel_apply(lambda x: '' if ('n/a' in x) or ('nan' in x) or ('unknown' in x) else x)
+    
+    # msModel
+    summary.msModel = summary.msModel.astype('str')
+    summary.msModel = summary.msModel.str.lower()
+    summary.msModel = summary.msModel.parallel_apply(lambda x: '' if ('n/a' in x) or ('nan' in x) or ('unknown' in x) else x)
+    
+    # msDissociationMethod
+    summary.msDissociationMethod = summary.msDissociationMethod.astype('str')
+    summary.msDissociationMethod = summary.msDissociationMethod.str.lower()
+    summary.msDissociationMethod = summary.msDissociationMethod.parallel_apply(lambda x: '' if ('n/a' in x) or ('nan' in x) or ('unknown' in x) else x)
     
     mask = (summary.msMassAnalyzer.notna()) & (summary.msMassAnalyzer != 'nan')
     def literal_eval_helper(x):
@@ -228,7 +243,7 @@ def clean_smiles(summary):
     equivalency_mask = (inchi_from_smiles != summary.loc[mask, 'INCHI'])
     if sum(equivalency_mask) > 0 :
         print(f"Warning: {sum(equivalency_mask)} entries have INCHI and SMILES that are not equivalent, SMILES values will be used to replace INCHI")
-        summary.loc[mask, 'INCHI'].loc[equivalency_mask] = inchi_from_smiles.loc[equivalency_mask]
+        summary.loc[mask & equivalency_mask, 'INCHI'] = inchi_from_smiles.loc[equivalency_mask]
     
     # If no INCHI but we have SMILES, convert it to INCHI
     mask = (summary.Smiles != '') & (summary.INCHI == '')
@@ -256,6 +271,9 @@ def validate_monoisotopic_masses(summary:pd.DataFrame):
         pd.DataFrame: The modified summary dataframe
     """
     parsable_mask = summary.Smiles.apply(lambda x: Chem.MolFromSmiles(x) is not None if x != '' else False)
+    # Anything uparsable should have an ExactMass of np.nan
+    summary.loc[~parsable_mask, 'ExactMass'] = np.nan
+    
     correct_masses = summary.loc[parsable_mask, 'Smiles'].parallel_apply(lambda x: Descriptors.ExactMolWt(Chem.MolFromSmiles(x)))
     correct_mask = summary.loc[parsable_mask, 'ExactMass'] != correct_masses
     
@@ -263,8 +281,15 @@ def validate_monoisotopic_masses(summary:pd.DataFrame):
         print(f"Warning: {sum(correct_mask)} entries have ExactMasses that are not equivalent to the monoisotopic mass of the SMILES.")
         print(f"Of the incorrect masses, {sum(summary.loc[parsable_mask, 'ExactMass'].loc[correct_mask]==0)} entries have an ExactMass of 0")
         print("ExactMasses will be replaced with the monoisotopic mass of the SMILES")
+        diff = summary.loc[parsable_mask & correct_mask, 'ExactMass'] - correct_masses.loc[correct_mask]
+        # Save a csv of the difference in incorrect masses
+        diff.to_csv('./incorrect_masses.csv')
+        # Save a csv in the difference of incorrect masses that were not zero
+        diff =  summary.loc[parsable_mask & (correct_mask & (summary.ExactMass !=0)), 'ExactMass'] - correct_masses.loc[correct_mask & (summary.ExactMass !=0)]
+        diff.to_csv('./incorrect_masses_non_zero.csv')
         
-        summary.loc[parsable_mask, 'ExactMass'].loc[correct_mask] = correct_masses.loc[correct_mask]
+        
+        summary.loc[parsable_mask & correct_mask, 'ExactMass'] = correct_masses.loc[correct_mask]
     
     return summary
 
@@ -353,7 +378,7 @@ def add_columns_formula_analysis(summary):
     def helper(row):
         try:
             smiles = str(row['Smiles'])
-            if row['Smiles'] != 'nan':
+            if row['Smiles'] != '':
                 formula = Formula.formula_from_smiles(smiles, row['Adduct'], no_api=False)  # Disabling API can improve speed 
                 if formula is not None:
                     return float(formula.ppm_difference_with_exp_mass(row['Precursor_MZ']))
@@ -377,7 +402,7 @@ def add_explained_intensity(summary, spectra):
     def helper(row):
         try:
             smiles = str(row['Smiles'])
-            if smiles != 'nan':
+            if smiles != '':
                 # Build a dictionary of mz, intensity
                 this_spectra = indexed_mgf[row['scan']]
                 if this_spectra['params']['title'] != row['spectrum_id']:
@@ -444,7 +469,9 @@ def postprocess_files(csv_path, mgf_path, output_csv_path, output_parquet_path, 
     summary.scan = np.arange(1, len(summary)+ 1)
         
     sanity_checks(summary)
-
+        
+    print("Writing csv file", flush=True)
+    summary.to_csv(output_csv_path, index=False)
         
     # Cleanup MGF file. Must be done before explained intensity calculations in order to make sure spectra are in order
     print("Writing mgf file", flush=True)
@@ -466,8 +493,6 @@ def postprocess_files(csv_path, mgf_path, output_csv_path, output_parquet_path, 
     print("Writing parquet file", flush=True)
     parquet_as_df = generate_parquet_df(cleaned_mgf_path)
     parquet_as_df.to_parquet(output_parquet_path, index=False)
-    print("Writing csv file", flush=True)
-    summary.to_csv(output_csv_path, index=False)
     print("Postprocessing complete!", flush=True)
 
 def main():
