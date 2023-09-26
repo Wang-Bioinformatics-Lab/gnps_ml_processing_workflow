@@ -160,21 +160,23 @@ def basic_cleaning(summary):
     
     summary.msMassAnalyzer = summary.msMassAnalyzer.astype('str')
     summary.msMassAnalyzer = summary.msMassAnalyzer.str.lower()
-    summary.msMassAnalyzer = summary.msMassAnalyzer.parallel_apply(lambda x: '' if ('n/a' in x) or ('nan' in x) else x)
+    summary.msMassAnalyzer = summary.msMassAnalyzer.parallel_apply(lambda x: '' if ('n/a' in x) or ('nan' in x) or ('unknown' in x) else x)
     
     mask = (summary.msMassAnalyzer.notna()) & (summary.msMassAnalyzer != 'nan')
     def literal_eval_helper(x):
         """
         An small helper function to handle weird entries in msMassAnalyzer
         """
+        if x == '':
+            return ['']
         try:
             return ast.literal_eval(x)
         except Exception as e:
             print(e)
             print(f"Error in literal_eval_helper when trying to parse {x}")
-            return ["nan"]
+            return ['']
     
-    summary.loc[mask,'msMassAnalyzer'] = summary.loc[mask,'msMassAnalyzer'].apply(lambda x: literal_eval_helper(x))
+    summary.loc[mask,'msMassAnalyzer'] = summary.loc[mask,'msMassAnalyzer'].apply(literal_eval_helper)
     summary.loc[mask,'msMassAnalyzer'] = summary.loc[mask,'msMassAnalyzer'].apply(lambda x: [transform_analyzer(y) for y in x])
     summary.loc[mask,'msMassAnalyzer'] = summary.loc[mask,'msMassAnalyzer'].apply(merge_analyzer)
     # summary.loc[mask].apply(lambda x: [y == 'quadrupole tof' for y in x].any())
@@ -253,7 +255,7 @@ def validate_monoisotopic_masses(summary:pd.DataFrame):
     Returns:
         pd.DataFrame: The modified summary dataframe
     """
-    parsable_mask = summary.Smiles.apply(lambda x: Chem.MolFromSmiles(x) is not None if x != '' else None)
+    parsable_mask = summary.Smiles.apply(lambda x: Chem.MolFromSmiles(x) is not None if x != '' else False)
     correct_masses = summary.loc[parsable_mask, 'Smiles'].parallel_apply(lambda x: Descriptors.ExactMolWt(Chem.MolFromSmiles(x)))
     correct_mask = summary.loc[parsable_mask, 'ExactMass'] != correct_masses
     
@@ -261,6 +263,7 @@ def validate_monoisotopic_masses(summary:pd.DataFrame):
         print(f"Warning: {sum(correct_mask)} entries have ExactMasses that are not equivalent to the monoisotopic mass of the SMILES.")
         print(f"Of the incorrect masses, {sum(summary.loc[parsable_mask, 'ExactMass'].loc[correct_mask]==0)} entries have an ExactMass of 0")
         print("ExactMasses will be replaced with the monoisotopic mass of the SMILES")
+        
         summary.loc[parsable_mask, 'ExactMass'].loc[correct_mask] = correct_masses.loc[correct_mask]
     
     return summary
@@ -415,7 +418,7 @@ def postprocess_files(csv_path, mgf_path, output_csv_path, output_parquet_path, 
     # Clean up monoistopic masses:
     print("Cleaning up monoisotopic masses", flush=True)
     start = time.time()
-    raise NotImplementedError("This is not implemented yet")
+    summary = validate_monoisotopic_masses(summary)
     print("Done in {} seconds".format(datetime.timedelta(seconds=time.time() - start)), flush=True)
     
     
