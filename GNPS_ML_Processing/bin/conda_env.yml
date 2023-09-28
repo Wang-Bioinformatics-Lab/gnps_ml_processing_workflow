@@ -18,11 +18,12 @@ dependencies:
   - lxml=4.8.0
   - pip
   - pip:
-    - obonet=1.0.0
-    - vaex=4.17.0 
-    - pandarallel=1.6.5 
-    - dask=2023.5.0
-    - rdkit=2023.3.3
+    - obonet==1.0.0
+    - vaex==4.17.0 
+    - pandarallel==1.6.5 
+    - dask==2023.5.0
+    - rdkit==2023.3.3
+    - formula_validation==1.0.0
     #- pandarallel
   # - pyteomics
   # - tqdm

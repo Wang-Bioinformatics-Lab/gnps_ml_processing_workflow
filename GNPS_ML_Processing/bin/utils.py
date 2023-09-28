@@ -422,6 +422,46 @@ def generate_fingerprints(summary):
 
     return summary
 
+def neutralize_atoms(smiles):
+    """This function takes in an rdkit mol and verifies that it does not have a charge that can be
+    neutralized by protonation or deprotonation. If it does, it will neutralize the charge and return the mol.
+    Code Source: http://www.rdkit.org/docs/Cookbook.html#neutralizing-molecules
+    Returns:
+        Union[int,bool,int,rdkit.Chem.rdchem.Mol]: The number of charges removed, whether the resulting mol is 
+        both pos and neg charged, the sum of the charges, and the neutralized mol.
+    """    
+    mol = Chem.MolFromSmiles(smiles)
+    if mol is None:
+        return None
+    
+    pattern = Chem.MolFromSmarts("[+1!h0!$([*]~[-1,-2,-3,-4]),-1!$([*]~[+1,+2,+3,+4])]")
+    at_matches = mol.GetSubstructMatches(pattern)
+    at_matches_list = [y[0] for y in at_matches]
+    num_removed_charges = len(at_matches_list)
+    if len(at_matches_list) > 0:
+        for at_idx in at_matches_list:
+            atom = mol.GetAtomWithIdx(at_idx)
+            chg = atom.GetFormalCharge()
+            hcount = atom.GetTotalNumHs()
+            atom.SetFormalCharge(0)
+            atom.SetNumExplicitHs(hcount - chg)
+            atom.UpdatePropertyCache()
+    pos = False
+    neg = False
+    sum_of_charges = 0
+    for atom in mol.GetAtoms():
+        charge = atom.GetFormalCharge()
+        if charge < 0:
+            neg = True
+        if charge > 0:
+             pos = True
+        sum_of_charges += charge
+    if pos and neg:
+        pos_and_neg =True
+    else:
+        pos_and_neg = False
+    
+    return num_removed_charges, pos_and_neg, sum_of_charges, Chem.MolToSmiles(mol)
 
 # Code Credit: Yasin El Abiead
 def harmonize_smiles_rdkit(smiles, tautomer_limit = 900, skip_tautomerization=False):

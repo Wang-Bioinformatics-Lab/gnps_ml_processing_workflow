@@ -7,7 +7,7 @@ import pandas as pd
 from pyteomics.mgf import IndexedMGF
 import re
 from tqdm import tqdm
-from utils import harmonize_smiles_rdkit, INCHI_to_SMILES, synchronize_spectra, generate_parquet_df
+from utils import harmonize_smiles_rdkit, neutralize_atoms, INCHI_to_SMILES, synchronize_spectra, generate_parquet_df
 from rdkit import Chem
 from rdkit.Chem import Descriptors
 from pandarallel import pandarallel
@@ -176,6 +176,9 @@ def basic_cleaning(summary):
     summary.msDissociationMethod = summary.msDissociationMethod.astype('str')
     summary.msDissociationMethod = summary.msDissociationMethod.str.lower()
     summary.msDissociationMethod = summary.msDissociationMethod.parallel_apply(lambda x: '' if ('n/a' in x) or ('nan' in x) or ('unknown' in x) else x)
+    summary.msDissociationMethod.loc[(np.array(['beam-type' in x for x in summary.msDissociationMethod])) & (summary.msDissociationMethod == "")] = 'hcd'
+    summary.msDissociationMethod.loc[(np.array(['collision-induced 'in x for x in summary.msDissociationMethod])) & (summary.msDissociationMethod == "")] = 'cid'
+    
     
     mask = (summary.msMassAnalyzer.notna()) & (summary.msMassAnalyzer != 'nan')
     def literal_eval_helper(x):
@@ -256,7 +259,7 @@ def clean_smiles(summary):
     if sum(incorrect_mask) > 0 :
         print(f"Warning: {sum(incorrect_mask)} entries have INCHI and INCHIKey that are not equivalent, new INCHIKeys will be generated based on INCHI")
         summary.loc[incorrect_mask, 'InChIKey_smiles'] = summary.loc[incorrect_mask, 'INCHI'].apply(lambda x: Chem.inchi.InchiToInchiKey(x))
-    
+       
     return summary
 
 def validate_monoisotopic_masses(summary:pd.DataFrame):
@@ -290,6 +293,59 @@ def validate_monoisotopic_masses(summary:pd.DataFrame):
         
         
         summary.loc[parsable_mask & correct_mask, 'ExactMass'] = correct_masses.loc[correct_mask]
+    
+    return summary
+
+def check_M_H_adducts(summary):
+    # Verify that there are no protonated or unprotonated smiles strings
+    mask = (summary.Smiles != '')
+    result = summary.loc[mask, 'Smiles'].parallel_apply(neutralize_atoms)   # Returns num_removed_charges, pos_and_neg, sum_of_charges, smiles
+    
+    num_removed_charges = result.aply(lambda x: x[0])
+    net_charge = result.apply(lambda x: x[2])
+    smiles = result.apply(lambda x: x[3])
+    
+    # Check for molecules with both positive and negative charges that can be removed with protonation/deprotonation
+    # that sum to zero
+    net_zero = result.apply(lambda x: x[1] and (net_charge==0))
+    
+    # If these exist, they must have an adduct that is not [M], otherwise they could not be detected
+    adduct_is_M = summary.loc[(mask & net_zero)].Adduct.apply(lambda x: '[M]' in x)
+    to_drop = (mask & net_zero & adduct_is_M)
+    print(f"There are {sum(to_drop)} molecules with with a net charge of 0. And [M] Adduct. These will be dropped.")
+    summary = summary.loc[~to_drop]
+    
+    # Mask for any charges that have changed.
+    removed_charge_mask = num_removed_charges & (~ to_drop)
+    if sum(removed_charge_mask) > 0:
+        print(f"Found {sum(removed_charge_mask)} structures with non-intrinsic charges, these will be updated. Adducts and charges will not be updated.")
+        summary.loc[mask & removed_charge_mask, 'Smiles'] = smiles.loc[removed_charge_mask]
+        
+        
+        # DEBUG
+        summary.loc[mask & removed_charge_mask].to_csv('./structures_with_non_intrinsic_charges.csv')
+        #### So there's a decision point here, we could update the charges on the adducts and in the charge column
+        #### but that feels risky. I think the best way to go here is to trust that they got the overall charge + adduct right
+        #### definitely double check this thought though
+        
+        # Recalculate the ExactMass. We don't care about the adduct mass because this will be used to check if there is no adduct
+        summary.loc[mask & removed_charge_mask, 'ExactMass'] = summary.loc[mask & removed_charge_mask, 'Smiles'].parallel_apply(lambda x: Descriptors.ExactMolWt(Chem.MolFromSmiles(x)))
+        
+    # For mols with intrinsic charges, if the Precursor_MZ and ExactMass are approximately the same, we will change the adduct to [M(+/-)xe]x(+/-)
+    intrinsic_charge_mask = (net_charge != 0) & (~ to_drop)
+    mass_diff = summary.loc[intrinsic_charge_mask, 'Precursor_MZ'] - (summary.loc[intrinsic_charge_mask, 'ExactMass']/net_charge.loc[intrinsic_charge_mask])
+    mass_mask = mass_diff.abs() <= 0.01
+    
+    suspect_adduct_mask = (intrinsic_charge_mask & mass_mask)
+    
+    # Try rewriting all adducts
+    corrected_adducts = net_charge.loc[suspect_adduct_mask].apply(lambda x: f'[M-{x}e]{x}+' if x > 0 else f'[M+{-x}e]{x}-')
+    # Check which ones are incorrect
+    incorrect_adduct_mask = summary.loc[suspect_adduct_mask, 'Adduct'] != corrected_adducts
+    
+    if sum(incorrect_adduct_mask) > 0:
+        print(f"Found {sum(incorrect_adduct_mask)} structures with incorrect adducts, these will be changed to [M]+")
+        summary.loc[incorrect_adduct_mask, 'Adduct'] = corrected_adducts.loc[incorrect_adduct_mask]
     
     return summary
 
@@ -339,6 +395,8 @@ def propogate_GNPS_Inst_field(summary):
     summary.loc[(np.array([("lc-esi-q" == x) or ("lc-esi-qq" == x) or ("lc-appi-qq" == x) or ("qqq" in x ) or ("beqq" in x) for x in summary.GNPS_Inst]) & (summary.msMassAnalyzer == '')),"msMassAnalyzer"] = "quadrupole"
     summary.loc[(np.array([("impact hd" == x) for x in summary.GNPS_Inst]) & (summary.msMassAnalyzer == '')),"msMassAnalyzer"] = "qtof"
     summary.loc[(np.array([("ion trap" in x) or ('itms' in x) or ("lcq" in x) or ("qit" in x)  or ("lit" in x) or ("lc-esi-it" in x) for x in summary.GNPS_Inst]) & (summary.msMassAnalyzer == '')),"msMassAnalyzer"] = "ion trap"
+    summary.loc[(np.array([("cid" in x) and ('lumos' in x) & (summary.msMassAnalyzer == '') for x in summary.GNPS_Inst]) & (summary.msMassAnalyzer == '')),"msMassAnalyzer"] = "ion trap"
+    summary.loc[(np.array([("hcd" in x) and ('lumos' in x) & (summary.msMassAnalyzer == '') for x in summary.GNPS_Inst]) & (summary.msMassAnalyzer == '')),"msMassAnalyzer"] = "orbitrap"
   
     # Manufacturer Info (Not Done)
     summary.loc[(np.array([bool("maxis" in x) for x in summary.GNPS_Inst]) & (summary.msManufacturer == "")),"msManufacturer"] = "Bruker Daltonics"
@@ -439,13 +497,18 @@ def postprocess_files(csv_path, mgf_path, output_csv_path, output_parquet_path, 
     start = time.time()
     summary = clean_smiles(summary)
     print("Done in {} seconds".format(datetime.timedelta(seconds=time.time() - start)), flush=True)
-    
+       
     # Clean up monoistopic masses:
     print("Cleaning up monoisotopic masses", flush=True)
     start = time.time()
     summary = validate_monoisotopic_masses(summary)
     print("Done in {} seconds".format(datetime.timedelta(seconds=time.time() - start)), flush=True)
     
+    # Check M+H adducts should not be [M]+:
+    print("Checking for missing [M]+ Adducts")
+    start = time.time()
+    summaary = check_M_H_adducts(summary)
+    print("Done in {} seconds".format(datetime.timedelta(seconds=time.time() - start)), flush=True)
     
     # Exploiting GNPS_Inst annotations:
     print("Attempting to propogate user instrument annotations", flush=True)
@@ -471,6 +534,7 @@ def postprocess_files(csv_path, mgf_path, output_csv_path, output_parquet_path, 
     sanity_checks(summary)
         
     print("Writing csv file", flush=True)
+    summary = summary.drop(columns=['retention_time', 'msDetector', 'msModel', 'GNPS_Inst'])
     summary.to_csv(output_csv_path, index=False)
         
     # Cleanup MGF file. Must be done before explained intensity calculations in order to make sure spectra are in order
