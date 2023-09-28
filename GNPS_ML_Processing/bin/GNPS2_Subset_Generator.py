@@ -252,7 +252,7 @@ def Structural_Similarity_Prediction(summary_path:str, mgf_path:str):
     # Save to json
     print("Generating json output.", flush=True)
     start_time = time.time()
-    json_path = 'json_outputs/Structural_Similarity_Prediction.json'
+    json_path = './json_outputs/Structural_Similarity_Prediction.json'
     generate_json_mgf(mgf_path, csv_path, json_path, progress_bar=False)
     print("Done in {:.2f} seconds.".format(time.time() - start_time), flush=True)
     
