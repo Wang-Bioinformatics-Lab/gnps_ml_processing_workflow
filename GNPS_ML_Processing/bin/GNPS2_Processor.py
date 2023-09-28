@@ -36,7 +36,7 @@ def helper(process_num, scan_start, all_spectra_list, path_to_provenance):
 
     output_mgf = open('./temp/temp_{}.mgf'.format(process_num), "w")
     output_csv = open('./temp/temp_{}.csv'.format(process_num), "w")
-    w = csv.DictWriter(output_csv, ['scan', 'spectrum_id','collision_energy','retention_time','Adduct','Compound_Source','Precursor_MZ','ExactMass','Charge','Ion_Mode','Smiles','INCHI','InChIKey_smiles','InChIKey_inchi','msModel','msManufacturer','msDetector','msMassAnalyzer','msIonisation','msDissociationMethod','GNPS_library_membership','GNPS_Inst'])
+    w = csv.DictWriter(output_csv, ['scan', 'spectrum_id','collision_energy','retention_time','Adduct','Compound_Source','Compund_Name','Precursor_MZ','ExactMass','Charge','Ion_Mode','Smiles','INCHI','InChIKey_smiles','InChIKey_inchi','msModel','msManufacturer','msDetector','msMassAnalyzer','msIonisation','msDissociationMethod','GNPS_library_membership','GNPS_Inst'])
     if process_num == 0: w.writeheader()    # This way when we merge the csvs we only get one header
     
     for spectrum in t:
