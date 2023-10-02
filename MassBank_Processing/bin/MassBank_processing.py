@@ -173,7 +173,7 @@ def process_file(input_path, output_path = None):
     }
     
     if output_path is None:
-        output_path = 'output'
+        output_path = f'output_{summary_dict["spectrum_id"]}'
     if output_path is not None:
         dir_path = os.path.dirname(output_path)
         if dir_path != '':
