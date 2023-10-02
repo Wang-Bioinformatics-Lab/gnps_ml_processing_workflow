@@ -71,8 +71,9 @@ def basic_cleaning(summary):
         if adduct not in adduct_mapping.values():
             # If the adduct is not in the values, attempt to map it:
             mapped_adduct = adduct_mapping.get(adduct)
-            if mapped_adduct is not None:
-                adduct = mapped_adduct
+            
+            # This will drop adducts that are not mapped
+            adduct = mapped_adduct
             
         # Add 1 if not None and last is
         if adduct is not None:
@@ -83,7 +84,7 @@ def basic_cleaning(summary):
             
         return adduct
         
-    summary.Adduct = summary.Adduct.parallel_apply(helper)
+    summary.loc[:, 'Adduct'] = summary.Adduct.parallel_apply(helper)
     summary = summary[summary.Adduct.notna()]
     
     # Get a mask of non-matching adducts
@@ -175,9 +176,9 @@ def basic_cleaning(summary):
     # msDissociationMethod
     summary.msDissociationMethod = summary.msDissociationMethod.astype('str')
     summary.msDissociationMethod = summary.msDissociationMethod.str.lower()
-    summary.msDissociationMethod = summary.msDissociationMethod.parallel_apply(lambda x: '' if ('n/a' in x) or ('nan' in x) or ('unknown' in x) else x)
-    summary.msDissociationMethod.loc[(np.array(['beam-type' in x for x in summary.msDissociationMethod])) & (summary.msDissociationMethod == "")] = 'hcd'
-    summary.msDissociationMethod.loc[(np.array(['collision-induced 'in x for x in summary.msDissociationMethod])) & (summary.msDissociationMethod == "")] = 'cid'
+    summary.loc[:,'msDissociationMethod'] = summary.msDissociationMethod.parallel_apply(lambda x: '' if ('n/a' in x) or ('nan' in x) or ('unknown' in x) else x)
+    summary.loc[(np.array(['beam-type' in x for x in summary.msDissociationMethod])) & (summary.msDissociationMethod == ""), 'msDissociationMethod'] = 'hcd'
+    summary.loc[(np.array(['collision-induced 'in x for x in summary.msDissociationMethod])) & (summary.msDissociationMethod == ""), 'msDissociationMethod'] = 'cid'
     
     
     mask = (summary.msMassAnalyzer.notna()) & (summary.msMassAnalyzer != 'nan')
@@ -301,55 +302,74 @@ def check_M_H_adducts(summary):
     mask = (summary.Smiles != '')
     result = summary.loc[mask, 'Smiles'].parallel_apply(neutralize_atoms)   # Returns num_removed_charges, pos_and_neg, sum_of_charges, smiles
     
-    num_removed_charges = result.aply(lambda x: x[0])
-    net_charge = result.apply(lambda x: x[2])
-    smiles = result.apply(lambda x: x[3])
+    num_removed_charges = result.apply(lambda x: x[0]).astype(int)
+    net_charge = result.apply(lambda x: x[2]).astype(int)
+    smiles = result.apply(lambda x: x[3]).astype(str)
     
     # Check for molecules with both positive and negative charges that can be removed with protonation/deprotonation
     # that sum to zero
-    net_zero = result.apply(lambda x: x[1] and (net_charge==0))
+    net_zero = result.apply(lambda x: x[1]) & (net_charge==0)
     
     # If these exist, they must have an adduct that is not [M], otherwise they could not be detected
-    adduct_is_M = summary.loc[(mask & net_zero)].Adduct.apply(lambda x: '[M]' in x)
+    adduct_is_M = summary.loc[(mask & net_zero), 'Adduct'].apply(lambda x: bool('[M]' in str(x)))
     to_drop = (mask & net_zero & adduct_is_M)
     print(f"There are {sum(to_drop)} molecules with with a net charge of 0. And [M] Adduct. These will be dropped.")
     summary = summary.loc[~to_drop]
     
-    # Mask for any charges that have changed.
-    removed_charge_mask = num_removed_charges & (~ to_drop)
-    if sum(removed_charge_mask) > 0:
-        print(f"Found {sum(removed_charge_mask)} structures with non-intrinsic charges, these will be updated. Adducts and charges will not be updated.")
-        summary.loc[mask & removed_charge_mask, 'Smiles'] = smiles.loc[removed_charge_mask]
+    # # Mask for any charges that have changed.
+    # removed_charge_mask = num_removed_charges & (~ to_drop)
+    # if sum(removed_charge_mask) > 0:
+    #     print(f"Found {sum(removed_charge_mask)} structures with non-intrinsic charges, these will be updated. Adducts and charges will not be updated.")
+    #     summary.loc[mask & removed_charge_mask, 'Smiles'] = smiles.loc[removed_charge_mask]
         
         
-        # DEBUG
-        summary.loc[mask & removed_charge_mask].to_csv('./structures_with_non_intrinsic_charges.csv')
-        #### So there's a decision point here, we could update the charges on the adducts and in the charge column
-        #### but that feels risky. I think the best way to go here is to trust that they got the overall charge + adduct right
-        #### definitely double check this thought though
+    #     # DEBUG
+    #     summary.loc[mask & removed_charge_mask].to_csv('./structures_with_non_intrinsic_charges.csv')
+    #     #### So there's a decision point here, we could update the charges on the adducts and in the charge column
+    #     #### but that feels risky. I think the best way to go here is to trust that they got the overall charge + adduct right
+    #     #### definitely double check this thought though
         
-        # Recalculate the ExactMass. We don't care about the adduct mass because this will be used to check if there is no adduct
-        summary.loc[mask & removed_charge_mask, 'ExactMass'] = summary.loc[mask & removed_charge_mask, 'Smiles'].parallel_apply(lambda x: Descriptors.ExactMolWt(Chem.MolFromSmiles(x)))
+    #     # Recalculate the ExactMass. We don't care about the adduct mass because this will be used to check if there is no adduct
+    #     summary.loc[mask & removed_charge_mask, 'ExactMass'] = summary.loc[mask & removed_charge_mask, 'Smiles'].parallel_apply(lambda x: Descriptors.ExactMolWt(Chem.MolFromSmiles(x)))
+    
+    # it's very hard to tell if the original molecule was charged or not, and whether the adduct is supposed to make up for it 
+    # ex: CCCCCCCCC=CCCCCCCCC(=O)OCC(COP(=O)([O-])OCC[N+](C)(C)C)O with [M+H]2+, 
+    #     was it CCCCCCCCC=CCCCCCCCC(=O)OCC(O)COP(=O)(O)OCC[N+](C)(C)C with no adduct ([M]+)?
+    #     or did it enter the machine with a positive charge?
+    #     You can look at the adduct and see if there are hydrogens to make up for the charge on the element, but this doesn't feel very concrete.
+    #     Here, we would be able to note that the instrument was in positive ion mode, and this is a negative charge, so it's likely that the molecule
+    #     the molecule was not really charged.
+    # In a future release we'll consider updating the adducts and charges based on the new smiles.
+    
+    # Mask all charges that have changed, if there is no remaining intrinsic charge, we'll drop the whole row because
+    # to_drop_2 = (net_charge != 0) & (num_removed_charges > 0)
+    # summary = summary.loc[~to_drop_2]
+
         
     # For mols with intrinsic charges, if the Precursor_MZ and ExactMass are approximately the same, we will change the adduct to [M(+/-)xe]x(+/-)
-    intrinsic_charge_mask = (net_charge != 0) & (~ to_drop)
-    mass_diff = summary.loc[intrinsic_charge_mask, 'Precursor_MZ'] - (summary.loc[intrinsic_charge_mask, 'ExactMass']/net_charge.loc[intrinsic_charge_mask])
+    intrinsic_charge_mask = (net_charge != 0) & (~ (to_drop))
+    mass_diff = summary.loc[intrinsic_charge_mask, 'Precursor_MZ'] - summary.loc[intrinsic_charge_mask, 'ExactMass']
     mass_mask = mass_diff.abs() <= 0.01
     
     suspect_adduct_mask = (intrinsic_charge_mask & mass_mask)
     
     # Try rewriting all adducts
-    corrected_adducts = net_charge.loc[suspect_adduct_mask].apply(lambda x: f'[M-{x}e]{x}+' if x > 0 else f'[M+{-x}e]{x}-')
+    corrected_adducts = net_charge.loc[suspect_adduct_mask].apply(lambda x: f'[M]{x}+' if x > 0 else f'[M]{x}-')
     # Check which ones are incorrect
-    incorrect_adduct_mask = summary.loc[suspect_adduct_mask, 'Adduct'] != corrected_adducts
+    # Here, we '&' with mask, because we need to align the boolean indexers. This is just as good with anding with True for all rows
+    incorrect_adduct_mask = (summary.loc[suspect_adduct_mask, 'Adduct'] != corrected_adducts) & mask   
     
     if sum(incorrect_adduct_mask) > 0:
         print(f"Found {sum(incorrect_adduct_mask)} structures with incorrect adducts, these will be changed to [M]+")
         summary.loc[incorrect_adduct_mask, 'Adduct'] = corrected_adducts.loc[incorrect_adduct_mask]
+        
+    # Drop everything we didn't update
+    # i.e. keep everything that we corrected the adduct of, didn't have SMILES, or we didn't change the charge of
+    summary = summary.loc[(incorrect_adduct_mask) | (~mask) | (num_removed_charges == 0)]
     
     return summary
 
-def propogate_GNPS_Inst_field(summary):
+def propagate_GNPS_Inst_field(summary):
     summary.GNPS_Inst = summary.GNPS_Inst.astype('str')
     summary.GNPS_Inst = summary.GNPS_Inst.map(lambda x: x.strip().lower())
     """
@@ -395,8 +415,8 @@ def propogate_GNPS_Inst_field(summary):
     summary.loc[(np.array([("lc-esi-q" == x) or ("lc-esi-qq" == x) or ("lc-appi-qq" == x) or ("qqq" in x ) or ("beqq" in x) for x in summary.GNPS_Inst]) & (summary.msMassAnalyzer == '')),"msMassAnalyzer"] = "quadrupole"
     summary.loc[(np.array([("impact hd" == x) for x in summary.GNPS_Inst]) & (summary.msMassAnalyzer == '')),"msMassAnalyzer"] = "qtof"
     summary.loc[(np.array([("ion trap" in x) or ('itms' in x) or ("lcq" in x) or ("qit" in x)  or ("lit" in x) or ("lc-esi-it" in x) for x in summary.GNPS_Inst]) & (summary.msMassAnalyzer == '')),"msMassAnalyzer"] = "ion trap"
-    summary.loc[(np.array([("cid" in x) and ('lumos' in x) & (summary.msMassAnalyzer == '') for x in summary.GNPS_Inst]) & (summary.msMassAnalyzer == '')),"msMassAnalyzer"] = "ion trap"
-    summary.loc[(np.array([("hcd" in x) and ('lumos' in x) & (summary.msMassAnalyzer == '') for x in summary.GNPS_Inst]) & (summary.msMassAnalyzer == '')),"msMassAnalyzer"] = "orbitrap"
+    summary.loc[(np.array([("cid" in x) and ('lumos' in x) for x in summary.GNPS_Inst]) & (summary.msMassAnalyzer == '')),"msMassAnalyzer"] = "ion trap"
+    summary.loc[(np.array([("hcd" in x) and ('lumos' in x) for x in summary.GNPS_Inst]) & (summary.msMassAnalyzer == '')),"msMassAnalyzer"] = "orbitrap"
   
     # Manufacturer Info (Not Done)
     summary.loc[(np.array([bool("maxis" in x) for x in summary.GNPS_Inst]) & (summary.msManufacturer == "")),"msManufacturer"] = "Bruker Daltonics"
@@ -404,7 +424,7 @@ def propogate_GNPS_Inst_field(summary):
     summary.loc[(np.array(["q exactive" in x or "q-exactive" in x for x in summary.GNPS_Inst]) & (summary.msManufacturer == "")),"msManufacturer"] = "Thermo"
     return summary
 
-def propogate_msModel_field(summary):
+def propagate_msModel_field(summary):
     summary.msModel = summary.msModel.astype(str)
 
     summary.loc[["maxis" in x.lower() or "bruker daltonics" in x.lower() for x in summary.msModel],"msManufacturer"] = "Bruker Daltonics"
@@ -437,7 +457,13 @@ def add_columns_formula_analysis(summary):
         try:
             smiles = str(row['Smiles'])
             if row['Smiles'] != '':
-                formula = Formula.formula_from_smiles(smiles, row['Adduct'], no_api=False)  # Disabling API can improve speed 
+                # For molecules with intrinsic charges, the adduct is [M]+ or [M]-, so we'll remove it
+                # This prevents the loss of charge from being double counted with the following +/- and on the molecule, 'M' itself
+                adduct = row['Adduct']
+                if adduct == '[M]+' or adduct == '[M]-':
+                    adduct = '[M]'
+                
+                formula = Formula.formula_from_smiles(smiles, adduct, no_api=False)  # Disabling API can improve speed 
                 if formula is not None:
                     return float(formula.ppm_difference_with_exp_mass(row['Precursor_MZ']))
                 else:
@@ -507,19 +533,19 @@ def postprocess_files(csv_path, mgf_path, output_csv_path, output_parquet_path, 
     # Check M+H adducts should not be [M]+:
     print("Checking for missing [M]+ Adducts")
     start = time.time()
-    summaary = check_M_H_adducts(summary)
+    summary = check_M_H_adducts(summary)
     print("Done in {} seconds".format(datetime.timedelta(seconds=time.time() - start)), flush=True)
     
     # Exploiting GNPS_Inst annotations:
-    print("Attempting to propogate user instrument annotations", flush=True)
+    print("Attempting to propagate user instrument annotations", flush=True)
     start = time.time()
-    summary = propogate_GNPS_Inst_field(summary)
+    summary = propagate_GNPS_Inst_field(summary)
     print("Done in {} seconds".format(datetime.timedelta(seconds=time.time() - start)), flush=True)
 
     # Exploiting Some of the info in msModel
-    print("Attempting to propogate msModel field", flush=True)
+    print("Attempting to propagate msModel field", flush=True)
     start = time.time()
-    summary = propogate_msModel_field(summary)
+    summary = propagate_msModel_field(summary)
     print("Done in {} seconds".format(datetime.timedelta(seconds=time.time() - start)), flush=True)
 
     # Calculating ppm error
@@ -534,7 +560,7 @@ def postprocess_files(csv_path, mgf_path, output_csv_path, output_parquet_path, 
     sanity_checks(summary)
         
     print("Writing csv file", flush=True)
-    summary = summary.drop(columns=['retention_time', 'msDetector', 'msModel', 'GNPS_Inst'])
+    summary = summary.drop(columns=['retention_time', 'msDetector', 'msModel', 'GNPS_Inst', 'InChIKey_inchi'])
     summary.to_csv(output_csv_path, index=False)
         
     # Cleanup MGF file. Must be done before explained intensity calculations in order to make sure spectra are in order
@@ -582,7 +608,7 @@ if __name__ == '__main__':
     main()
     
     
-def test_propogate_GNPS_Inst_field():
+def test_propagate_GNPS_Inst_field():
     # pip install -U pytest
     # Command to run: python -m pytest ./GNPS2_Postprocessor.py
     
@@ -592,7 +618,7 @@ def test_propogate_GNPS_Inst_field():
     # Make all NaN values ''
     test_df = test_df.fillna('')
        
-    out = propogate_GNPS_Inst_field(test_df)
+    out = propagate_GNPS_Inst_field(test_df)
     correct_cols = [col for col in out.columns if col.startswith('correct_')]
     inconsistent_rows = pd.DataFrame(columns=out.columns)
 
@@ -610,4 +636,4 @@ def test_propogate_GNPS_Inst_field():
         pd.set_option('display.max_columns', None)
         print(inconsistent_rows)
         inconsistent_rows.to_csv('./GNPS_inst_test_output.csv')        
-        raise AssertionError("The GNPS_Inst field is not being propogated correctly")
+        raise AssertionError("The GNPS_Inst field is not being propagated correctly")
