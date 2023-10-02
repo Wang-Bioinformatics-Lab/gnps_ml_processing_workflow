@@ -10,7 +10,7 @@ params.subset = "Structural_Similarity_Prediction"
 
 use_default_path = true
 
-params.spectra_parallelism = 1000
+params.spectra_parallelism = 5000
 
 params.path_to_provenance = "/home/user/LabData/GNPS_Library_Provenance/"
 
@@ -23,9 +23,16 @@ params.parallelism = 12
 params.pure_networking_parallelism = 5000
 params.pure_networking_forks = 32
 
+// This environment won't build if called by nextflow, but works fine here
+process environment_creation {
+  """
+  mamba env update --file $TOOL_FOLDER/conda_env.yml --prefix $TOOL_FOLDER/gnps_ml_processing_env2/
+  """
+}
+
 // Splitting out the GNPS Libraries into smaller chunks
 process prep_params {
-  conda "$TOOL_FOLDER/conda_env.yml"
+  conda "$TOOL_FOLDER/gnps_ml_processing_env2"
 
   cache 'lenient'
 
@@ -40,9 +47,10 @@ process prep_params {
 
 // Pull additional data from Provenance File
 process export {
-    conda "$TOOL_FOLDER/conda_env.yml"
+    conda "$TOOL_FOLDER/gnps_ml_processing_env2"
 
-    maxForks 16
+    maxForks 8
+    errorStrategy 'retry'
 
     input: 
     each input_file
@@ -60,7 +68,7 @@ process export {
 // Merges all the exports together
 process merge_export {
   //conda "$TOOL_FOLDER/gnps_ml_processing_env2/"
-  conda "$TOOL_FOLDER/conda_env.yml"
+  conda "$TOOL_FOLDER/gnps_ml_processing_env2"
 
   input:
   path temp_files
@@ -78,7 +86,7 @@ process merge_export {
 // Cleaning work - unifying the Controlled Vocabulary
 process postprocess {
   //conda "$TOOL_FOLDER/gnps_ml_processing_env2/"
-  conda "$TOOL_FOLDER/conda_env.yml"
+  conda "$TOOL_FOLDER/gnps_ml_processing_env2"
 
   publishDir "./nf_output", mode: 'copy'
 
@@ -101,8 +109,9 @@ process postprocess {
 
 // Exports the output in JSON format
 process export_full_json {
-  //conda "$TOOL_FOLDER/gnps_ml_processing_env2/"
-  conda "$TOOL_FOLDER/conda_env.yml"
+  conda "$TOOL_FOLDER/gnps_ml_processing_env2"
+
+  publishDir "./nf_output", mode: 'copy'
 
   cache true
 
@@ -200,7 +209,7 @@ process calculate_similarities_pure_networking {
 process calculate_similarities {
   // Similarities using fasst search have not been implemented yet
   //conda "$TOOL_FOLDER/gnps_ml_processing_env2/"
-  conda "$TOOL_FOLDER/conda_env.yml"
+  conda "$TOOL_FOLDER/gnps_ml_processing_env2"
 
   publishDir "./nf_output", mode: 'copy'
   
@@ -260,12 +269,13 @@ process publish_similarities_for_prediction {
 }
 
 workflow {
+  environment_creation()
   export_params = prep_params()
   temp_files = export(export_params)
   (merged_mgf, merged_csv) = merge_export(temp_files.collect())
 
   // A python dictionary that maps GNPS adducts to a unified set of adducts used in the GNPS2 workflow
-  adduct_mapping_ch = channel.fromPath("$TOOL_FOLDER/adduct_mapping.pkl")
+  adduct_mapping_ch = channel.fromPath("$TOOL_FOLDER/adduct_mapping.txt")
 
   postprocess(merged_csv, merged_mgf, adduct_mapping_ch)
   export_full_json(postprocess.out.cleaned_csv, postprocess.out.cleaned_mgf)

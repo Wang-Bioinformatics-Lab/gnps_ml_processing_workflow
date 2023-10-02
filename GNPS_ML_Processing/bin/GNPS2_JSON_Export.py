@@ -79,6 +79,9 @@ def generate_json_mgf(mgf_path:str, csv_path:str, output_path:str, progress_bar=
         if not os.path.isdir(output_path):
             os.makedirs(output_path)
         main_output_path = os.path.join(output_path, "ALL_GNPS_cleaned.json")
+        
+    if not os.path.isdir(output_path):
+        os.makedirs(output_path)
     
     try:
         # Dict of files for all GNPS_libraries

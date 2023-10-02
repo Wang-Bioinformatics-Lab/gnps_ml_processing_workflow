@@ -5,7 +5,7 @@ import argparse
 import os
 import vaex
 import pickle
-from GNPS_JSON_Export import generate_json_mgf
+from GNPS2_JSON_Export import generate_json_mgf
 from utils import build_tanimoto_similarity_list_precomputed, generate_fingerprints, harmonize_smiles_rdkit, synchronize_spectra, generate_parquet_df
 from pyteomics.mgf import IndexedMGF
 # import dask.dataframe as dd
@@ -252,7 +252,7 @@ def Structural_Similarity_Prediction(summary_path:str, mgf_path:str):
     # Save to json
     print("Generating json output.", flush=True)
     start_time = time.time()
-    json_path = 'json_outputs/Structural_Similarity_Prediction.json'
+    json_path = './json_outputs/Structural_Similarity_Prediction.json'
     generate_json_mgf(mgf_path, csv_path, json_path, progress_bar=False)
     print("Done in {:.2f} seconds.".format(time.time() - start_time), flush=True)
     

@@ -422,10 +422,50 @@ def generate_fingerprints(summary):
 
     return summary
 
+def neutralize_atoms(smiles):
+    """This function takes in an rdkit mol and verifies that it does not have a charge that can be
+    neutralized by protonation or deprotonation. If it does, it will neutralize the charge and return the mol.
+    Code Source: http://www.rdkit.org/docs/Cookbook.html#neutralizing-molecules
+    Returns:
+        Union[int,bool,int,rdkit.Chem.rdchem.Mol]: The number of charges removed, whether the resulting mol is 
+        both pos and neg charged, the sum of the charges, and the neutralized mol.
+    """    
+    mol = Chem.MolFromSmiles(smiles)
+    if mol is None:
+        return None
+    
+    pattern = Chem.MolFromSmarts("[+1!h0!$([*]~[-1,-2,-3,-4]),-1!$([*]~[+1,+2,+3,+4])]")
+    at_matches = mol.GetSubstructMatches(pattern)
+    at_matches_list = [y[0] for y in at_matches]
+    num_removed_charges = len(at_matches_list)
+    if len(at_matches_list) > 0:
+        for at_idx in at_matches_list:
+            atom = mol.GetAtomWithIdx(at_idx)
+            chg = atom.GetFormalCharge()
+            hcount = atom.GetTotalNumHs()
+            atom.SetFormalCharge(0)
+            atom.SetNumExplicitHs(hcount - chg)
+            atom.UpdatePropertyCache()
+    pos = False
+    neg = False
+    sum_of_charges = 0
+    for atom in mol.GetAtoms():
+        charge = atom.GetFormalCharge()
+        if charge < 0:
+            neg = True
+        if charge > 0:
+             pos = True
+        sum_of_charges += charge
+    if pos and neg:
+        pos_and_neg =True
+    else:
+        pos_and_neg = False
+    
+    return num_removed_charges, pos_and_neg, sum_of_charges, Chem.MolToSmiles(mol)
 
 # Code Credit: Yasin El Abiead
 def harmonize_smiles_rdkit(smiles, tautomer_limit = 900, skip_tautomerization=False):
-    if smiles is None or smiles == 'nan' or smiles == 'None': return None
+    if smiles is None or smiles == 'nan' or smiles == 'None' or smiles == '': return ''
     try:
         smiles = str(smiles)
         # take the largest covalently bound molecule
@@ -434,7 +474,7 @@ def harmonize_smiles_rdkit(smiles, tautomer_limit = 900, skip_tautomerization=Fa
 
         if mol is None:
             # The files failed to parse, it should be removed
-            return None
+            return ''
         
         monomass = rdMolDescriptors.CalcExactMolWt(mol)
         if not skip_tautomerization:
@@ -460,14 +500,17 @@ def harmonize_smiles_rdkit(smiles, tautomer_limit = 900, skip_tautomerization=Fa
 
     except Exception as e:
         print(f"An error occurred with input {smiles}: {e}")
-        return None
+        return ''
     
 def INCHI_to_SMILES(inchi):
-    if inchi is None or inchi == 'nan': return None
+    if inchi is None or inchi == 'nan': return ''
     try:
-        return Chem.MolToSmiles(Chem.MolFromInchi(inchi))
+        mol = Chem.MolFromInchi(inchi)
+        if mol is None:
+            return ''
+        return Chem.MolToSmiles(mol)
     except:
-        return None
+        return ''
     
 def synchronize_spectra(input_path, output_path, spectrum_ids, progress_bar=True):
     """Reads an MGF file from input_path and generates a new_mgf file in output_path with only the spectra in spectrum_ids.
@@ -477,7 +520,7 @@ def synchronize_spectra(input_path, output_path, spectrum_ids, progress_bar=True
         output_path (str): Path to save the output mgf.
         spectrum_ids (list): List of spectrum ids to keep.
     """   
-    scan_counter = 0
+    scan_counter = 1
     with open(output_path, 'w') as output_mgf:
         input_mgf = IndexedMGF(input_path,index_by_scans=True)
         if progress_bar:
@@ -520,5 +563,4 @@ def generate_parquet_df(input_mgf):
             level_0 += 1
                 
     output = pd.DataFrame(output)
-    output.set_index('spectrum_id')
     return output
