@@ -23,7 +23,7 @@ dependencies:
     - pandarallel==1.6.5 
     - dask==2023.5.0
     - rdkit==2023.3.3
-    - formula_validation==1.0.0
+    - formula_validation==1.0.1
     #- pandarallel
   # - pyteomics
   # - tqdm

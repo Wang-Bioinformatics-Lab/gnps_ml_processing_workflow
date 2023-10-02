@@ -109,7 +109,6 @@ process postprocess {
 
 // Exports the output in JSON format
 process export_full_json {
-  //conda "$TOOL_FOLDER/gnps_ml_processing_env2/"
   conda "$TOOL_FOLDER/gnps_ml_processing_env2"
 
   publishDir "./nf_output", mode: 'copy'
