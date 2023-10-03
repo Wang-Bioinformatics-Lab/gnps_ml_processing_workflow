@@ -14,6 +14,9 @@ params.spectra_parallelism = 5000
 
 params.path_to_provenance = "/home/user/LabData/GNPS_Library_Provenance/"
 
+// If true, will download and reparse massbank, additionally removing all massbank entires from GNPS
+params.include_massbank = true
+
 // Workflow Boiler Plate
 params.OMETALINKING_YAML = "flow_filelinking.yaml"
 params.OMETAPARAM_YAML = "job_parameters.yaml"
@@ -22,6 +25,10 @@ TOOL_FOLDER = "$baseDir/bin"
 params.parallelism = 12
 params.pure_networking_parallelism = 5000
 params.pure_networking_forks = 32
+
+
+// Include MassBank parser in case params.include_massbank is true
+include { fetch_data_massbank; export_massbank; merge_export_massbank } from '../MassBank_Processing/MassBank_processing.nf'
 
 // This environment won't build if called by nextflow, but works fine here
 process environment_creation {
@@ -77,10 +84,15 @@ process merge_export {
   path './ALL_GNPS_merged.mgf'
   path './ALL_GNPS_merged.csv'
 
-  """
-  python3 $TOOL_FOLDER/merge_files.py 
-  """
-
+  script:
+  if (params.include_massbank)
+    """
+    python3 $TOOL_FOLDER/merge_files.py --include_massbank 
+    """
+  else
+    """
+    python3 $TOOL_FOLDER/merge_files.py 
+    """
 }
 
 // Cleaning work - unifying the Controlled Vocabulary
@@ -272,6 +284,14 @@ workflow {
   environment_creation()
   export_params = prep_params()
   temp_files = export(export_params)
+
+  if (params.include_massbank) {
+    fetch_data_massbank()
+    massbank_files = export_massbank(fetch_data_massbank.out.massbank_data, fetch_data_massbank.out.blacklist)
+    merge_export_massbank(massbank_files.collect())
+    temp_files = temp_files.concat(merge_export_massbank.out.merged_files)
+  }
+
   (merged_mgf, merged_csv) = merge_export(temp_files.collect())
 
   // A python dictionary that maps GNPS adducts to a unified set of adducts used in the GNPS2 workflow

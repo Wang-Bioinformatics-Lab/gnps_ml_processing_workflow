@@ -12,8 +12,8 @@ TOOL_FOLDER_MB = "$moduleDir/bin"
 // Use git to pull the latest MassBank Library
 process fetch_data_massbank {
     output: 
-    path "MassBank-data/MSSJ/*.txt", emit: massbank_data  // for testing
-    // path "MassBank-data/*/*.txt", emit: massbank_data
+    // path "MassBank-data/MSSJ/*.txt", emit: massbank_data  // for testing
+    path "MassBank-data/*/*.txt", emit: massbank_data
     path "MassBank-data/legacy.blacklist", emit: blacklist
 
     """
@@ -44,8 +44,6 @@ process export_massbank {
 process merge_export_massbank {
   conda "$TOOL_FOLDER_MB/conda_env.yml"
 
-  publishDir "./MassBank_export_massbank", mode: 'copy'
-
   input:
   path temp_files
 
@@ -57,8 +55,25 @@ process merge_export_massbank {
   """
 }
 
+// Output the data into nf_output
+process output {
+  publishDir "./nf_output", mode: 'copy'
+
+  input:
+  path merged_mgf
+  path merged_csv
+
+  output:
+  path 'ALL_MassBank_merged.*', emit: merged_files
+
+  """
+  echo "Outputting data to nf_output"
+  """
+}
+
 workflow {
   fetch_data_massbank()
   temp_files = export_massbank(fetch_data_massbank.out.massbank_data, fetch_data_massbank.out.blacklist)
   (merged_mgf, merged_csv) = merge_export_massbank(temp_files.collect())
+  output(merged_mgf, merged_csv)
 }
