@@ -98,7 +98,7 @@ def basic_cleaning(summary):
     # Conversion of numerical columns to numerical types to protect against contamination
     summary.Precursor_MZ = summary.Precursor_MZ.astype(float)
     summary.ExactMass = summary.ExactMass.astype(float)
-    summary.Charge = summary.Charge.astype(int)
+    summary.Charge = summary.Charge.fillna(0).astype(int)
     
     # Charge
     # Mask whether charge is equal to adduct charge
