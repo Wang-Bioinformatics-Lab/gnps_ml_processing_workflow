@@ -133,4 +133,5 @@
 'M-H+CH2O2': '[M+CH2O2-H]-',
 'M+CH2O2-H': '[M+CH2O2-H]-',
 'M+TFA-H': '[M+C2HF3O2-H]-',
-'M-C2HF3O2-H': '[M+C2HF3O2-H]-'}
+'M-C2HF3O2-H': '[M+C2HF3O2-H]-',
+'[M]1+': '[M]1+'}
