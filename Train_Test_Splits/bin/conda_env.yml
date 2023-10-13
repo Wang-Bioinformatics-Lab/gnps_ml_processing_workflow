@@ -1,0 +1,14 @@
+name: splitting_env
+channels:
+  - conda-forge
+  - defaults
+  - bioconda
+dependencies:
+  - python=3.8.8
+  - pip
+  - pytest
+  - numpy
+  - pandas
+  - pyteomics
+  - tqdm
+  - expiringdict

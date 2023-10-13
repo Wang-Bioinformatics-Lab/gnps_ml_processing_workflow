@@ -1,0 +1,4 @@
+bin/__pycache__
+bin/.nextflow
+bin/.pytest_cache
+.nextflow.pid
