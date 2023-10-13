@@ -214,7 +214,7 @@ def Structural_Similarity_Prediction(summary_path:str, mgf_path:str):
                                             'msModel':str})
     df.Smiles = df.Smiles.astype(str)
     df = df[(df.Smiles.notnull()) | (df.Smiles != 'nan')]
-    final_ids = df.spectrum_id.values
+    final_ids = df[['spectrum_id','scan','Charge']]
     
     print("Generating fingerprints.", flush=True)
     start_time = time.time()

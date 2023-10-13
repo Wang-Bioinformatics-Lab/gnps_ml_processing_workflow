@@ -28,7 +28,7 @@ params.pure_networking_forks = 32
 
 
 // Include MassBank parser in case params.include_massbank is true
-include { fetch_data_massbank; export_massbank; merge_export_massbank } from '../MassBank_Processing/MassBank_processing.nf'
+include { fetch_data_massbank; prep_params_massbank; export_massbank; merge_export_massbank } from '../MassBank_Processing/MassBank_processing.nf'
 
 // This environment won't build if called by nextflow, but works fine here
 process environment_creation {
@@ -114,9 +114,15 @@ process postprocess {
   path "ALL_GNPS_cleaned.parquet", emit: cleaned_parquet
   path "ALL_GNPS_cleaned.mgf", emit: cleaned_mgf
 
-  """
-  python3 $TOOL_FOLDER/GNPS2_Postprocessor.py
-  """
+  script:
+  if (params.include_massbank)
+    """
+    python3 $TOOL_FOLDER/GNPS2_Postprocessor.py --includes_massbank
+    """
+  else
+    """
+    python3 $TOOL_FOLDER/GNPS2_Postprocessor.py
+    """
 }
 
 // Exports the output in JSON format
@@ -287,7 +293,8 @@ workflow {
 
   if (params.include_massbank) {
     fetch_data_massbank()
-    massbank_files = export_massbank(fetch_data_massbank.out.massbank_data, fetch_data_massbank.out.blacklist)
+    prep_params_massbank(fetch_data_massbank.out.blacklist, fetch_data_massbank.out.massbank_data)
+    massbank_files = export_massbank(fetch_data_massbank.out.massbank_data, prep_params_massbank.out.params)
     merge_export_massbank(massbank_files.collect())
     temp_files = temp_files.concat(merge_export_massbank.out.merged_files)
   }

@@ -512,34 +512,42 @@ def INCHI_to_SMILES(inchi):
     except:
         return ''
     
-def synchronize_spectra(input_path, output_path, spectrum_ids, progress_bar=True):
+def synchronize_spectra(input_path, output_path, summary, progress_bar=True):
     """Reads an MGF file from input_path and generates a new_mgf file in output_path with only the spectra in spectrum_ids.
 
     Args:
         input_path (str): Path to the input mgf.
         output_path (str): Path to save the output mgf.
-        spectrum_ids (list): List of spectrum ids to keep.
+        summary (pd.Dataframe): Dataframe with spectrum ids to keep.
     """   
-    scan_counter = 1
+    for col_name in ['spectrum_id', 'scan', 'Charge']:
+        if col_name not in summary.columns:
+            raise ValueError("Summary must contain columns 'spectrum_id', 'scan', and 'charge'")
+    
     with open(output_path, 'w') as output_mgf:
-        input_mgf = IndexedMGF(input_path,index_by_scans=True)
+        input_mgf = IndexedMGF(input_path)
+        
         if progress_bar:
             print("Syncing MGF with summary")
-            input_mgf = tqdm(input_mgf)
-        for spectra in input_mgf:
-            if spectra['params']['title'] in spectrum_ids:
-                output_mgf.write("BEGIN IONS\n")
-                output_mgf.write("PEPMASS={}\n".format(spectra['params']['pepmass'][0]))
-                output_mgf.write("CHARGE={}\n".format(spectra['params']["charge"]))
-                output_mgf.write("TITLE={}\n".format(spectra['params']['title']))
-                output_mgf.write("SCANS={}\n".format(scan_counter))
+            mapping = tqdm(summary[['spectrum_id','scan','Charge']].itertuples())
+        else:
+            mapping = summary[['spectrum_id','scan','Charge']].itertuples()
+        
+        for _, title, scan, charge in mapping:
+            spectra = input_mgf[title]
+            if spectra['params']['title'] != title:
+                raise ValueError("Sanity Check Failed. Expected specrum identifier did not match mgf spectrum identifier.")
+            output_mgf.write("BEGIN IONS\n")
+            output_mgf.write("PEPMASS={}\n".format(float(spectra['params']['pepmass'][0])))
+            output_mgf.write("CHARGE={}\n".format(charge))
+            output_mgf.write("TITLE={}\n".format(spectra['params']['title']))
+            output_mgf.write("SCANS={}\n".format(scan))
 
-                peaks = zip(spectra['m/z array'], spectra['intensity array'])
-                for peak in peaks:
-                    output_mgf.write("{} {}\n".format(peak[0], peak[1]))
+            peaks = zip(spectra['m/z array'], spectra['intensity array'])
+            for peak in peaks:
+                output_mgf.write("{} {}\n".format(peak[0], peak[1]))
 
-                output_mgf.write("END IONS\n")
-                scan_counter += 1
+            output_mgf.write("END IONS\n")
                 
 def generate_parquet_df(input_mgf):
     """

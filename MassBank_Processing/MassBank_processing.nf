@@ -9,11 +9,18 @@ params.OMETAPARAM_YAML = "job_parameters.yaml"
 
 TOOL_FOLDER_MB = "$moduleDir/bin"
 
+/*
+ * Number of bins to bin MassBank data into.
+ * Note that this is limited by the number of file handles that your system
+ * can tolerate. If you are running into issues, try reducing this number.
+ * If you run into load balancing issues, increase this number.
+*/
+params.spectra_parallelism = 5000
+
 // Use git to pull the latest MassBank Library
 process fetch_data_massbank {
     output: 
-    // path "MassBank-data/MSSJ/*.txt", emit: massbank_data  // for testing
-    path "MassBank-data/*/*.txt", emit: massbank_data
+    path "MassBank-data/", emit: massbank_data
     path "MassBank-data/legacy.blacklist", emit: blacklist
 
     """
@@ -21,22 +28,47 @@ process fetch_data_massbank {
     """
 }
 
+// Bin the massbank data into params.spectra_parallelism bins
+process prep_params_massbank {
+  conda "$TOOL_FOLDER_MB/conda_env.yml"
+
+  input:
+  path blacklist
+  path massbank_data
+
+  output:
+  path 'params/params_*.npy', emit: params
+
+  """
+  python3 $TOOL_FOLDER_MB/prep_params.py \
+            --glob "MassBank-data/*/*.txt" \
+            --blacklist "$blacklist" \
+            -p "$params.spectra_parallelism"
+
+  # python3 $TOOL_FOLDER_MB/prep_params.py \
+  #         --glob "MassBank-data/MSSJ/*.txt" \
+  #         --blacklist "$blacklist" \
+  #         -p "$params.spectra_parallelism"
+  """
+}
+
 // Process all data into a unified csv, mgf format
 process export_massbank {
     conda "$TOOL_FOLDER_MB/conda_env.yml"
 
+    cache false
+
     input: 
-    each input_file
-    path blacklist
+    path masbank_data
+    each params
 
     // Optional because MS1 scans will not be read, and blacklist files are skipped
     output:
     path 'output_*', optional: true
 
     """
-    python3 $TOOL_FOLDER_MB/MassBank_processing.py \
-    --input "$input_file" \
-    --blacklist "$blacklist"
+    python3 "$TOOL_FOLDER_MB/MassBank_processing.py" \
+    --params "$params"
     """
 }
 
@@ -60,11 +92,10 @@ process output {
   publishDir "./nf_output", mode: 'copy'
 
   input:
-  path merged_mgf
-  path merged_csv
+  path merged_files
 
   output:
-  path 'ALL_MassBank_merged.*', emit: merged_files
+  path 'ALL_MassBank_merged.*', emit: merged_files, includeInputs: true
 
   """
   echo "Outputting data to nf_output"
@@ -73,7 +104,8 @@ process output {
 
 workflow {
   fetch_data_massbank()
-  temp_files = export_massbank(fetch_data_massbank.out.massbank_data, fetch_data_massbank.out.blacklist)
-  (merged_mgf, merged_csv) = merge_export_massbank(temp_files.collect())
-  output(merged_mgf, merged_csv)
+  prep_params_massbank(fetch_data_massbank.out.blacklist, fetch_data_massbank.out.massbank_data)
+  temp_files = export_massbank(fetch_data_massbank.out.massbank_data, prep_params_massbank.out.params)
+  merged_files = merge_export_massbank(temp_files.collect())
+  output(merged_files)
 }
