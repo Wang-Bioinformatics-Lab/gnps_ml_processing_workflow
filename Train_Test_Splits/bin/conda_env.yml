@@ -12,3 +12,7 @@ dependencies:
   - pyteomics
   - tqdm
   - expiringdict
+  - rdkit
+  - joblib
+  - rdkit
+  - pandarallel

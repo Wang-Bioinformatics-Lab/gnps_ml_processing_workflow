@@ -16,7 +16,7 @@ def select_test(input_csv, input_mgf, num_test_points):
         input_csv (_type_): _description_
         input_mgf (_type_): _description_
     """
-    summary = pd.read_csv(input_csv)  
+    summary = pd.read_csv(input_csv)#.head(100) #HEAD FOR DEBUG
     
     spectra     = IndexedMGF(input_mgf, index_by_scans=False)
     

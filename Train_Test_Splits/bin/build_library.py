@@ -42,7 +42,8 @@ def create_library(input_mgf, output_folder):
                 'GNPSLibraryAccession': spectrum['params']['title'],
             })
 
-            charge = int(spectrum['params']['charge'][0])
+            # charge = int(spectrum['params']['charge'][0])
+            charge =1
 
             o.write("BEGIN IONS\n")
             o.write("SEQ=*..*\n")

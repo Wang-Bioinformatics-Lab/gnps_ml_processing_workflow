@@ -51,10 +51,10 @@ def search_library(input_mgf,
     spectra = IndexedMGF(input_mgf, index_by_scans=True)
 
     with open(temp_query_mgf, "w") as o:
-        for _, spectrum in enumerate(spectra):
+        for spectrum in spectra:
             scan = spectrum['params']['scans']
-            charge = int(spectrum['params']['charge'][0])
-            
+            # charge = int(spectrum['params']['charge'][0])
+            charge = 1            
             if charge == 0:
                 charge = 1
                 
@@ -69,7 +69,7 @@ def search_library(input_mgf,
             o.write("END IONS\n")
     
     # Return to command line
-    print(temp_query_mgf, cosine_threshold)
+    print(temp_query_mgf)
     return
 
     library_index_path = Path("./libraries").joinpath(library_name).joinpath("build_index")
@@ -253,16 +253,9 @@ def search_library(input_mgf,
 def main():
     parser = argparse.ArgumentParser(description='Build Query File')
     parser.add_argument('--input_mgf', help='Input MGF File')
-    parser.add_argument('--spectral_threshold', help='Spectral Threshold', type=str)
     args = parser.parse_args()
     
     input_mgf = args.input_mgf
-    spectral_threshold = ast.literal_eval(args.spectral_threshold)
-    
-    # Nextflow workaround
-    if len(spectral_threshold) != 1:
-        raise ValueError(f'Spectral Threshold must be a list of length 1 but got {spectral_threshold}')
-    spectral_threshold=spectral_threshold[0]
     
     search_library(input_mgf,
                     "input_library",               # ./libraries/input_library
@@ -270,8 +263,7 @@ def main():
                     lower_delta=130,
                     upper_delta=200,
                     pm_tolerance=0.2,
-                    fragment_tolerance=0.2,
-                    cosine_threshold=spectral_threshold)
+                    fragment_tolerance=0.2,)
     
 if __name__ == "__main__":
     main()
