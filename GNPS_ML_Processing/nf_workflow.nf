@@ -1,10 +1,10 @@
 #!/usr/bin/env nextflow
 nextflow.enable.dsl=2
 
-// params.subset = "Orbitrap_Fragmentation_Prediction"
+params.subset = "Orbitrap_Fragmentation_Prediction"
 params.split  = false
 
-params.subset = "Structural_Similarity_Prediction"
+// params.subset = "Structural_Similarity_Prediction"
 // params.subset = "MH_MNA_Translation"
 // params.subset = "GNPS_default"
 
@@ -156,13 +156,13 @@ process generate_subset {
  
   publishDir "./nf_output", mode: 'copy'
 
-  cache true
+  cache false
 
   input:
   path cleaned_csv
   path cleaned_parquet
   path cleaned_mgf
-  val json_dummy          // Dummy input to force this process to run after the export_full_json process
+  // val json_dummy          // Dummy input to force this process to run after the export_full_json process
 
   output:
   path "summary/*"
@@ -305,8 +305,8 @@ workflow {
   adduct_mapping_ch = channel.fromPath("$TOOL_FOLDER/adduct_mapping.txt")
 
   postprocess(merged_csv, merged_mgf, adduct_mapping_ch)
-  export_full_json(postprocess.out.cleaned_csv, postprocess.out.cleaned_mgf)
-  generate_subset(postprocess.out.cleaned_csv, postprocess.out.cleaned_parquet, postprocess.out.cleaned_mgf, export_full_json.out.dummy)    
+  // export_full_json(postprocess.out.cleaned_csv, postprocess.out.cleaned_mgf)
+  generate_subset(postprocess.out.cleaned_csv, postprocess.out.cleaned_parquet, postprocess.out.cleaned_mgf)    //, export_full_json.out.dummy
 
   calculate_similarities(generate_subset.out.output_mgf)
 

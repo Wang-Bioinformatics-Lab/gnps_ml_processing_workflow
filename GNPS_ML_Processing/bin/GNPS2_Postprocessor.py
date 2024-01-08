@@ -63,10 +63,10 @@ def basic_cleaning(summary):
     # Compound Source
     summary.Compound_Source = summary.Compound_Source.astype(str)
     summary.Compound_Source = summary.Compound_Source.parallel_apply(lambda x: x.strip().lower())
+    summary.loc[[('unknown' == x) or ('nan' == x) or ('other' == x) or ('lcms'==x) for x in summary.Compound_Source], 'Compound_Source'] = ''
     summary.loc[[('commercial standard' == x) or ('commercial' == x) or ('standard' == x) or ('cosmetic _raw meterial' == x) for x in summary.Compound_Source], 'Compound_Source'] = "commercial"
     summary.loc[[('prestwick' in x) or ('nih natural product library' == x)  or('nih pharmacologically active library' == x) for x in summary.Compound_Source], 'Compound_Source'] = "isolated"
     summary.loc[[('lysate' == x)  for x in summary.Compound_Source], 'Compound_Source'] = "crude"
-    summary.loc[[('lcms' == x)  for x in summary.Compound_Source], 'Compound_Source'] = "other"
     
     
     # Adduct translation from chemical names to adduct formulas -> 'M+TFA-H': '[M+C2HF3O2-H]-'
@@ -153,6 +153,15 @@ def basic_cleaning(summary):
     if sum(mask) > 0:
         print(f"Imputing {sum(mask)} negative ion modes using the Charge field.")
         summary.loc[mask, 'Ion_Mode'] = 'negative'
+    # Any ion modes that disagree with the charge field will be replaced
+    mask = (summary.Ion_Mode != 'negative') & (summary.Charge < 0)
+    if sum(mask) > 0:
+        print(f"Correcting {sum(mask)} positive ion modes using the Charge field.")
+        summary.loc[mask, 'Ion_Mode'] = 'negative'
+    mask = (summary.Ion_Mode != 'positive') & (summary.Charge > 0)
+    if sum(mask) > 0:
+        print(f"Correcting {sum(mask)} negative ion modes using the Charge field.")
+        summary.loc[mask, 'Ion_Mode'] = 'positive'
 
     # Manufacturer
     summary.msManufacturer = summary.msManufacturer.astype('str')
@@ -252,7 +261,7 @@ def clean_smiles(summary):
        
     # In rare cases the user will use INCHI and not smiles, so we'll convert it to smiles
     mask = (summary.Smiles == '') & (summary.INCHI != '')
-    summary.loc[mask, 'Smiles'] = summary.loc[mask, 'Smiles'].apply(INCHI_to_SMILES)
+    summary.loc[mask, 'Smiles'] = summary.loc[mask, 'INCHI'].apply(INCHI_to_SMILES)
     
     summary.Smiles = summary.Smiles.parallel_apply(lambda x: harmonize_smiles_rdkit(x, skip_tautomerization=True))
     

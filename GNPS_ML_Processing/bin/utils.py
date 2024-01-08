@@ -18,6 +18,7 @@ import vaex
 import os
 # import dask.dataframe as dd
 import tempfile
+import json
 from pandarallel import pandarallel
 from joblib import Parallel, delayed
 
@@ -194,7 +195,7 @@ def build_tanimoto_similarity_list(mgf_summary:pd.DataFrame,output_dir:str=None,
     if output_dir is not None: out.to_csv(output_dir, index_label=False)
     return out
 
-def _sim_helper(fps,
+def _sim_helper_csv(fps,
                 comparison_fps_lst,
                 indices,
                 truncate,
@@ -249,6 +250,7 @@ def _sim_helper(fps,
                                 continue
                             items_left_per_bin[bin_index] -= 1
                         for edge_from in idx_mapping[idx]:
+                            # Loop over identical structures
                             for edge_to in idx_mapping[idx + 1 + j]: # i + 1 + j because we skip the diagonal
                                 row = {
                                     'spectrumid1': edge_from,
@@ -266,6 +268,66 @@ def _sim_helper(fps,
         if os.path.isfile(temp_file):
             os.remove(temp_file)
         raise suprise_exception
+       
+def _sim_helper(fps,
+                comparison_fps,
+                indices,
+                truncate,
+                fieldnames,
+                similarity_threshold,
+                idx_mapping,
+                output_file=None,
+                progress=False):
+    if output_file is None:
+        temp_file = os.path.join(tempfile.gettempdir(), f"GNPS_PROCESSING/TEMP_SIMILARITY_FILE_{indices[0]}.json")
+    else:
+        temp_file = output_file
+    
+    # Create a dictionary to store the data grouped by 'spectrumid1'
+    data_dict = {}
+
+    # Wrapping for easy parallelization
+    wrapped_bulk_tanimoto_similarity = BulkTanimotoSimilarity
+    try:
+        for idx, fp in zip(indices, fps):
+            if truncate is not None:
+                n_bins, n_items_per_bin = truncate
+
+                if not isinstance(n_bins, int) or not isinstance(n_items_per_bin, int):
+                    raise ValueError("Expected arg 'truncate' to be None or a tuple of type (int,int).")
+                bin_size = (1.0 - similarity_threshold) / (n_bins - 1)  # Reserve the last bin for identical spectra (rest of histogram is left aligned)
+                items_left_per_bin = np.full(n_bins, n_items_per_bin)
+
+            sims = wrapped_bulk_tanimoto_similarity(fp, comparison_fps)
+            for j, this_sim in enumerate(sims):
+                if idx == j:
+                    continue
+                if this_sim >= similarity_threshold:
+                    # Check if we have filled the bin for this entry.
+                    if truncate is not None:
+                        bin_index = int((this_sim - similarity_threshold) / bin_size)
+                        if items_left_per_bin[bin_index] <= 0:
+                            continue
+                        items_left_per_bin[bin_index] -= 1
+                    for edge_from in idx_mapping[idx]:
+                        # Loop over identical structures
+                        if data_dict.get(edge_from) is None: data_dict[edge_from] = []
+                        data_dict[edge_from].append({
+                                'Tanimoto_Similarity': this_sim,
+                                'spectrumid2': [edge_to for edge_to in idx_mapping[j]]})
+                    if truncate is not None:
+                        if sum(items_left_per_bin) == 0:
+                            break
+
+        # Serialize the dictionary to a JSON file
+        with open(temp_file, 'w') as json_file:
+            json.dump(data_dict, json_file, indent=2)
+
+    except Exception as e:
+        raise e
+        print(f"An error occurred: {e}")
+    
+    return temp_file
 
 def build_tanimoto_similarity_list_precomputed(mgf_summary:pd.DataFrame,
                                                output_file:str, 
@@ -316,8 +378,17 @@ def build_tanimoto_similarity_list_precomputed(mgf_summary:pd.DataFrame,
     
     fieldnames = ['spectrumid1', 'spectrumid2', 'Tanimoto_Similarity']
            
-    _ = _sim_helper([fps[j] for j in range(len(fps))],
-                [fps[j+1:] for j in range(len(fps))],
+    # _ = _sim_helper_csv([fps[j] for j in range(len(fps))],
+    #             [fps[j+1:] for j in range(len(fps))],
+    #             [j for j in range(len(fps))],
+    #             truncate,
+    #             fieldnames,
+    #             similarity_threshold,
+    #             idx_mapping,
+    #             output_file = output_file,
+    #             progress = True)
+    _ = _sim_helper(fps,
+                fps,
                 [j for j in range(len(fps))],
                 truncate,
                 fieldnames,
