@@ -246,23 +246,35 @@ def test_data_processing():
     # Tests can be run with  python3 -m pytest ./bin/MassBank_processing.py 
     import pandas as pd
     path = './data/tests/MSBNK-AAFC-AC000870.txt'
+    params_path = "./params/params_0_1.npy"
     
-    np.save('./params/params_0_1.npy', [path])
-    
-    process_file('./params/params_0_1.npy', output_path = './test_outputs/test.csv')
-    
-    # Compare csvs
-    df = pd.read_csv('./test_outputs/test.csv')
-    label_df = pd.read_csv('./data/tests/MSBNK-AAFC-AC000870_output.csv')
-    
-    # Compare mgfs
-    with open('./test_outputs/test.mgf', 'r') as f:
-        mgf = f.read()
-        with open('./data/tests/MSBNK-AAFC-AC000870_output.mgf', 'r') as f:
-            label_mgf = f.read()
-            assert mgf == label_mgf
-            
-    # Check if './params/params_0_1.npy' is deleted
-    if os.path.isfile('./params/params_0_1.npy'):
-        os.remove('./params/params_0_1.npy')
-    assert df.equals(label_df)
+    try:
+        
+        if not os.path.isdir('./params'):
+            os.makedirs('./params')
+        np.save(params_path, [path])
+        
+        process_file(params_path, output_path = './test_outputs/test')
+        
+        # Compare csvs
+        df = pd.read_csv('./test_outputs/test.csv')
+        label_df = pd.read_csv('./data/tests/MSBNK-AAFC-AC000870_output.csv')
+        
+        # Compare mgfs
+        with open('./test_outputs/test.mgf', 'r') as f:
+            mgf = f.read()
+            with open('./data/tests/MSBNK-AAFC-AC000870_output.mgf', 'r') as f:
+                label_mgf = f.read()
+                assert mgf == label_mgf
+                
+        assert df.equals(label_df)
+
+
+        
+    finally:            
+        # Check if params_path is deleted
+        if os.path.isfile(params_path):
+            os.remove(params_path)
+        # Check if ./params dir is deleted
+        if os.path.isdir('./params'):
+            os.rmdir('./params')

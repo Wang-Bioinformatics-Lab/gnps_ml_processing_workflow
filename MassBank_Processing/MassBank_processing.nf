@@ -56,7 +56,7 @@ process prep_params_massbank {
 process export_massbank {
     conda "$TOOL_FOLDER_MB/conda_env.yml"
 
-    cache false
+    cache true
 
     input: 
     path masbank_data
