@@ -1,10 +1,10 @@
 #!/usr/bin/env nextflow
 nextflow.enable.dsl=2
 
-params.subset = "Orbitrap_Fragmentation_Prediction"
+// params.subset = "Orbitrap_Fragmentation_Prediction"
 params.split  = false
 
-// params.subset = "Structural_Similarity_Prediction"
+params.subset = "Structural_Similarity_Prediction"
 // params.subset = "MH_MNA_Translation"
 // params.subset = "GNPS_default"
 
@@ -123,6 +123,72 @@ process postprocess {
     """
     python3 $TOOL_FOLDER/GNPS2_Postprocessor.py
     """
+}
+
+// // A serial piece of code to cache the PubChem names for MatchMS Filtering
+// // Doing so avoids excessive parallel API calls
+// process cache_pubchem_names_for_matchms {
+//   publishDir "./bin/matchms", mode: 'copy'
+//   conda "$TOOL_FOLDER/gnps_ml_processing_matchms.yml"
+
+//   maxForks 1
+
+//   cache true
+
+//   input:
+//   path cleaned_mgf
+
+//   output:
+//   path "pubchem_names.csv", includeInputs: true, emit: pubchem_names
+
+//   """
+//   python3 $TOOL_FOLDER/matchms/cache_pubchem_names_for_matchms.py --input_mgf_path ${cleaned_mgf} \
+//                                                                   --cached_compound_name_annotation_path "$TOOL_FOLDER/matchms/pubchem_names.csv"
+//   """
+// }
+
+// Splits the output mgf into smaller chunks to parallelize MatchMS Filtering
+process split_mgf_for_matchms_filtering {
+  conda "$TOOL_FOLDER/gnps_ml_processing_matchms.yml"
+
+  cache true
+
+  input:
+  path cleaned_mgf
+
+  output: 
+  path "mgf_chunks/*", emit: mgf_chunks
+
+  // The below script has an optional argument --splitsize, which defaults to 1000. This can be changed to increase or decrease the number of mgf files
+  """
+  python3 $TOOL_FOLDER/matchms/split_mgf_for_matchms_filtering.py --input_mgf_path ${cleaned_mgf} \
+                                                                  --output_path "./mgf_chunks"
+  """
+}
+
+// Incoperate MatchMS Filtering into the Pipeline
+process matchms_filtering {
+  // Estimated runtime: 45 hours for all of GNPS
+  conda "$TOOL_FOLDER/gnps_ml_processing_matchms.yml"
+
+  publishDir "./matchms_output", mode: 'copy'
+  publishDir "$TOOL_FOLDER/matchms", mode: 'copy', pattern: "compound_name_annotation.csv", saveAs: { filename -> "pubchem_names.csv" } // The script will create this file and copy it back
+
+  cache false
+
+  input:
+  each cleaned_mgf_chunk
+  // path pubchem_names
+  
+  output:
+  path "matchms_output/"
+  path "compound_name_annotation.csv"
+
+  """
+  python3 $TOOL_FOLDER/matchms/matchms_cleaning.py  --input_mgf_path ${cleaned_mgf_chunk}\
+                                                    --cached_compound_name_annotation_path "$TOOL_FOLDER/matchms/pubchem_names.csv" \
+                                                    --output_path "./matchms_output" \
+  """
 }
 
 // Exports the output in JSON format
@@ -305,31 +371,42 @@ workflow {
   adduct_mapping_ch = channel.fromPath("$TOOL_FOLDER/adduct_mapping.txt")
 
   postprocess(merged_csv, merged_mgf, adduct_mapping_ch)
-  // export_full_json(postprocess.out.cleaned_csv, postprocess.out.cleaned_mgf)
+  // cache_pubchem_names_for_matchms(postprocess.out.cleaned_mgf)
+  // split_mgf_for_matchms_filtering(postprocess.out.cleaned_mgf)
+
+  // matchms_filtering(split_mgf_for_matchms_filtering.out.mgf_chunks.flatten(), cache_pubchem_names_for_matchms.out.pubchem_names)
+  // current:
+  // matchms_filtering(postprocess.out.cleaned_mgf)
+
+
+  /*********** FROM HERE DOWN IS THE ML SPLITS ************/
+  // if (false) {
+    // export_full_json(postprocess.out.cleaned_csv, postprocess.out.cleaned_mgf)
   generate_subset(postprocess.out.cleaned_csv, postprocess.out.cleaned_parquet, postprocess.out.cleaned_mgf)    //, export_full_json.out.dummy
+  if (false) {
+    calculate_similarities(generate_subset.out.output_mgf)
 
-  calculate_similarities(generate_subset.out.output_mgf)
+    // For the spectral similarity prediction task, we need to calculate all pairs similarity in the training set
+    if (params.subset == "GNPS_default" || params.subset == "Spectral_Similarity_Prediction") {
+      use_default_path = false
+      //// generate_subset.out.output_parquet.collect()  // Make sure this finishes first
+      //// channel.fromPath(".nf_output/Spectral_Similarity_Prediction.parquet") | generate_mgf
+      //generate_mgf(generate_subset.out.output_parquet)
+      //calculate_similarities(generate_mgf.out.output_mgf)
 
-  // For the spectral similarity prediction task, we need to calculate all pairs similarity in the training set
-  if (params.subset == "GNPS_default" || params.subset == "Spectral_Similarity_Prediction") {
-    use_default_path = false
-    //// generate_subset.out.output_parquet.collect()  // Make sure this finishes first
-    //// channel.fromPath(".nf_output/Spectral_Similarity_Prediction.parquet") | generate_mgf
-    //generate_mgf(generate_subset.out.output_parquet)
-    //calculate_similarities(generate_mgf.out.output_mgf)
+      publish_similarities_for_prediction(calculate_similarities.out.spectral_similarities)
 
-    publish_similarities_for_prediction(calculate_similarities.out.spectral_similarities)
+    }
+    // } else if (params.subset == "Spectral_Similarity_Prediction") {
+    //   generate_subset.out.output_parquet.collect()  // Make sure this finishes first
+    //   channel.fromPath(".nf_output/Spectral_Similarity_Prediction.parquet") | generate_mgf
+    //   // generate_mgf(generate_subset.out.output_parquet)
+    //   generate_mgf.out.output_mgf  | calculate_similarities 
+    //   publish_similarities_for_prediction(calculate_similarities.out.spectral_similarities)
+    // }
 
-  }
-  // } else if (params.subset == "Spectral_Similarity_Prediction") {
-  //   generate_subset.out.output_parquet.collect()  // Make sure this finishes first
-  //   channel.fromPath(".nf_output/Spectral_Similarity_Prediction.parquet") | generate_mgf
-  //   // generate_mgf(generate_subset.out.output_parquet)
-  //   generate_mgf.out.output_mgf  | calculate_similarities 
-  //   publish_similarities_for_prediction(calculate_similarities.out.spectral_similarities)
-  // }
-
-  if (params.split) {
-    calculate_similarities.out.spectral_similarities | split_subsets
+    if (params.split) {
+      calculate_similarities.out.spectral_similarities | split_subsets
+    }
   }
 }

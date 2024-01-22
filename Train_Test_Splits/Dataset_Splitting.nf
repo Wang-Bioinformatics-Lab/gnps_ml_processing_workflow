@@ -10,8 +10,8 @@ FAST_SEARCH_LIBRARY_BIN = "$TOOL_FOLDER_LS/GNPS_FastSearch_Library/bin"
 
 // params.input_csv = '/home/user/SourceCode/GNPS_ML_Processing_Workflow/GNPS_ML_Processing/nf_output/ALL_GNPS_cleaned.csv'
 // params.input_mgf = '/home/user/SourceCode/GNPS_ML_Processing_Workflow/GNPS_ML_Processing/nf_output/ALL_GNPS_cleaned.mgf'
-params.input_csv = '/home/user/SourceCode/GNPS_ML_Processing_Workflow/GNPS_ML_Processing/work/2b/aa101f0c3b430b801cd277b43d62ef/summary/Structural_Similarity_Prediction.csv'
-params.input_mgf = '/home/user/SourceCode/GNPS_ML_Processing_Workflow/GNPS_ML_Processing/work/2b/aa101f0c3b430b801cd277b43d62ef/spectra/Structural_Similarity_Prediction.mgf'
+params.input_csv = '/home/user/SourceCode/GNPS_ML_Processing_Workflow/GNPS_ML_Processing/nf_output/summary/Structural_Similarity_Prediction.csv'
+params.input_mgf = '/home/user/SourceCode/GNPS_ML_Processing_Workflow/GNPS_ML_Processing/nf_output/spectra/Structural_Similarity_Prediction.mgf'
 
 params.test_set_num = 0.10  // An integer (or float) representing the number (or percentage of) data points to use as a test set
 
@@ -114,7 +114,7 @@ process spectral_similarity_calculation {
   -autoINPUT_SPECS \$temp_query_mgf \
   -autoPM_TOLERANCE $params.pm_tolerance  \
   -autoFRAG_TOLERANCE $params.fragment_tolerance  \
-  -autoDELTA_MZ_ABOVE $params.lower_delta\
+  -autoDELTA_MZ_ABOVE $params.lower_delta \
   -autoDELTA_MZ_BELOW $params.upper_delta \
   -autoTHETA $params.lowest_spectral_threshold \
   -autoSPECTRUM_DISK_ACCESS_POLICY DISK   \
@@ -127,6 +127,7 @@ process spectral_similarity_calculation {
 
 process structural_similarity_calculation {
   conda "$TOOL_FOLDER_LS/conda_env.yml"
+  publishDir './nf_output', mode: 'copy'
 
   input:
   path train_rows_csv
