@@ -8,6 +8,9 @@ params.subset = "Structural_Similarity_Prediction"
 // params.subset = "MH_MNA_Translation"
 // params.subset = "GNPS_default"
 
+params.output_dir = "./nf_output"
+params.GNPS_json_path = "None"
+
 use_default_path = true
 
 params.spectra_parallelism = 5000
@@ -32,8 +35,14 @@ include { fetch_data_massbank; prep_params_massbank; export_massbank; merge_expo
 
 // This environment won't build if called by nextflow, but works fine here
 process environment_creation {
+  
+  output: 
+  path "dummy.text", emit: dummy
+  
   """
   mamba env update --file $TOOL_FOLDER/conda_env.yml --prefix $TOOL_FOLDER/gnps_ml_processing_env2/
+
+  touch dummy.text
   """
 }
 
@@ -43,12 +52,16 @@ process prep_params {
 
   cache 'lenient'
 
+  input:
+  path dummy
+
   output:
   path 'params/params_*.npy'
 
   """
   python3 $TOOL_FOLDER/prep_params.py \
-  -p "$params.spectra_parallelism"
+  -p "$params.spectra_parallelism" \
+  --all_GNPS_json_path $params.GNPS_json_path
   """
 }
 
@@ -100,7 +113,7 @@ process postprocess {
   //conda "$TOOL_FOLDER/gnps_ml_processing_env2/"
   conda "$TOOL_FOLDER/gnps_ml_processing_env2"
 
-  publishDir "./nf_output", mode: 'copy'
+  publishDir "$params.output_dir", mode: 'copy'
 
   cache true
 
@@ -195,7 +208,7 @@ process matchms_filtering {
 process export_full_json {
   conda "$TOOL_FOLDER/gnps_ml_processing_env2"
 
-  publishDir "./nf_output", mode: 'copy'
+  publishDir "$params.output_dir", mode: 'copy'
 
   cache true
 
@@ -220,7 +233,7 @@ process export_full_json {
 process generate_subset {
   conda "$TOOL_FOLDER/gnps_ml_processing_env2/"
  
-  publishDir "./nf_output", mode: 'copy'
+  publishDir "$params.output_dir", mode: 'copy'
 
   cache false
 
@@ -273,7 +286,7 @@ process generate_mgf {
 
 process calculate_similarities_pure_networking {
   // Currently, this process is not used and it is scheduled for deletion
-  publishDir "./nf_output", mode: 'copy'
+  publishDir "$params.output_dir", mode: 'copy'
   
   input:
   each mgf
@@ -295,7 +308,7 @@ process calculate_similarities {
   //conda "$TOOL_FOLDER/gnps_ml_processing_env2/"
   conda "$TOOL_FOLDER/gnps_ml_processing_env2"
 
-  publishDir "./nf_output", mode: 'copy'
+  publishDir "$params.output_dir", mode: 'copy'
   
   input:
   each mgf
@@ -316,7 +329,7 @@ process calculate_similarities {
 process split_subsets {
   conda "$TOOL_FOLDER/gnps_ml_processing_env2/"
 
-  publishDir "./nf_output", mode: 'copy'
+  publishDir "$params.output_dir", mode: 'copy'
 
   input:
   path spectral_similarities
@@ -354,7 +367,7 @@ process publish_similarities_for_prediction {
 
 workflow {
   environment_creation()
-  export_params = prep_params()
+  export_params = prep_params(environment_creation.out.dummy)
   temp_files = export(export_params)
 
   if (params.include_massbank) {
@@ -376,14 +389,14 @@ workflow {
 
   // matchms_filtering(split_mgf_for_matchms_filtering.out.mgf_chunks.flatten(), cache_pubchem_names_for_matchms.out.pubchem_names)
   // current:
-  // matchms_filtering(postprocess.out.cleaned_mgf)
+  matchms_filtering(postprocess.out.cleaned_mgf)
 
 
   /*********** FROM HERE DOWN IS THE ML SPLITS ************/
-  // if (false) {
+  if (false) {
     // export_full_json(postprocess.out.cleaned_csv, postprocess.out.cleaned_mgf)
   generate_subset(postprocess.out.cleaned_csv, postprocess.out.cleaned_parquet, postprocess.out.cleaned_mgf)    //, export_full_json.out.dummy
-  if (false) {
+  // if (false) {
     calculate_similarities(generate_subset.out.output_mgf)
 
     // For the spectral similarity prediction task, we need to calculate all pairs similarity in the training set
