@@ -179,28 +179,51 @@ process split_mgf_for_matchms_filtering {
   """
 }
 
+/* This process reads the csv file, and appends all CCMS IDs to the pubchem name searching cache file to signficantly
+reduce the number of api calls */
+process spoof_matchms_caching {
+  // Curerntly deprecated, see TODO in workflow
+  conda "$TOOL_FOLDER/gnps_ml_processing_matchms.yml"
+  publishDir "$TOOL_FOLDER/matchms", mode: 'copy', pattern: "compound_name_annotation.csv", saveAs: { filename -> "pubchem_names.csv" } // The script will create this file and copy it back
+
+  cache 'lenient'
+
+  input:
+  path cleaned_csv
+
+  output:
+  path "compound_name_annotation.csv"
+  path "dummy.txt", emit: cache_dummy
+
+  """
+  python3 $TOOL_FOLDER/matchms/spoof_matchms_caching.py --input_csv_path ${cleaned_csv} \
+                                                        --cached_compound_name_annotation_path "$TOOL_FOLDER/matchms/pubchem_names.csv"
+  
+  touch dummy.txt
+  """
+}
+
 // Incoperate MatchMS Filtering into the Pipeline
 process matchms_filtering {
-  // Estimated runtime: 45 hours for all of GNPS
   conda "$TOOL_FOLDER/gnps_ml_processing_matchms.yml"
 
-  publishDir "./matchms_output", mode: 'copy'
+  publishDir "$params.output_dir/matchms_output", mode: 'copy'
   publishDir "$TOOL_FOLDER/matchms", mode: 'copy', pattern: "compound_name_annotation.csv", saveAs: { filename -> "pubchem_names.csv" } // The script will create this file and copy it back
 
   cache false
 
   input:
   each cleaned_mgf_chunk
-  // path pubchem_names
+  // file cache_dummy // See TODO: in workflow
   
   output:
-  path "matchms_output/"
+  path "matchms_output/*"
   path "compound_name_annotation.csv"
 
   """
   python3 $TOOL_FOLDER/matchms/matchms_cleaning.py  --input_mgf_path ${cleaned_mgf_chunk}\
                                                     --cached_compound_name_annotation_path "$TOOL_FOLDER/matchms/pubchem_names.csv" \
-                                                    --output_path "./matchms_output" \
+                                                    --output_path "./matchms_output/" \
   """
 }
 
@@ -387,9 +410,14 @@ workflow {
   // cache_pubchem_names_for_matchms(postprocess.out.cleaned_mgf)
   // split_mgf_for_matchms_filtering(postprocess.out.cleaned_mgf)
 
-  // matchms_filtering(split_mgf_for_matchms_filtering.out.mgf_chunks.flatten(), cache_pubchem_names_for_matchms.out.pubchem_names)
-  // current:
+  /******* 
+  * Since every time the cache is used matchms reopens the csv, it's actually faster to just 
+  * let the API calls fail, fixing this is TODO
+  * spoof_matchms_caching(postprocess.out.cleaned_csv) 
+  * matchms_filtering(postprocess.out.cleaned_mgf, spoof_matchms_caching.out.cache_dummy)  
+  *******/
   matchms_filtering(postprocess.out.cleaned_mgf)
+
 
 
   /*********** FROM HERE DOWN IS THE ML SPLITS ************/
