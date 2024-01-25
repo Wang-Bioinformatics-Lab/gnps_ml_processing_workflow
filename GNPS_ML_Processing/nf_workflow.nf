@@ -248,8 +248,7 @@ process export_full_json {
   python3 $TOOL_FOLDER/GNPS2_JSON_Export.py --input_mgf_path ${cleaned_mgf}\
                                             --input_csv_path ${cleaned_csv}\
                                             --output_path "./json_outputs" \
-                                            --progress \
-                                            --per_library
+                                            --progress
   """
 }
 
