@@ -601,11 +601,11 @@ def synchronize_spectra(input_path, output_path, summary, progress_bar=True):
         
         if progress_bar:
             print("Syncing MGF with summary")
-            mapping = tqdm(summary[['spectrum_id','scan','Charge','Compund_Name']].itertuples())
+            mapping = tqdm(summary[['spectrum_id','scan','Charge','Compund_Name', 'Smiles']].itertuples())
         else:
-            mapping = summary[['spectrum_id','scan','Charge','Compund_Name']].itertuples()
+            mapping = summary[['spectrum_id','scan','Charge','Compund_Name', 'Smiles']].itertuples()
         
-        for _, title, scan, charge, compound_name in mapping:
+        for _, title, scan, charge, compound_name, smiles in mapping:
             spectra = input_mgf[title]
             if spectra['params']['title'] != title:
                 raise ValueError("Sanity Check Failed. Expected specrum identifier did not match mgf spectrum identifier.")
@@ -614,6 +614,7 @@ def synchronize_spectra(input_path, output_path, summary, progress_bar=True):
             output_mgf.write("CHARGE={}\n".format(charge))
             output_mgf.write("TITLE={}\n".format(spectra['params']['title']))
             output_mgf.write("COMPOUND_NAME={}\n".format(compound_name))
+            output_mgf.write(f"SMILES={smiles}\n")
             output_mgf.write("SCANS={}\n".format(scan))
 
             peaks = zip(spectra['m/z array'], spectra['intensity array'])

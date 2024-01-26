@@ -115,7 +115,7 @@ def Orbitrap_Fragmentation_Prediction(summary_path:str, mgf_path:str):
     csv_path = './summary/Orbitrap_Fragmentation_Prediction.csv'
     reduced_df.to_csv(csv_path, index=False)
     
-    final_ids = reduced_df[['spectrum_id','scan','Charge','Compund_Name']]
+    final_ids = reduced_df[['spectrum_id','scan','Charge','Compund_Name', 'Smiles']]
     del reduced_df
     
     # Save to parquet
@@ -232,8 +232,8 @@ def Structural_Similarity_Prediction(summary_path:str, mgf_path:str):
                                             'msModel':str})
     
     df.Smiles = df.Smiles.astype(str)
-    df = df[(df.Smiles.notnull()) | (df.Smiles != 'nan')]
-    final_ids = df[['spectrum_id','scan','Charge','Compund_Name']]
+    df = df[(df.Smiles.notnull()) & (df.Smiles != 'nan')]
+    final_ids = df[['spectrum_id','scan','Charge','Compund_Name', 'Smiles']]
     
     print("Generating fingerprints.", flush=True)
     start_time = time.time()
