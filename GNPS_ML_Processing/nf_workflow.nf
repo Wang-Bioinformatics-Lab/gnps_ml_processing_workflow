@@ -207,7 +207,7 @@ process spoof_matchms_caching {
 process matchms_filtering {
   conda "$TOOL_FOLDER/gnps_ml_processing_matchms.yml"
 
-  publishDir "$params.output_dir/matchms_output", mode: 'copy'
+  publishDir "$params.output_dir", mode: 'copy'
   publishDir "$TOOL_FOLDER/matchms", mode: 'copy', pattern: "compound_name_annotation.csv", saveAs: { filename -> "pubchem_names.csv" } // The script will create this file and copy it back
 
   cache false
