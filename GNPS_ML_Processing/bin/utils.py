@@ -582,6 +582,17 @@ def INCHI_to_SMILES(inchi):
         return Chem.MolToSmiles(mol)
     except:
         return ''
+
+def is_nan(x):
+    if pd.isna(x):
+        return True
+    if x == '':
+        return True
+    if x == 'nan':
+        return True
+    if x == 'None':
+        return True
+    return False
     
 def synchronize_spectra(input_path, output_path, summary, progress_bar=True):
     """Reads an MGF file from input_path and generates a new_mgf file in output_path with only the spectra in spectrum_ids.
@@ -623,18 +634,28 @@ def synchronize_spectra(input_path, output_path, summary, progress_bar=True):
             output_mgf.write("TITLE={}\n".format(spectra['params']['title']))
             output_mgf.write("COMPOUND_NAME={}\n".format(row_dict['Compund_Name']))
             output_mgf.write(f"SMILES={row_dict['Smiles']}\n")
-            output_mgf.write("SCANS={}\n".format(row_duct['scan']))
+            output_mgf.write("SCANS={}\n".format(row_dict['scan']))
             if 'collision_energy' in row_dict:
-                output_mgf.write(f"COLLISION_ENERGY={row_dict['collision_energy']}\n")
+                collision_energy = row_dict.get('collision_energy')
+                if not is_nan(collision_energy):
+                    output_mgf.write(f"COLLISION_ENERGY={row_dict['collision_energy']}\n")
             if 'msManufacturer' in row_dict:
-                output_mgf.write(f"MS_MANUFACTURER={row_dict['msManufacturer']}\n")
+                msManufacturer = row_dict.get('msManufacturer')
+                if not is_nan(msManufacturer):
+                    output_mgf.write(f"MS_MANUFACTURER={row_dict['msManufacturer']}\n")
             if 'msMassAnalyzer' in row_dict:
-                output_mgf.write(f"MS_MASS_ANALYZER={row_dict['msMassAnalyzer']}\n")
+                msMassAnalyzer = row_dict.get('msMassAnalyzer')
+                if not is_nan(msMassAnalyzer):
+                    output_mgf.write(f"MS_MASS_ANALYZER={row_dict['msMassAnalyzer']}\n")
             if 'msIonisation' in row_dict:
-                output_mgf.write(f"MS_IONISATION={row_dict['msIonisation']}\n")
+                msIonisation = row_dict.get('msIonisation')
+                if not is_nan(msIonisation):
+                    output_mgf.write(f"MS_IONISATION={row_dict['msIonisation']}\n")
             if 'msDissociationMethod' in row_dict:
-                output_mgf.write(f"MS_DISSOCIATION_METHOD={row_dict['msDissociationMethod']}\n")
-
+                msDissociationMethod = row_dict.get('msDissociationMethod')
+                if not is_nan(msDissociationMethod):
+                    output_mgf.write(f"MS_DISSOCIATION_METHOD={row_dict['msDissociationMethod']}\n")
+                    
             peaks = zip(spectra['m/z array'], spectra['intensity array'])
             for peak in peaks:
                 output_mgf.write("{} {}\n".format(peak[0], peak[1]))
