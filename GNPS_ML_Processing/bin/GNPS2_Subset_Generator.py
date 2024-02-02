@@ -115,14 +115,11 @@ def Orbitrap_Fragmentation_Prediction(summary_path:str, mgf_path:str):
     csv_path = './summary/Orbitrap_Fragmentation_Prediction.csv'
     reduced_df.to_csv(csv_path, index=False)
     
-    final_ids = reduced_df[['spectrum_id','scan','Charge','Compund_Name', 'Smiles']]
-    del reduced_df
-    
     # Save to parquet
     print("Scynchronizing spectra.", flush=True)
     start_time = time.time()
     output_mgf_path = './spectra/Orbitrap_Fragmentation_Prediction.mgf'
-    synchronize_spectra(mgf_path, output_mgf_path, final_ids, progress_bar=True)
+    synchronize_spectra(mgf_path, output_mgf_path, reduced_df, progress_bar=True)
     print("Done in {:.2f} seconds.".format(time.time() - start_time), flush=True)
     print("Generating parquet file.", flush=True)
     start_time = time.time()
@@ -233,7 +230,6 @@ def Structural_Similarity_Prediction(summary_path:str, mgf_path:str):
     
     df.Smiles = df.Smiles.astype(str)
     df = df[(df.Smiles.notnull()) & (df.Smiles != 'nan')]
-    final_ids = df[['spectrum_id','scan','Charge','Compund_Name', 'Smiles']]
     
     print("Generating fingerprints.", flush=True)
     start_time = time.time()
@@ -250,17 +246,15 @@ def Structural_Similarity_Prediction(summary_path:str, mgf_path:str):
     print("Computing structural similarity sim matrix.", flush=True)
     start_time = time.time()
     min_df = df[['Smiles','spectrum_id','Morgan_2048_3']].copy()
-    del df
     
     build_tanimoto_similarity_list_precomputed(min_df, './util/Structural_Similarity_Prediction_Pairs.json', similarity_threshold=0.0, truncate=(20,10))
-    print("Done in {:.2f} seconds.".format(time.time() - start_time), flush=True)
-    
+    print("Done in {:.2f} seconds.".format(time.time() - start_time), flush=True) 
    
     # Save to parquet
     print("Scynchronizing spectra.", flush=True)
     start_time = time.time()
     output_mgf_path = './spectra/Structural_Similarity_Prediction.mgf'
-    synchronize_spectra(mgf_path, output_mgf_path, final_ids, progress_bar=True)
+    synchronize_spectra(mgf_path, output_mgf_path, df, progress_bar=True)
     print("Done in {:.2f} seconds.".format(time.time() - start_time), flush=True)
     print("Generating parquet file.", flush=True)
     start_time = time.time()

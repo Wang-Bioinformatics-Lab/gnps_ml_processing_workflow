@@ -596,8 +596,16 @@ def synchronize_spectra(input_path, output_path, summary, progress_bar=True):
             raise ValueError("Summary must contain columns 'spectrum_id', 'scan', 'charge', and 'Compund_Name'. \n \
                              Instead got columns {}".format(summary.columns))
     
-    with open(output_path, 'w') as output_mgf:
+    with open(output_path, 'w', encoding="utf-8") as output_mgf:
         input_mgf = IndexedMGF(input_path)
+        
+        columns_to_sync = ['spectrum_id', 'scan', 'Charge', 'Compund_Name', 'Smiles']
+        optional_columns = ['collision_energy', 'msManufacturer', 'msMassAnalyzer', 'msIonisation', 'msDissociationMethod']
+        for column in optional_columns:
+            if column in summary.columns:
+                columns_to_sync.append(column)
+            else:
+                print(f"Warning: Column {column} not found in summary. Skipping this output.")
         
         if progress_bar:
             print("Syncing MGF with summary")
@@ -605,17 +613,27 @@ def synchronize_spectra(input_path, output_path, summary, progress_bar=True):
         else:
             mapping = summary[['spectrum_id','scan','Charge','Compund_Name', 'Smiles']].itertuples()
         
-        for _, title, scan, charge, compound_name, smiles in mapping:
-            spectra = input_mgf[title]
-            if spectra['params']['title'] != title:
+        for row_dict in mapping.to_dict(orient="records"):
+            spectra = input_mgf[row_dict['spectrum_id']]
+            if spectra['params']['title'] != row_dict['spectrum_id']:
                 raise ValueError("Sanity Check Failed. Expected specrum identifier did not match mgf spectrum identifier.")
             output_mgf.write("BEGIN IONS\n")
             output_mgf.write("PEPMASS={}\n".format(float(spectra['params']['pepmass'][0])))
-            output_mgf.write("CHARGE={}\n".format(charge))
+            output_mgf.write("CHARGE={}\n".format(row_dict['Charge']))
             output_mgf.write("TITLE={}\n".format(spectra['params']['title']))
-            output_mgf.write("COMPOUND_NAME={}\n".format(compound_name))
-            output_mgf.write(f"SMILES={smiles}\n")
-            output_mgf.write("SCANS={}\n".format(scan))
+            output_mgf.write("COMPOUND_NAME={}\n".format(row_dict['Compund_Name']))
+            output_mgf.write(f"SMILES={row_dict['Smiles']}\n")
+            output_mgf.write("SCANS={}\n".format(row_duct['scan']))
+            if 'collision_energy' in row_dict:
+                output_mgf.write(f"COLLISION_ENERGY={row_dict['collision_energy']}\n")
+            if 'msManufacturer' in row_dict:
+                output_mgf.write(f"MS_MANUFACTURER={row_dict['msManufacturer']}\n")
+            if 'msMassAnalyzer' in row_dict:
+                output_mgf.write(f"MS_MASS_ANALYZER={row_dict['msMassAnalyzer']}\n")
+            if 'msIonisation' in row_dict:
+                output_mgf.write(f"MS_IONISATION={row_dict['msIonisation']}\n")
+            if 'msDissociationMethod' in row_dict:
+                output_mgf.write(f"MS_DISSOCIATION_METHOD={row_dict['msDissociationMethod']}\n")
 
             peaks = zip(spectra['m/z array'], spectra['intensity array'])
             for peak in peaks:
