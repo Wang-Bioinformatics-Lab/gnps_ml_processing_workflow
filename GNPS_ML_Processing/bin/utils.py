@@ -634,6 +634,8 @@ def synchronize_spectra(input_path, output_path, summary, progress_bar=True):
             output_mgf.write("TITLE={}\n".format(spectra['params']['title']))
             output_mgf.write("SPECTRUMID={}\n".format(row_dict['spectrum_id']))
             output_mgf.write("COMPOUND_NAME={}\n".format(row_dict['Compund_Name']))
+            output_mgf.write("ADDUCT={}\n".format(row_dict['Adduct']))
+            output_mgf.write("ION_MODE={}\n".format(row_dict['Ion_Mode']))
             output_mgf.write(f"SMILES={row_dict['Smiles']}\n")
             output_mgf.write("SCANS={}\n".format(row_dict['scan']))
             if 'collision_energy' in row_dict:
