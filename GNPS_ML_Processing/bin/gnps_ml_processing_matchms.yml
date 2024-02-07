@@ -1,0 +1,4 @@
+name: gnps_ml_processing_matchms
+dependencies:
+  - python=3.9
+  - bioconda::matchms

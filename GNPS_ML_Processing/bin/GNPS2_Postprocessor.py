@@ -15,7 +15,7 @@ import time
 import datetime
 import argparse
 
-PARALLEL_WORKERS = 32
+PARALLEL_WORKERS = 6
 
 import sys
 
@@ -58,6 +58,16 @@ def basic_cleaning(summary):
     summary.msIonisation = summary.msIonisation.astype(str)
     summary.loc[['esi' in x.lower() or 'electrospray' in x.lower() for x in summary.msIonisation], 'msIonisation'] = "ESI"
     summary.loc[['' == x or 'positive' == x.lower() or 'negative'  == x.lower() for x in summary.msIonisation], 'msIonisation'] = ""
+    summary.loc[['LC-APCI' in x.upper() for x in summary.msIonisation], 'msIonisation'] = "APCI"   
+    
+    # Compound Source
+    summary.Compound_Source = summary.Compound_Source.astype(str)
+    summary.Compound_Source = summary.Compound_Source.parallel_apply(lambda x: x.strip().lower())
+    summary.loc[[('unknown' == x) or ('nan' == x) or ('other' == x) or ('lcms'==x) for x in summary.Compound_Source], 'Compound_Source'] = ''
+    summary.loc[[('commercial standard' == x) or ('commercial' == x) or ('standard' == x) or ('cosmetic _raw meterial' == x) for x in summary.Compound_Source], 'Compound_Source'] = "commercial"
+    summary.loc[[('prestwick' in x) or ('nih natural product library' == x)  or('nih pharmacologically active library' == x) for x in summary.Compound_Source], 'Compound_Source'] = "isolated"
+    summary.loc[[('lysate' == x)  for x in summary.Compound_Source], 'Compound_Source'] = "crude"
+    
     
     # Adduct translation from chemical names to adduct formulas -> 'M+TFA-H': '[M+C2HF3O2-H]-'
     # Adduct Table Credit: Yasin El Abiead
@@ -98,7 +108,7 @@ def basic_cleaning(summary):
     # Conversion of numerical columns to numerical types to protect against contamination
     summary.Precursor_MZ = summary.Precursor_MZ.astype(float)
     summary.ExactMass = summary.ExactMass.astype(float)
-    summary.Charge = summary.Charge.astype(int)
+    summary.Charge = summary.Charge.fillna(0).astype(int)
     
     # Charge
     # Mask whether charge is equal to adduct charge
@@ -125,7 +135,12 @@ def basic_cleaning(summary):
     if sum(mask) > 0:
         print(f"Imputing {sum(mask)} collision energies using the GNPS_Inst field.")
         summary.loc[mask, 'collision_energy'] = extracted_eV[mask]
-
+        
+    # Check if it's just in the collision energy field and needs cleaning
+    pattern = re.compile(r'(\d+)')
+    extracted_eV = summary.collision_energy.apply(lambda x: re.search(pattern, str(x)))
+    summary.collision_energy = extracted_eV.apply(lambda x: x.group(1) if x is not None else None).astype(float)
+    
     # Ion Mode
     summary.Ion_Mode = summary.Ion_Mode.parallel_apply(lambda x: '' if ('n/a' in x) or ('nan' in x) or ('unknown' in x) else x)
     summary.loc[summary.Ion_Mode == 'positive-20ev','Ion_Mode'] = 'positive'
@@ -138,6 +153,15 @@ def basic_cleaning(summary):
     if sum(mask) > 0:
         print(f"Imputing {sum(mask)} negative ion modes using the Charge field.")
         summary.loc[mask, 'Ion_Mode'] = 'negative'
+    # Any ion modes that disagree with the charge field will be replaced
+    mask = (summary.Ion_Mode != 'negative') & (summary.Charge < 0)
+    if sum(mask) > 0:
+        print(f"Correcting {sum(mask)} positive ion modes using the Charge field.")
+        summary.loc[mask, 'Ion_Mode'] = 'negative'
+    mask = (summary.Ion_Mode != 'positive') & (summary.Charge > 0)
+    if sum(mask) > 0:
+        print(f"Correcting {sum(mask)} negative ion modes using the Charge field.")
+        summary.loc[mask, 'Ion_Mode'] = 'positive'
 
     # Manufacturer
     summary.msManufacturer = summary.msManufacturer.astype('str')
@@ -177,8 +201,8 @@ def basic_cleaning(summary):
     summary.msDissociationMethod = summary.msDissociationMethod.astype('str')
     summary.msDissociationMethod = summary.msDissociationMethod.str.lower()
     summary.loc[:,'msDissociationMethod'] = summary.msDissociationMethod.parallel_apply(lambda x: '' if ('n/a' in x) or ('nan' in x) or ('unknown' in x) else x)
-    summary.loc[(np.array(['beam-type' in x for x in summary.msDissociationMethod])) & (summary.msDissociationMethod == ""), 'msDissociationMethod'] = 'hcd'
-    summary.loc[(np.array(['collision-induced 'in x for x in summary.msDissociationMethod])) & (summary.msDissociationMethod == ""), 'msDissociationMethod'] = 'cid'
+    summary.loc[(np.array(['beam-type' in x for x in summary.msDissociationMethod])), 'msDissociationMethod'] = 'hcd'
+    summary.loc[(np.array(['collision-induced' in x or 'low-energy cid' in x for x in summary.msDissociationMethod])), 'msDissociationMethod'] = 'cid'
     
     
     mask = (summary.msMassAnalyzer.notna()) & (summary.msMassAnalyzer != 'nan')
@@ -204,8 +228,8 @@ def basic_cleaning(summary):
 
     # msIonisation
     summary.msIonisation = summary.msIonisation.astype('str')
-    summary.msIonisation = summary.msIonisation.str.lower()
-    summary.msIonisation = summary.msIonisation.parallel_apply(lambda x: '' if ('n/a' in x) or ('nan' in x) else x) 
+    summary.msIonisation = summary.msIonisation.str.upper()
+    summary.msIonisation = summary.msIonisation.parallel_apply(lambda x: '' if ('N/A' in x) or ('NAN' in x) else x) 
 
     # Detector
     '''A very specific set of files has MS:1000253 as the detector name which is used for mzML files, 
@@ -237,7 +261,7 @@ def clean_smiles(summary):
        
     # In rare cases the user will use INCHI and not smiles, so we'll convert it to smiles
     mask = (summary.Smiles == '') & (summary.INCHI != '')
-    summary.loc[mask, 'Smiles'] = summary.loc[mask, 'Smiles'].apply(INCHI_to_SMILES)
+    summary.loc[mask, 'Smiles'] = summary.loc[mask, 'INCHI'].apply(INCHI_to_SMILES)
     
     summary.Smiles = summary.Smiles.parallel_apply(lambda x: harmonize_smiles_rdkit(x, skip_tautomerization=True))
     
@@ -398,12 +422,12 @@ def propagate_GNPS_Inst_field(summary):
     summary.loc[(np.array([("cid" in x and not "is-cid" in x) for x in summary.GNPS_Inst]) & (summary.msDissociationMethod == '')), 'msDissociationMethod'] = "cid"
 
     # Ionisation Info (Not Done)
-    summary.loc[(np.array(["fab" in x for x in  summary.GNPS_Inst]) & (summary.msIonisation == '')), 'msIonisation'] = 'FAB'
-    summary.loc[(np.array(["esi" in x for x in  summary.GNPS_Inst]) & (summary.msIonisation == '')), 'msIonisation'] = 'ESI'
-    summary.loc[(np.array(["apci" in x for x in  summary.GNPS_Inst]) & (summary.msIonisation == '')), 'msIonisation'] = 'APCI'
-    summary.loc[(np.array(["api" in x for x in  summary.GNPS_Inst]) & (summary.msIonisation == '')), 'msIonisation'] = 'API'
-    summary.loc[(np.array([("appi" in x and not "dappi" in x) for x in summary.GNPS_Inst]) & (summary.msIonisation == '')), 'msIonisation'] = 'APPI'
-    summary.loc[(np.array(["dappi" in x for x in summary.GNPS_Inst]) & (summary.msIonisation == '')), 'msIonisation'] = 'DAPPI'
+    summary.loc[(np.array(["FAB" in x for x in  summary.GNPS_Inst]) & (summary.msIonisation == '')), 'msIonisation'] = 'FAB'
+    summary.loc[(np.array(["ESI" in x for x in  summary.GNPS_Inst]) & (summary.msIonisation == '')), 'msIonisation'] = 'ESI'
+    summary.loc[(np.array(["APCI" in x for x in  summary.GNPS_Inst]) & (summary.msIonisation == '')), 'msIonisation'] = 'APCI'
+    summary.loc[(np.array(["API" in x for x in  summary.GNPS_Inst]) & (summary.msIonisation == '')), 'msIonisation'] = 'API'
+    summary.loc[(np.array([("APPI" in x and not "DAPPI" in x) for x in summary.GNPS_Inst]) & (summary.msIonisation == '')), 'msIonisation'] = 'APPI'
+    summary.loc[(np.array(["DAPPI" in x for x in summary.GNPS_Inst]) & (summary.msIonisation == '')), 'msIonisation'] = 'DAPPI'
 
     # Mass Analyzer (Not Done)
     summary.loc[(np.array([("orbitrap" in x) or ("q-exactive" in x) for x in summary.GNPS_Inst]) & (summary.msMassAnalyzer == '')),"msMassAnalyzer"] = "orbitrap"
@@ -441,12 +465,14 @@ def sanity_checks(summary):
     if len(test_df) != 0:
         pd.options.display.max_columns = None
         print(test_df.head(10))
-        raise ValueError("There are {} entries with Thermo and qtof".format(len(test_df)))
-    test_df = summary[(summary.msMassAnalyzer == 'orbitrap') & (summary.msManufacturer == 'Bruker Daltonics')]
+        raise ValueError(f"There are {len(test_df)} entries with Thermo and qtof")
+
+    test_df = summary[(summary.msMassAnalyzer == 'orbitrap') & ((summary.msManufacturer != 'Thermo') & (summary.msManufacturer != ''))]
     if len(test_df) != 0:
         pd.options.display.max_columns = None
         print(test_df.head(10))
-        raise ValueError("There are {} entries with Bruker Daltonics and orbitrap".format(len(test_df)))
+        raise ValueError(f"There are {len(test_df)} entries with orbitrap that are not Thermo.")
+    
     # assert len(summary[(summary.Adduct == 'None') & (summary.Adduct == 'nan') & (summary.Adduct.isna())]) == 0 # Right now because of the adduct cleaning, there is a chance that we'll have nan adducts
 
 
@@ -507,10 +533,14 @@ def add_explained_intensity(summary, spectra):
     filter = (summary['ppmBetweenExpAndThMass'].notna() & summary['ppmBetweenExpAndThMass']<=50)
     summary.loc[filter, column_name_ppmBetweenExpAndThMass] = summary.loc[filter].parallel_apply(helper, axis=1)
             
-def postprocess_files(csv_path, mgf_path, output_csv_path, output_parquet_path, cleaned_mgf_path):
+def postprocess_files(csv_path, mgf_path, output_csv_path, output_parquet_path, cleaned_mgf_path, includes_massbank=False):
     pandarallel.initialize(progress_bar=False, nb_workers=PARALLEL_WORKERS, use_memory_fs = False)
     
     summary = pd.read_csv(csv_path)
+    
+    # If the merged files include massbank, drop the old massbank data
+    if includes_massbank:
+        summary = summary.loc[(summary.GNPS_library_membership != 'MASSBANK') & (summary.GNPS_library_membership != 'MASSBANKEU')]
 
     # Cleaning up files:
     print("Performing basic cleaning", flush=True)
@@ -566,7 +596,7 @@ def postprocess_files(csv_path, mgf_path, output_csv_path, output_parquet_path, 
     # Cleanup MGF file. Must be done before explained intensity calculations in order to make sure spectra are in order
     print("Writing mgf file", flush=True)
     start = time.time()
-    synchronize_spectra(mgf_path, cleaned_mgf_path, summary.spectrum_id.astype('str').values)
+    synchronize_spectra(mgf_path, cleaned_mgf_path, summary)
     print("Done in {} seconds".format(datetime.timedelta(seconds=time.time() - start)), flush=True)
     
     # # Because calculating explained intensity is slow, we'll save an output file just in case
@@ -592,6 +622,7 @@ def main():
     parser.add_argument('--output_csv_path', type=str, default="ALL_GNPS_cleaned.csv", help='Path to the output csv file')
     parser.add_argument('--output_parquet_path', type=str, default="ALL_GNPS_cleaned.parquet", help='Path to the output parquet file')
     parser.add_argument('--output_mgf_path', type=str, default="ALL_GNPS_cleaned.mgf", help='Path to the output mgf file')
+    parser.add_argument('--includes_massbank', action='store_true', help='Whether the merged files include reparsed massbank entries.')
     args= parser.parse_args()
     
     csv_path                = str(args.input_csv_path)
@@ -602,7 +633,7 @@ def main():
 
     if not os.path.isfile(cleaned_csv_path):
         if not os.path.isfile(cleaned_parquet_path):
-            postprocess_files(csv_path, mgf_path, cleaned_csv_path, cleaned_parquet_path, cleaned_mgf_path)
+            postprocess_files(csv_path, mgf_path, cleaned_csv_path, cleaned_parquet_path, cleaned_mgf_path, args.includes_massbank)
             
 if __name__ == '__main__':
     main()

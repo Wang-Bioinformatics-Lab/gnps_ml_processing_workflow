@@ -1,0 +1,4 @@
+bin/massbank_env/
+bin/__pycache__/
+/test_outputs/
+/nohup.out

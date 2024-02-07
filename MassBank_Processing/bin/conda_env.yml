@@ -1,0 +1,12 @@
+name: massbank_env
+channels:
+  - conda-forge
+  - defaults
+  - bioconda
+dependencies:
+  - python=3.8.8
+  - pip
+  - pytest
+  - pandas
+  - pip:
+    - rdkit==2023.3.3

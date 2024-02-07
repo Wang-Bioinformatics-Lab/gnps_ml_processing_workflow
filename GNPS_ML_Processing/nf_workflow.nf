@@ -8,11 +8,17 @@ params.subset = "Structural_Similarity_Prediction"
 // params.subset = "MH_MNA_Translation"
 // params.subset = "GNPS_default"
 
+params.output_dir = "./nf_output"
+params.GNPS_json_path = "None"
+
 use_default_path = true
 
 params.spectra_parallelism = 5000
 
 params.path_to_provenance = "/home/user/LabData/GNPS_Library_Provenance/"
+
+// If true, will download and reparse massbank, additionally removing all massbank entires from GNPS
+params.include_massbank = true
 
 // Workflow Boiler Plate
 params.OMETALINKING_YAML = "flow_filelinking.yaml"
@@ -23,10 +29,20 @@ params.parallelism = 12
 params.pure_networking_parallelism = 5000
 params.pure_networking_forks = 32
 
+
+// Include MassBank parser in case params.include_massbank is true
+include { fetch_data_massbank; prep_params_massbank; export_massbank; merge_export_massbank } from '../MassBank_Processing/MassBank_processing.nf'
+
 // This environment won't build if called by nextflow, but works fine here
 process environment_creation {
+  
+  output: 
+  path "dummy.text", emit: dummy
+  
   """
   mamba env update --file $TOOL_FOLDER/conda_env.yml --prefix $TOOL_FOLDER/gnps_ml_processing_env2/
+
+  touch dummy.text
   """
 }
 
@@ -36,12 +52,16 @@ process prep_params {
 
   cache 'lenient'
 
+  input:
+  path dummy
+
   output:
   path 'params/params_*.npy'
 
   """
   python3 $TOOL_FOLDER/prep_params.py \
-  -p "$params.spectra_parallelism"
+  -p "$params.spectra_parallelism" \
+  --all_GNPS_json_path $params.GNPS_json_path
   """
 }
 
@@ -77,10 +97,15 @@ process merge_export {
   path './ALL_GNPS_merged.mgf'
   path './ALL_GNPS_merged.csv'
 
-  """
-  python3 $TOOL_FOLDER/merge_files.py 
-  """
-
+  script:
+  if (params.include_massbank)
+    """
+    python3 $TOOL_FOLDER/merge_files.py --include_massbank 
+    """
+  else
+    """
+    python3 $TOOL_FOLDER/merge_files.py 
+    """
 }
 
 // Cleaning work - unifying the Controlled Vocabulary
@@ -88,7 +113,7 @@ process postprocess {
   //conda "$TOOL_FOLDER/gnps_ml_processing_env2/"
   conda "$TOOL_FOLDER/gnps_ml_processing_env2"
 
-  publishDir "./nf_output", mode: 'copy'
+  publishDir "$params.output_dir", mode: 'copy'
 
   cache true
 
@@ -102,8 +127,103 @@ process postprocess {
   path "ALL_GNPS_cleaned.parquet", emit: cleaned_parquet
   path "ALL_GNPS_cleaned.mgf", emit: cleaned_mgf
 
+  script:
+  if (params.include_massbank)
+    """
+    python3 $TOOL_FOLDER/GNPS2_Postprocessor.py --includes_massbank
+    """
+  else
+    """
+    python3 $TOOL_FOLDER/GNPS2_Postprocessor.py
+    """
+}
+
+// // A serial piece of code to cache the PubChem names for MatchMS Filtering
+// // Doing so avoids excessive parallel API calls
+// process cache_pubchem_names_for_matchms {
+//   publishDir "./bin/matchms", mode: 'copy'
+//   conda "$TOOL_FOLDER/gnps_ml_processing_matchms.yml"
+
+//   maxForks 1
+
+//   cache true
+
+//   input:
+//   path cleaned_mgf
+
+//   output:
+//   path "pubchem_names.csv", includeInputs: true, emit: pubchem_names
+
+//   """
+//   python3 $TOOL_FOLDER/matchms/cache_pubchem_names_for_matchms.py --input_mgf_path ${cleaned_mgf} \
+//                                                                   --cached_compound_name_annotation_path "$TOOL_FOLDER/matchms/pubchem_names.csv"
+//   """
+// }
+
+// Splits the output mgf into smaller chunks to parallelize MatchMS Filtering
+process split_mgf_for_matchms_filtering {
+  conda "$TOOL_FOLDER/gnps_ml_processing_matchms.yml"
+
+  cache true
+
+  input:
+  path cleaned_mgf
+
+  output: 
+  path "mgf_chunks/*", emit: mgf_chunks
+
+  // The below script has an optional argument --splitsize, which defaults to 1000. This can be changed to increase or decrease the number of mgf files
   """
-  python3 $TOOL_FOLDER/GNPS2_Postprocessor.py
+  python3 $TOOL_FOLDER/matchms/split_mgf_for_matchms_filtering.py --input_mgf_path ${cleaned_mgf} \
+                                                                  --output_path "./mgf_chunks"
+  """
+}
+
+/* This process reads the csv file, and appends all CCMS IDs to the pubchem name searching cache file to signficantly
+reduce the number of api calls */
+process spoof_matchms_caching {
+  // Curerntly deprecated, see TODO in workflow
+  conda "$TOOL_FOLDER/gnps_ml_processing_matchms.yml"
+  publishDir "$TOOL_FOLDER/matchms", mode: 'copy', pattern: "compound_name_annotation.csv", saveAs: { filename -> "pubchem_names.csv" } // The script will create this file and copy it back
+
+  cache 'lenient'
+
+  input:
+  path cleaned_csv
+
+  output:
+  path "compound_name_annotation.csv"
+  path "dummy.txt", emit: cache_dummy
+
+  """
+  python3 $TOOL_FOLDER/matchms/spoof_matchms_caching.py --input_csv_path ${cleaned_csv} \
+                                                        --cached_compound_name_annotation_path "$TOOL_FOLDER/matchms/pubchem_names.csv"
+  
+  touch dummy.txt
+  """
+}
+
+// Incoperate MatchMS Filtering into the Pipeline
+process matchms_filtering {
+  conda "$TOOL_FOLDER/gnps_ml_processing_matchms.yml"
+
+  publishDir "$params.output_dir", mode: 'copy'
+  publishDir "$TOOL_FOLDER/matchms", mode: 'copy', pattern: "compound_name_annotation.csv", saveAs: { filename -> "pubchem_names.csv" } // The script will create this file and copy it back
+
+  cache false
+
+  input:
+  each cleaned_mgf_chunk
+  // file cache_dummy // See TODO: in workflow
+  
+  output:
+  path "matchms_output/*"
+  path "compound_name_annotation.csv"
+
+  """
+  python3 $TOOL_FOLDER/matchms/matchms_cleaning.py  --input_mgf_path ${cleaned_mgf_chunk}\
+                                                    --cached_compound_name_annotation_path "$TOOL_FOLDER/matchms/pubchem_names.csv" \
+                                                    --output_path "./matchms_output/" \
   """
 }
 
@@ -111,7 +231,7 @@ process postprocess {
 process export_full_json {
   conda "$TOOL_FOLDER/gnps_ml_processing_env2"
 
-  publishDir "./nf_output", mode: 'copy'
+  publishDir "$params.output_dir", mode: 'copy'
 
   cache true
 
@@ -128,23 +248,22 @@ process export_full_json {
   python3 $TOOL_FOLDER/GNPS2_JSON_Export.py --input_mgf_path ${cleaned_mgf}\
                                             --input_csv_path ${cleaned_csv}\
                                             --output_path "./json_outputs" \
-                                            --progress \
-                                            --per_library
+                                            --progress
   """
 }
 
 process generate_subset {
   conda "$TOOL_FOLDER/gnps_ml_processing_env2/"
  
-  publishDir "./nf_output", mode: 'copy'
+  publishDir "$params.output_dir", mode: 'copy'
 
-  cache true
+  cache false
 
   input:
   path cleaned_csv
   path cleaned_parquet
   path cleaned_mgf
-  val json_dummy          // Dummy input to force this process to run after the export_full_json process
+  // val json_dummy          // Dummy input to force this process to run after the export_full_json process
 
   output:
   path "summary/*"
@@ -189,7 +308,7 @@ process generate_mgf {
 
 process calculate_similarities_pure_networking {
   // Currently, this process is not used and it is scheduled for deletion
-  publishDir "./nf_output", mode: 'copy'
+  publishDir "$params.output_dir", mode: 'copy'
   
   input:
   each mgf
@@ -211,7 +330,7 @@ process calculate_similarities {
   //conda "$TOOL_FOLDER/gnps_ml_processing_env2/"
   conda "$TOOL_FOLDER/gnps_ml_processing_env2"
 
-  publishDir "./nf_output", mode: 'copy'
+  publishDir "$params.output_dir", mode: 'copy'
   
   input:
   each mgf
@@ -232,7 +351,7 @@ process calculate_similarities {
 process split_subsets {
   conda "$TOOL_FOLDER/gnps_ml_processing_env2/"
 
-  publishDir "./nf_output", mode: 'copy'
+  publishDir "$params.output_dir", mode: 'copy'
 
   input:
   path spectral_similarities
@@ -270,39 +389,66 @@ process publish_similarities_for_prediction {
 
 workflow {
   environment_creation()
-  export_params = prep_params()
+  export_params = prep_params(environment_creation.out.dummy)
   temp_files = export(export_params)
+
+  if (params.include_massbank) {
+    fetch_data_massbank()
+    prep_params_massbank(fetch_data_massbank.out.blacklist, fetch_data_massbank.out.massbank_data)
+    massbank_files = export_massbank(fetch_data_massbank.out.massbank_data, prep_params_massbank.out.params)
+    merge_export_massbank(massbank_files.collect())
+    temp_files = temp_files.concat(merge_export_massbank.out.merged_files)
+  }
+
   (merged_mgf, merged_csv) = merge_export(temp_files.collect())
 
   // A python dictionary that maps GNPS adducts to a unified set of adducts used in the GNPS2 workflow
   adduct_mapping_ch = channel.fromPath("$TOOL_FOLDER/adduct_mapping.txt")
 
   postprocess(merged_csv, merged_mgf, adduct_mapping_ch)
+
   export_full_json(postprocess.out.cleaned_csv, postprocess.out.cleaned_mgf)
-  generate_subset(postprocess.out.cleaned_csv, postprocess.out.cleaned_parquet, postprocess.out.cleaned_mgf, export_full_json.out.dummy)    
+  // cache_pubchem_names_for_matchms(postprocess.out.cleaned_mgf)
+  // split_mgf_for_matchms_filtering(postprocess.out.cleaned_mgf)
 
-  calculate_similarities(generate_subset.out.output_mgf)
+  /******* 
+  * Since every time the cache is used matchms reopens the csv, it's actually faster to just 
+  * let the API calls fail, fixing this is TODO
+  * spoof_matchms_caching(postprocess.out.cleaned_csv) 
+  * matchms_filtering(postprocess.out.cleaned_mgf, spoof_matchms_caching.out.cache_dummy)  
+  *******/
+  matchms_filtering(postprocess.out.cleaned_mgf)
 
-  // For the spectral similarity prediction task, we need to calculate all pairs similarity in the training set
-  if (params.subset == "GNPS_default" || params.subset == "Spectral_Similarity_Prediction") {
-    use_default_path = false
-    //// generate_subset.out.output_parquet.collect()  // Make sure this finishes first
-    //// channel.fromPath(".nf_output/Spectral_Similarity_Prediction.parquet") | generate_mgf
-    //generate_mgf(generate_subset.out.output_parquet)
-    //calculate_similarities(generate_mgf.out.output_mgf)
 
-    publish_similarities_for_prediction(calculate_similarities.out.spectral_similarities)
 
-  }
-  // } else if (params.subset == "Spectral_Similarity_Prediction") {
-  //   generate_subset.out.output_parquet.collect()  // Make sure this finishes first
-  //   channel.fromPath(".nf_output/Spectral_Similarity_Prediction.parquet") | generate_mgf
-  //   // generate_mgf(generate_subset.out.output_parquet)
-  //   generate_mgf.out.output_mgf  | calculate_similarities 
-  //   publish_similarities_for_prediction(calculate_similarities.out.spectral_similarities)
-  // }
+  /*********** FROM HERE DOWN IS THE ML SPLITS ************/
+  if (false) {
+    // export_full_json(postprocess.out.cleaned_csv, postprocess.out.cleaned_mgf)
+  generate_subset(postprocess.out.cleaned_csv, postprocess.out.cleaned_parquet, postprocess.out.cleaned_mgf)    //, export_full_json.out.dummy
+  // if (false) {
+    calculate_similarities(generate_subset.out.output_mgf)
 
-  if (params.split) {
-    calculate_similarities.out.spectral_similarities | split_subsets
+    // For the spectral similarity prediction task, we need to calculate all pairs similarity in the training set
+    if (params.subset == "GNPS_default" || params.subset == "Spectral_Similarity_Prediction") {
+      use_default_path = false
+      //// generate_subset.out.output_parquet.collect()  // Make sure this finishes first
+      //// channel.fromPath(".nf_output/Spectral_Similarity_Prediction.parquet") | generate_mgf
+      //generate_mgf(generate_subset.out.output_parquet)
+      //calculate_similarities(generate_mgf.out.output_mgf)
+
+      publish_similarities_for_prediction(calculate_similarities.out.spectral_similarities)
+
+    }
+    // } else if (params.subset == "Spectral_Similarity_Prediction") {
+    //   generate_subset.out.output_parquet.collect()  // Make sure this finishes first
+    //   channel.fromPath(".nf_output/Spectral_Similarity_Prediction.parquet") | generate_mgf
+    //   // generate_mgf(generate_subset.out.output_parquet)
+    //   generate_mgf.out.output_mgf  | calculate_similarities 
+    //   publish_similarities_for_prediction(calculate_similarities.out.spectral_similarities)
+    // }
+
+    if (params.split) {
+      calculate_similarities.out.spectral_similarities | split_subsets
+    }
   }
 }

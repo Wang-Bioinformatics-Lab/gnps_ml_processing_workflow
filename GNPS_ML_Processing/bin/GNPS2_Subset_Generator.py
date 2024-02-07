@@ -88,7 +88,7 @@ def Bruker_Fragmentation_Prediction(summary_path:str, parquet_path:str):
     parquet_as_df = parquet_as_df[parquet_as_df.spectrum_id.isin(id_list)]
     parquet_as_df.export_parquet('./spectra/Bruker_Fragmentation_Prediction.parquet')
 
-def Orbitrap_Fragmentation_Prediction(summary_path:str, parquet_path:str):  
+def Orbitrap_Fragmentation_Prediction(summary_path:str, mgf_path:str):  
     """This function follows the cleaning in 3DMolMS applied to orbitrap instruments.
 
     Args:
@@ -101,7 +101,7 @@ def Orbitrap_Fragmentation_Prediction(summary_path:str, parquet_path:str):
     allowed_atoms = ['C', 'H', 'O', 'N', 'F', 'S', 'Cl', 'P', 'B', 'Br', 'I']
 
     # Remove structure-less entries. select instrument = orbitrap, GNPS_Inst = orbitrap, adduct = M+H
-    reduced_df = reduced_df[(~reduced_df['Smiles'].isna()) & (reduced_df['msMassAnalyzer'] == 'orbitrap') & (reduced_df['GNPS_Inst'] == 'orbitrap') & (reduced_df['Adduct'] == 'M+H') ]
+    reduced_df = reduced_df[(~reduced_df['Smiles'].isna()) & (reduced_df['msMassAnalyzer'] == 'orbitrap') & (reduced_df['Adduct'] == '[M+H]1+') ]
     
     # Remove all entires with atoms not in ['C', 'H', 'O', 'N', 'F', 'S', 'Cl', 'P', 'B', 'Br', 'I']
     reduced_df['Smiles_letters_only'] = reduced_df['Smiles'].apply(lambda x: "".join(re.findall("[a-zA-Z]+", x)))
@@ -110,14 +110,29 @@ def Orbitrap_Fragmentation_Prediction(summary_path:str, parquet_path:str):
     reduced_df.drop(['Smiles_letters_only','Smiles_cleaned'], inplace=True, axis=1)
 
     # reduced_df = reduced_df[reduced_df.msManufacturer == 'Bruker Daltonics']  
-    reduced_df.to_csv('./summary/Orbitrap_Fragmentation_Prediction.csv', index=False)
+        # Save to csv
+    print("Writing orbitrap fragmentation prediction subset to csv.", flush=True)
+    csv_path = './summary/Orbitrap_Fragmentation_Prediction.csv'
+    reduced_df.to_csv(csv_path, index=False)
     
-    id_list = list(reduced_df.spectrum_id )
-    del reduced_df
+    # Save to parquet
+    print("Scynchronizing spectra.", flush=True)
+    start_time = time.time()
+    output_mgf_path = './spectra/Orbitrap_Fragmentation_Prediction.mgf'
+    synchronize_spectra(mgf_path, output_mgf_path, reduced_df, progress_bar=True)
+    print("Done in {:.2f} seconds.".format(time.time() - start_time), flush=True)
+    print("Generating parquet file.", flush=True)
+    start_time = time.time()
+    parquet_as_df = generate_parquet_df(output_mgf_path)
+    parquet_as_df.to_parquet('./spectra/Orbitrap_Fragmentation_Prediction.parquet')
+    print("Done in {:.2f} seconds.".format(time.time() - start_time), flush=True)
     
-    parquet_as_df = vaex.open(parquet_path)
-    parquet_as_df = parquet_as_df[parquet_as_df.spectrum_id.isin(id_list)]
-    parquet_as_df.export_parquet('./spectra/Orbitrap_Fragmentation_Prediction.parquet')
+    # Save to json
+    print("Generating json output.", flush=True)
+    start_time = time.time()
+    json_path = './json_outputs/Orbitrap_Fragmentation_Prediction.json'
+    generate_json_mgf(output_mgf_path, csv_path, json_path, progress_bar=False)
+    print("Done in {:.2f} seconds.".format(time.time() - start_time), flush=True)
 
 def Thermo_Bruker_Translation(summary_path:str, parquet_path:str):
     """This function generates a csv, parquet file, and pairs list that contains the spectra of the same compounds from Thermo and Bruker instruments.
@@ -212,9 +227,9 @@ def Structural_Similarity_Prediction(summary_path:str, mgf_path:str):
                                             'msManufacturer':str,
                                             'msMassAnalyzer':str,
                                             'msModel':str})
+    
     df.Smiles = df.Smiles.astype(str)
-    df = df[(df.Smiles.notnull()) | (df.Smiles != 'nan')]
-    final_ids = df.spectrum_id.values
+    df = df[(df.Smiles.notnull()) & (df.Smiles != 'nan')]
     
     print("Generating fingerprints.", flush=True)
     start_time = time.time()
@@ -231,21 +246,19 @@ def Structural_Similarity_Prediction(summary_path:str, mgf_path:str):
     print("Computing structural similarity sim matrix.", flush=True)
     start_time = time.time()
     min_df = df[['Smiles','spectrum_id','Morgan_2048_3']].copy()
-    del df
     
-    build_tanimoto_similarity_list_precomputed(min_df, './util/Structural_Similarity_Prediction_Pairs.csv', similarity_threshold=0.0, truncate=(20,10))
-    print("Done in {:.2f} seconds.".format(time.time() - start_time), flush=True)
-    
+    build_tanimoto_similarity_list_precomputed(min_df, './util/Structural_Similarity_Prediction_Pairs.json', similarity_threshold=0.0, truncate=(20,10))
+    print("Done in {:.2f} seconds.".format(time.time() - start_time), flush=True) 
    
     # Save to parquet
     print("Scynchronizing spectra.", flush=True)
     start_time = time.time()
-    mgf_path = './spectra/Structural_Similarity_Prediction.mgf'
-    synchronize_spectra(mgf_path, mgf_path, final_ids, progress_bar=True)
+    output_mgf_path = './spectra/Structural_Similarity_Prediction.mgf'
+    synchronize_spectra(mgf_path, output_mgf_path, df, progress_bar=True)
     print("Done in {:.2f} seconds.".format(time.time() - start_time), flush=True)
     print("Generating parquet file.", flush=True)
     start_time = time.time()
-    parquet_as_df = generate_parquet_df(mgf_path)
+    parquet_as_df = generate_parquet_df(output_mgf_path)
     parquet_as_df.to_parquet('./spectra/Structural_Similarity_Prediction.parquet')
     print("Done in {:.2f} seconds.".format(time.time() - start_time), flush=True)
     
@@ -253,7 +266,7 @@ def Structural_Similarity_Prediction(summary_path:str, mgf_path:str):
     print("Generating json output.", flush=True)
     start_time = time.time()
     json_path = './json_outputs/Structural_Similarity_Prediction.json'
-    generate_json_mgf(mgf_path, csv_path, json_path, progress_bar=False)
+    generate_json_mgf(output_mgf_path, csv_path, json_path, progress_bar=False)
     print("Done in {:.2f} seconds.".format(time.time() - start_time), flush=True)
     
 
@@ -290,8 +303,8 @@ def Structural_Modification(summary_path:str, parquet_path:str):
     parquet_as_df = vaex.open(parquet_path)
         
     # Orbitrap Portion
-    positive = df.loc[(df.Adduct == 'M+H') & (df.msMassAnalyzer == 'orbitrap') & (df.GNPS_Inst == 'orbitrap')]
-    negative = df.loc[(df.Adduct == 'M-H') & (df.msMassAnalyzer == 'orbitrap') & (df.GNPS_Inst == 'orbitrap')]
+    positive = df.loc[(df.Adduct == 'M+H') & (df.msMassAnalyzer == 'orbitrap')]
+    negative = df.loc[(df.Adduct == 'M-H') & (df.msMassAnalyzer == 'orbitrap')]
     # Remove entries with duplicate SMILES
     positive = positive.drop_duplicates(subset=['Smiles'])
     negative = negative.drop_duplicates(subset=['Smiles'])
@@ -318,8 +331,8 @@ def Structural_Modification(summary_path:str, parquet_path:str):
     parquet_as_df[parquet_as_df.spectrum_id.isin(negative_ids)].export_parquet('./spectra/Structural_Modification_orbitrap_negative.parquet')
     
     # qtof Portion
-    positive = df.loc[(df.Adduct == 'M+H') & (df.msMassAnalyzer == 'qtof') & (df.GNPS_Inst == 'qtof')]
-    negative = df.loc[(df.Adduct == 'M-H') & (df.msMassAnalyzer == 'qtof') & (df.GNPS_Inst == 'qtof')]
+    positive = df.loc[(df.Adduct == 'M+H') & (df.msMassAnalyzer == 'qtof')]
+    negative = df.loc[(df.Adduct == 'M-H') & (df.msMassAnalyzer == 'qtof')]
     # Remove entries with duplicate SMILES
     positive = positive.drop_duplicates(subset=['Smiles'])
     negative = negative.drop_duplicates(subset=['Smiles'])
@@ -374,7 +387,7 @@ def main():
     elif args.subset == 'Fingerprint_Prediction':
         Fingerprint_Prediction(csv_path, parquet_path)
     elif args.subset == 'Orbitrap_Fragmentation_Prediction':
-        Orbitrap_Fragmentation_Prediction(csv_path, parquet_path)
+        Orbitrap_Fragmentation_Prediction(csv_path, mgf_path)
     elif args.subset == 'Thermo_Bruker_Translation':
         Thermo_Bruker_Translation(csv_path, parquet_path)
     elif args.subset == 'Structural_Modification':
@@ -386,7 +399,7 @@ def main():
     elif args.subset == 'GNPS_default':
         Bruker_Fragmentation_Prediction(csv_path, parquet_path)
         Fingerprint_Prediction(csv_path, parquet_path)
-        Orbitrap_Fragmentation_Prediction(csv_path, parquet_path)
+        Orbitrap_Fragmentation_Prediction(csv_path, mgf_path)
         Thermo_Bruker_Translation(csv_path, parquet_path)
         Structural_Modification(csv_path, parquet_path)
         Structural_Similarity_Prediction(csv_path, parquet_path)

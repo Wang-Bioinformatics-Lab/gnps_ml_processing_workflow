@@ -7,3 +7,15 @@
 [submodule "GNPS_ML_Processing/bin/GNPS_FastSearch_Library"]
 	path = GNPS_ML_Processing/bin/GNPS_FastSearch_Library
 	url = https://github.com/mwang87/GNPS_FastSearch_Library.git
+[submodule "Train_Test_Splits/bin/GNPS_FastSearch_Library"]
+	path = Train_Test_Splits/bin/GNPS_FastSearch_Library
+	url = https://github.com/mwang87/GNPS_FastSearch_Library.git
+[submodule "GNPS_ML_Processing/bin/collision_energy_imputation/search_libaries_against_public_data"]
+	path = GNPS_ML_Processing/bin/collision_energy_imputation/search_libaries_against_public_data
+	url = https://github.com/Wang-Bioinformatics-Lab/search_libaries_against_public_data.git
+[submodule "GNPS_ML_Processing/bin/collision_energy_imputation/PerScanSummarizer"]
+	path = GNPS_ML_Processing/bin/collision_energy_imputation/PerScanSummarizer
+	url = https://github.com/Wang-Bioinformatics-Lab/PerScanSummarizer.git
+[submodule "GNPS_ML_Processing/bin/collision_energy_imputation/downloadpublicdata"]
+	path = GNPS_ML_Processing/bin/collision_energy_imputation/downloadpublicdata
+	url = /home/user/LabData/michael_s/SourceCode/Workflows/downloadpublicdata

@@ -2,6 +2,7 @@ import numpy as np
 import argparse
 import requests
 import os
+import json
 
 def main():
     # We only want to generate these files quarter, so we'll check if it has already been done
@@ -11,11 +12,15 @@ def main():
     # parser.add_argument('input_libraryname', default='ALL_GNPS')
     parser.add_argument('-s', '--structures_required', help="remove entries that don't include structures", action="store_true")
     parser.add_argument('-p', type=int, help='Parallelism', default=100)
-
+    parser.add_argument('--all_GNPS_json_path', help='Path to all_GNPS.json', default="None")   # Using none in quotes for easy nextflow arguments
     args = parser.parse_args()
 
-    gnps_url = "https://external.gnps2.org/gnpslibrary/{}.json".format("ALL_GNPS_NO_PROPOGATED")
-    all_spectra_list = requests.get(gnps_url).json()
+    # If a path to the JSON file is provided, use that instead of downloading from GNPS
+    if args.all_GNPS_json_path != "None":
+        all_spectra_list = json.load(open(args.all_GNPS_json_path, 'r'))
+    else:
+        gnps_url = "https://external.gnps2.org/gnpslibrary/{}.json".format("ALL_GNPS_NO_PROPOGATED")
+        all_spectra_list = requests.get(gnps_url).json()
 
     if not os.path.isdir('./params'): os.makedirs('./params',exist_ok=True)
 
