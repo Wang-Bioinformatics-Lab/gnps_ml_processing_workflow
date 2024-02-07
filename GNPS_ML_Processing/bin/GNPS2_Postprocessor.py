@@ -15,7 +15,7 @@ import time
 import datetime
 import argparse
 
-PARALLEL_WORKERS = 32
+PARALLEL_WORKERS = 6
 
 import sys
 

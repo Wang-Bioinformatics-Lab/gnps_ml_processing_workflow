@@ -16,3 +16,6 @@
 [submodule "GNPS_ML_Processing/bin/collision_energy_imputation/PerScanSummarizer"]
 	path = GNPS_ML_Processing/bin/collision_energy_imputation/PerScanSummarizer
 	url = https://github.com/Wang-Bioinformatics-Lab/PerScanSummarizer.git
+[submodule "GNPS_ML_Processing/bin/collision_energy_imputation/downloadpublicdata"]
+	path = GNPS_ML_Processing/bin/collision_energy_imputation/downloadpublicdata
+	url = /home/user/LabData/michael_s/SourceCode/Workflows/downloadpublicdata
