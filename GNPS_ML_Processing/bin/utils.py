@@ -602,9 +602,9 @@ def synchronize_spectra(input_path, output_path, summary, progress_bar=True):
         output_path (str): Path to save the output mgf.
         summary (pd.Dataframe): Dataframe with spectrum ids to keep.
     """   
-    for col_name in ['spectrum_id', 'scan', 'Charge']:
+    for col_name in ['spectrum_id', 'scan', 'Charge', 'Adduct', 'Ion_Mode']:
         if col_name not in summary.columns:
-            raise ValueError("Summary must contain columns 'spectrum_id', 'scan', 'charge', and 'Compund_Name'. \n \
+            raise ValueError("Summary must contain columns 'spectrum_id', 'scan', 'charge', 'Compund_Name', 'Adduct', 'Ion_Mode. \n \
                              Instead got columns {}".format(summary.columns))
     
     with open(output_path, 'w', encoding="utf-8") as output_mgf:
@@ -624,7 +624,7 @@ def synchronize_spectra(input_path, output_path, summary, progress_bar=True):
         # else:
         #     mapping = summary[['spectrum_id','scan','Charge','Compund_Name', 'Smiles']].itertuples()
         
-        for row_dict in mapping.to_dict(orient="records"):
+        for row_dict in summary.to_dict(orient="records"):
             spectra = input_mgf[row_dict['spectrum_id']]
             if spectra['params']['title'] != row_dict['spectrum_id']:
                 raise ValueError("Sanity Check Failed. Expected specrum identifier did not match mgf spectrum identifier.")
