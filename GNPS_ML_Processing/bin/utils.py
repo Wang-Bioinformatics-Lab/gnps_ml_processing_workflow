@@ -618,11 +618,11 @@ def synchronize_spectra(input_path, output_path, summary, progress_bar=True):
             else:
                 print(f"Warning: Column {column} not found in summary. Skipping this output.")
         
-        if progress_bar:
-            print("Syncing MGF with summary")
-            mapping = tqdm(summary[['spectrum_id','scan','Charge','Compund_Name', 'Smiles']].itertuples())
-        else:
-            mapping = summary[['spectrum_id','scan','Charge','Compund_Name', 'Smiles']].itertuples()
+        # if progress_bar:
+        #     print("Syncing MGF with summary")
+        #     mapping = tqdm(summary[['spectrum_id','scan','Charge','Compund_Name', 'Smiles']].itertuples())
+        # else:
+        #     mapping = summary[['spectrum_id','scan','Charge','Compund_Name', 'Smiles']].itertuples()
         
         for row_dict in mapping.to_dict(orient="records"):
             spectra = input_mgf[row_dict['spectrum_id']]
