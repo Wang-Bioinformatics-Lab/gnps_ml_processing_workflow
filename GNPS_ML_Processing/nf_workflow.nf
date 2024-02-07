@@ -406,6 +406,8 @@ workflow {
   adduct_mapping_ch = channel.fromPath("$TOOL_FOLDER/adduct_mapping.txt")
 
   postprocess(merged_csv, merged_mgf, adduct_mapping_ch)
+
+  export_full_json(postprocess.out.cleaned_csv, postprocess.out.cleaned_mgf)
   // cache_pubchem_names_for_matchms(postprocess.out.cleaned_mgf)
   // split_mgf_for_matchms_filtering(postprocess.out.cleaned_mgf)
 
