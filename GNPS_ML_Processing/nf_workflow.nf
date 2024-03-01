@@ -29,6 +29,9 @@ params.parallelism = 12
 params.pure_networking_parallelism = 5000
 params.pure_networking_forks = 32
 
+// Include an option to change the conda path
+params.conda_path = "$TOOL_FOLDER/gnps_ml_processing_env2/"
+params.matchms_conda_path = "$TOOL_FOLDER/gnps_ml_processing_matchms_env/"
 
 // Include MassBank parser in case params.include_massbank is true
 include { fetch_data_massbank; prep_params_massbank; export_massbank; merge_export_massbank } from '../MassBank_Processing/MassBank_processing.nf'
@@ -40,7 +43,8 @@ process environment_creation {
   path "dummy.text", emit: dummy
   
   """
-  mamba env update --file $TOOL_FOLDER/conda_env.yml --prefix $TOOL_FOLDER/gnps_ml_processing_env2/
+  mamba env update --file $TOOL_FOLDER/conda_env.yml --prefix $params.conda_path 
+  mamba env update --file $TOOL_FOLDER/gnps_ml_processing_matchms.yml --prefix $params.matchms_conda_path
 
   touch dummy.text
   """
@@ -48,7 +52,7 @@ process environment_creation {
 
 // Splitting out the GNPS Libraries into smaller chunks
 process prep_params {
-  conda "$TOOL_FOLDER/gnps_ml_processing_env2"
+  conda "$params.conda_path"
 
   cache 'lenient'
 
@@ -67,7 +71,7 @@ process prep_params {
 
 // Pull additional data from Provenance File
 process export {
-    conda "$TOOL_FOLDER/gnps_ml_processing_env2"
+    conda "$params.conda_path"
 
     maxForks 8
     errorStrategy 'retry'
@@ -87,8 +91,8 @@ process export {
 
 // Merges all the exports together
 process merge_export {
-  //conda "$TOOL_FOLDER/gnps_ml_processing_env2/"
-  conda "$TOOL_FOLDER/gnps_ml_processing_env2"
+  //conda "$params.conda_path/"
+  conda "$params.conda_path"
 
   input:
   path temp_files
@@ -110,8 +114,8 @@ process merge_export {
 
 // Cleaning work - unifying the Controlled Vocabulary
 process postprocess {
-  //conda "$TOOL_FOLDER/gnps_ml_processing_env2/"
-  conda "$TOOL_FOLDER/gnps_ml_processing_env2"
+  //conda "$params.conda_path/"
+  conda "$params.conda_path"
 
   publishDir "$params.output_dir", mode: 'copy'
   publishDir "$TOOL_FOLDER", mode: 'copy', pattern: "tautomerization_cache.json", saveAs: { filename -> "tautomerization_cache.json" } // The script will create this file and copy it back
@@ -165,7 +169,7 @@ process postprocess {
 
 // Splits the output mgf into smaller chunks to parallelize MatchMS Filtering
 process split_mgf_for_matchms_filtering {
-  conda "$TOOL_FOLDER/gnps_ml_processing_matchms.yml"
+  conda "$params.matchms_conda_path"
 
   cache true
 
@@ -186,7 +190,7 @@ process split_mgf_for_matchms_filtering {
 reduce the number of api calls */
 process spoof_matchms_caching {
   // Curerntly deprecated, see TODO in workflow
-  conda "$TOOL_FOLDER/gnps_ml_processing_matchms.yml"
+  conda "$params.matchms_conda_path"
   publishDir "$TOOL_FOLDER/matchms", mode: 'copy', pattern: "compound_name_annotation.csv", saveAs: { filename -> "pubchem_names.csv" } // The script will create this file and copy it back
 
   cache 'lenient'
@@ -208,7 +212,7 @@ process spoof_matchms_caching {
 
 // Incoperate MatchMS Filtering into the Pipeline
 process matchms_filtering {
-  conda "$TOOL_FOLDER/gnps_ml_processing_matchms.yml"
+  conda "$params.matchms_conda_path"
 
   publishDir "$params.output_dir", mode: 'copy'
   publishDir "$TOOL_FOLDER/matchms", mode: 'copy', pattern: "compound_name_annotation.csv", saveAs: { filename -> "pubchem_names.csv" } // The script will create this file and copy it back
@@ -232,7 +236,7 @@ process matchms_filtering {
 
 // Exports the output in JSON format
 process export_full_json {
-  conda "$TOOL_FOLDER/gnps_ml_processing_env2"
+  conda "$params.conda_path"
 
   publishDir "$params.output_dir", mode: 'copy'
 
@@ -256,7 +260,7 @@ process export_full_json {
 }
 
 process generate_subset {
-  conda "$TOOL_FOLDER/gnps_ml_processing_env2/"
+  conda "$params.conda_path"
  
   publishDir "$params.output_dir", mode: 'copy'
 
@@ -281,7 +285,7 @@ process generate_subset {
 }
 
 process generate_mgf {
-  conda "$TOOL_FOLDER/gnps_ml_processing_env2/"
+  conda "$params.conda_path"
 
   input:
   each parquet_file
@@ -330,8 +334,8 @@ process calculate_similarities_pure_networking {
 
 process calculate_similarities {
   // Similarities using fasst search have not been implemented yet
-  //conda "$TOOL_FOLDER/gnps_ml_processing_env2/"
-  conda "$TOOL_FOLDER/gnps_ml_processing_env2"
+  //conda "$params.conda_path/"
+  conda "$params.conda_path"
 
   publishDir "$params.output_dir", mode: 'copy'
   
@@ -352,7 +356,7 @@ process calculate_similarities {
 }
 
 process split_subsets {
-  conda "$TOOL_FOLDER/gnps_ml_processing_env2/"
+  conda "$params.conda_path"
 
   publishDir "$params.output_dir", mode: 'copy'
 
