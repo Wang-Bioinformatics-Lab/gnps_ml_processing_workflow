@@ -1,6 +1,8 @@
 import argparse
 import pandas as pd
 from pyteomics.mgf import IndexedMGF
+from rdkit import Chem
+from rdkit.Chem.Scaffolds import MurckoScaffold
 from tqdm import tqdm
 import shutil
 
@@ -116,6 +118,53 @@ def split_data_structural(input_train_csv, input_train_mgf, input_test_csv, inpu
         temp = train_summary.sample(n=min_num_points, replace=False)
         temp.to_csv(output_train_csv_path)
         synchronize_spectra(input_train_mgf, output_train_mgf_path, temp)
+        
+def split_data_scaffold(input_train_csv, input_train_mgf, input_test_csv, input_test_mgf, progress_bar=True):
+    """This function removes all overlapping data points from the training set based on the general Murcko scaffold. 
+    For mroe information on this approach, see here: 
+    https://www.blopig.com/blog/2021/06/out-of-distribution-generalisation-and-scaffold-splitting-in-molecular-property-prediction/
+    """
+    train_summary = pd.read_csv(input_train_csv)
+    train_summary = train_summary.loc[~ train_summary.Smiles.isna()]
+
+    test_summary = pd.read_csv(input_test_csv)
+    test_summary = test_summary.loc[~ test_summary.Smiles.isna()]
+    
+    output_test_csv_path  = input_test_csv[:-4] + f"_scaffold.csv"
+    output_test_mgf_path  = input_test_mgf[:-4] + f"_scaffold.mgf"
+    
+    # Generate a dictionary from the smiles to the generalized murcko scaffold
+    def _generate_scaffold(smiles):
+        mol = Chem.MolFromSmiles(smiles)
+        if mol is None:
+            raise ValueError(f"Could not generate mol from smiles: {smiles}")
+        
+        mol_scaffold = MurckoScaffold.GetScaffoldForMol(mol)
+        mol_scaffold_generic = MurckoScaffold.MakeScaffoldGeneric(mol_scaffold)
+        
+        return Chem.CanonSmiles(Chem.MolToSmiles(mol_scaffold_generic))
+
+    train_smiles = train_summary.Smiles.unique()
+    train_scaffold_map = {smiles: _generate_scaffold(smiles) for smiles in train_smiles}
+    
+    test_smiles = test_summary.Smiles.unique()
+    test_scaffold_map = {smiles: _generate_scaffold(smiles) for smiles in test_smiles}
+    
+    test_summary['scaffold'] = test_summary.Smiles.apply(lambda x: test_scaffold_map[x])
+    train_summary['scaffold'] = train_summary.Smiles.apply(lambda x: train_scaffold_map[x])
+    
+    test_summary.to_csv(output_test_csv_path)
+    synchronize_spectra(input_test_mgf, output_test_mgf_path, test_summary)
+    
+    # Remove shared scaffolds
+    shared_scaffolds = set(test_summary.scaffold.values).intersection(set(train_summary.scaffold.values))
+    train_summary = train_summary.loc[~train_summary['scaffold'].isin(shared_scaffolds)]
+    
+    output_train_csv_path = input_train_csv[:-4] + f"_scaffold.csv"
+    output_train_mgf_path = input_train_mgf[:-4] + f"_scaffold.mgf"
+    
+    train_summary.to_csv(output_train_csv_path)
+    synchronize_spectra(input_train_mgf, output_train_mgf_path, train_summary)
 
 def split_data(input_train_csv, input_train_mgf, input_test_csv, input_test_mgf, spectral_similarities=None, structural_similarities=None, similarity_thresholds=[1.0]):
     """This function removes all instances of scans listed in the similarity file from the input csv and mgf files.
