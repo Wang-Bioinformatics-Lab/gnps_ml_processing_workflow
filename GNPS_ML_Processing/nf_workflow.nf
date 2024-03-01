@@ -114,6 +114,7 @@ process postprocess {
   conda "$TOOL_FOLDER/gnps_ml_processing_env2"
 
   publishDir "$params.output_dir", mode: 'copy'
+  publishDir "$TOOL_FOLDER", mode: 'copy', pattern: "tautomerization_cache.json", saveAs: { filename -> "tautomerization_cache.json" } // The script will create this file and copy it back
 
   cache true
 
@@ -126,11 +127,13 @@ process postprocess {
   path "ALL_GNPS_cleaned.csv", emit: cleaned_csv
   path "ALL_GNPS_cleaned.parquet", emit: cleaned_parquet
   path "ALL_GNPS_cleaned.mgf", emit: cleaned_mgf
+  path "tautomerization_cache.json", includeInputs: true
 
   script:
   if (params.include_massbank)
     """
-    python3 $TOOL_FOLDER/GNPS2_Postprocessor.py --includes_massbank
+    cp $TOOL_FOLDER/tautomerization_cache.json ./tautomerization_cache.json
+    python3 $TOOL_FOLDER/GNPS2_Postprocessor.py --includes_massbank --tautomerization_cache "tautomerization_cache.json"
     """
   else
     """
