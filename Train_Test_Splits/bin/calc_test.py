@@ -41,7 +41,7 @@ def select_test(input_csv, input_mgf, num_test_points):
     # Select Test Points
     test_rows = summary.sample(n=num_test_points)
     print("Total number of test rows: ", len(test_rows), flush=True)
-    train_rows = summary.loc[~ summary.scan.isin(test_rows.spectrum_id)]
+    train_rows = summary.loc[~ summary.spectrum_id.isin(test_rows.spectrum_id)]
     print("Total number of potential training rows: ", len(train_rows), flush=True)
     test_ids = test_rows['spectrum_id'].values
     train_ids = train_rows['spectrum_id'].values

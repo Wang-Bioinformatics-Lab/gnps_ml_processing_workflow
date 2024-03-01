@@ -93,6 +93,10 @@ def split_data_structural(input_train_csv, input_train_mgf, input_test_csv, inpu
     
     structural_similarities = pd.read_csv(structural_similarities)
     
+    # Remove obvious ones where spectrum_id is shared
+    all_test_ids = set(test_summary.spectrum_id.values)
+    train_summary = train_summary.loc[~train_summary['spectrum_id'].isin(all_test_ids)]
+    
     # Get the maximum number of data poitns to be dropped in order to hold train size fixed.
     min_threshold = min(similarity_thresholds)
     max_num_removed = len(structural_similarities[structural_similarities['Tanimoto_Similarity'] >= min_threshold].spectrumid1.unique())
@@ -102,7 +106,7 @@ def split_data_structural(input_train_csv, input_train_mgf, input_test_csv, inpu
         output_train_csv_path = input_train_csv[:-4] + f"_structural_{threshold}.csv"
         output_train_mgf_path = input_train_mgf[:-4] + f"_structural_{threshold}.mgf"
 
-        structural_similarities = structural_similarities.loc[structural_similarities['Tanimoto_Similarity'] <= threshold]
+        structural_similarities = structural_similarities.loc[structural_similarities['Tanimoto_Similarity'] >= threshold]
         
         to_drop = structural_similarities['spectrumid1'].values
         train_summary = train_summary.loc[~train_summary['spectrum_id'].isin(to_drop)]
@@ -136,3 +140,56 @@ def main():
 
 if __name__ == "__main__":
     main()
+    
+def test_split_data_structural():
+    # Create test data
+    import os
+    import pandas as pd
+    import numpy as np
+    
+    if not os.path.exists("./test_data"):
+        os.makedirs("./test_data")
+        
+    train_csv = "./test_data/train.csv"
+    train_mgf = "./test_data/train.mgf"
+    test_csv = "./test_data/test.csv"
+    test_mgf = "./test_data/test.mgf"
+    
+    spectral_similarities = "./test_data/spectral_similarities.csv"
+    structural_similarities = "./test_data/structural_similarities.csv"
+    
+    train_csv_df = pd.DataFrame({'spectrum_id': [f'spectrum_id_{x}' for x in np.arange(100)], 'scan': np.arange(100), 'Charge': np.ones(100), 'Smiles': ['C1CCCCC1' for x in np.arange(100)]})
+    train_csv_df.to_csv(train_csv, index=False)
+    test_csv_df = pd.DataFrame({'spectrum_id': [f'spectrum_id_{x}' for x in np.arange(50,100)], 'scan': np.arange(100, 150), 'Charge': np.ones(50), 'Smiles': ['C1CCCCC1' for x in np.arange(50)]})
+    test_csv_df.to_csv(test_csv, index=False)
+    
+    with open(train_mgf, 'w') as f:
+        for i in range(100):
+            f.write(f"BEGIN IONS\nPEPMASS=100.0\nCHARGE=1+\nTITLE=spectrum_id_{i}\nSCANS={i}\n100.0 100.0\nEND IONS\n")
+    with open(test_mgf, 'w') as f:
+        for i in range(50,100):
+            f.write(f"BEGIN IONS\nPEPMASS=100.0\nCHARGE=1+\nTITLE=spectrum_id_{i}\nSCANS={i}\n100.0 100.0\nEND IONS\n")
+            
+    structural_similarities_df = pd.DataFrame({'spectrumid1': [f'spectrum_id_{x}' for x in np.arange(50)], 'spectrumid2': [f'spectrum_id_{x}' for x in np.arange(50,100)], 'Tanimoto_Similarity': np.concatenate([np.ones(25), np.zeros(25)])})
+    structural_similarities_df.to_csv(structural_similarities, index=False)
+    
+    split_data_structural(train_csv, train_mgf, test_csv, test_mgf, structural_similarities, [0.7], progress_bar=True)
+    
+    output_train_csv = "./test_data/train_structural_0.7.csv"
+    output_train_mgf = "./test_data/train_structural_0.7.mgf"
+    
+    assert os.path.exists(output_train_csv)
+    assert os.path.exists(output_train_mgf)
+    
+    output_train_csv_df = pd.read_csv(output_train_csv)
+    output_train_mgf = IndexedMGF(output_train_mgf)
+    
+    # We start with 100, we lose 50 to ID collision, we lose 25 to structural similarity
+    assert len(output_train_csv_df) == 25 
+    assert len(output_train_mgf) == 25
+    
+    # Check the output ids are correct
+    assert set(output_train_csv_df.spectrum_id.values) == set([f'spectrum_id_{x}' for x in np.arange(25, 50)])
+
+    print(output_train_csv_df.spectrum_id.values)
+    raise ValueError("Test Complete")

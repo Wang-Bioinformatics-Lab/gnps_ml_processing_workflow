@@ -67,15 +67,16 @@ def compute_similarities_square(train_df:pd.DataFrame,
     test_df = test_df.drop_duplicates(subset='Smiles')
     
     pandarallel.initialize(progress_bar=False, nb_workers=PARALLEL_WORKERS, verbose=0)
-    train_fps   = train_df[fingerprint_column_name].parallel_apply(lambda x: CreateFromBitString(''.join(str(y) for y in x))).values
-    test_fps    = test_df[fingerprint_column_name].parallel_apply(lambda x: CreateFromBitString(''.join(str(y) for y in x))).values
-    train_fps   = list(train_fps)
-    test_fps    = list(test_fps)
+    train_df.loc[:, fingerprint_column_name] = train_df.loc[:, fingerprint_column_name].parallel_apply(lambda x: CreateFromBitString(''.join(str(y) for y in x))).values
+    test_df.loc[:, fingerprint_column_name] = test_df.loc[:, fingerprint_column_name].parallel_apply(lambda x: CreateFromBitString(''.join(str(y) for y in x))).values
+    
+    train_fps_mapping = dict(zip(train_df['Smiles'], train_df[fingerprint_column_name]))
+    test_fps_mapping = dict(zip(test_df['Smiles'], test_df[fingerprint_column_name]))
 
     # Indices are now non contiguous because the entries without structures are removed
     # This will map back to the original spectrum_id
-    train_idx_mapping = {idx: group_df['spectrum_id'].values for idx, (_, group_df) in enumerate(grouped_train_df)}
-    test_idx_mapping = {idx: group_df['spectrum_id'].values for idx, (_, group_df) in enumerate(grouped_test_df)}
+    train_smiles_mapping = {group_key: group_df['spectrum_id'].values for idx, (group_key, group_df) in enumerate(grouped_train_df)}
+    test_smiles_mapping = {group_key: group_df['spectrum_id'].values for idx, (group_key, group_df) in enumerate(grouped_test_df)}
     
     # Cleanup variables to reduce memory overhead
     del grouped_train_df
@@ -90,8 +91,10 @@ def compute_similarities_square(train_df:pd.DataFrame,
         temp_writer = csv.DictWriter(f, fieldnames=fieldnames)
         temp_writer.writeheader()
     
-        for train_index, train_fp in enumerate(train_fps):
-            sims = BulkTanimotoSimilarity(train_fp, test_fps)
+        for smiles_i, train_fp in train_fps_mapping.items():
+            sims = BulkTanimotoSimilarity(train_fp, list(test_fps_mapping.values()))
+            
+            corresponding_smiles = list(test_fps_mapping.keys())
             
             # We only need the highest similarity (it's good enough to know it won't be in our train set)
             max_sim = -1.0
@@ -102,10 +105,10 @@ def compute_similarities_square(train_df:pd.DataFrame,
                     max_sim = this_sim
                     max_sim_index = j
             if max_sim != -1.0:
-                for edge_from in train_idx_mapping[train_index]:
+                for edge_from in train_smiles_mapping[smiles_i]:
                     # Note that this will output all test spectrum_ids that have an identical smiles. 
                     # This in not technically necessary but may be useful for debugging.
-                    for edge_to in test_idx_mapping[max_sim_index]:
+                    for edge_to in test_smiles_mapping[corresponding_smiles[max_sim_index]]:
                         row = {
                             'spectrumid1': edge_from,
                             'spectrumid2': edge_to,  
