@@ -7,16 +7,17 @@ import pandas as pd
 from pyteomics.mgf import IndexedMGF
 import re
 from tqdm import tqdm
-from utils import harmonize_smiles_rdkit, neutralize_atoms, INCHI_to_SMILES, synchronize_spectra, generate_parquet_df
+from utils import harmonize_smiles_rdkit, tautomerize_smiles, neutralize_atoms, INCHI_to_SMILES, synchronize_spectra, generate_parquet_df
 from rdkit import Chem
 from rdkit.Chem import Descriptors
 import json
 from pandarallel import pandarallel
+from joblib import Parallel, delayed
 import time
 import datetime
 import argparse
 
-PARALLEL_WORKERS = 6
+PARALLEL_WORKERS = 2
 
 import sys
 
@@ -246,7 +247,7 @@ def basic_cleaning(summary):
     
     return summary
 
-def clean_smiles(summary, tautomerization_cache=None):
+def clean_smiles(summary, smiles_mapping_cache=None):
     """This function will harmonize the tautomers for the smiles strings and remove invalid strings.
 
     Args:
@@ -270,29 +271,50 @@ def clean_smiles(summary, tautomerization_cache=None):
     mask = (summary.Smiles == '') & (summary.INCHI != '')
     summary.loc[mask, 'Smiles'] = summary.loc[mask, 'INCHI'].apply(INCHI_to_SMILES)
     
+    print("\t Begining SMILES cleaning", flush=True)
     # Create a smiles to tautomerized smiles mapping
-    if tautomerization_cache is not None and os.path.exists(tautomerization_cache):
+    if smiles_mapping_cache is not None and os.path.exists(smiles_mapping_cache):
         try:
-            with open(tautomerization_cache, 'r', encoding="utf-8") as f:
+            with open(smiles_mapping_cache, 'r', encoding="utf-8") as f:
                 cached_smiles_mapping = json.load(f)
-            print("Loaded tautomerization cache")
+            print("Loaded smiles_mapping_cache")
         except Exception as e:
-            print(f"Error loading tautomerization cache: {e}")
+            print(f"Error loading smiles_mapping_cache {e}")
             cached_smiles_mapping = None
-    unique_smiles = pd.Series(summary.Smiles.unique())
+    uncached_unique_smiles = pd.Series(summary.Smiles.unique())
     if cached_smiles_mapping is not None:
-        unique_smiles = unique_smiles[~unique_smiles.isin(cached_smiles_mapping.keys())]
-    tautomerized_smiles = unique_smiles.parallel_apply(lambda x: harmonize_smiles_rdkit(x, skip_tautomerization=False))
-    smiles_mapping = dict(zip(unique_smiles, tautomerized_smiles))
+        uncached_unique_smiles = uncached_unique_smiles[~uncached_unique_smiles.isin(cached_smiles_mapping.keys())]
+                
+    # Returns a list of dicts
+    cleaned_smiles = Parallel(n_jobs=PARALLEL_WORKERS)(delayed(harmonize_smiles_rdkit)(x) for x in tqdm(uncached_unique_smiles))
+    # Merge into one dict
+    cleaned_smiles_mapping = {}
+    for mapping in cleaned_smiles:
+        cleaned_smiles_mapping.update(mapping)
+        
+    # Get the unique cleaned_smiles and tautomerize
+    print("\t Begining SMILES tautomerization", flush=True)
+    unique_cleaned_smiles = pd.Series(list(cleaned_smiles_mapping.values())).unique()
+    cleaned_tautomers = Parallel(n_jobs=PARALLEL_WORKERS)(delayed(tautomerize_smiles)(x) for x in tqdm(unique_cleaned_smiles))
+    # Merge into one dict
+    cleaned_tautomers_mapping = {}
+    for mapping in cleaned_tautomers:
+        cleaned_tautomers_mapping.update(mapping)
+    
+    # Merge the two mappings so we have initial_smiles -> cleaned_and_tautomerized_smiles
+    for k, v in cleaned_smiles_mapping.items():
+        cleaned_smiles_mapping[k] = cleaned_tautomers_mapping[v]
+        
+    # Add cached mappings, if available
     if cached_smiles_mapping is not None:
-        smiles_mapping.update(cached_smiles_mapping)
+        cleaned_smiles_mapping.update(cached_smiles_mapping)
         
     # Save to an external json file
-    if tautomerization_cache is not None:
-        with open(tautomerization_cache, 'w', encoding="utf-8") as f:
-            json.dump(smiles_mapping, f)
+    if smiles_mapping_cache is not None:
+        with open(smiles_mapping_cache, 'w', encoding="utf-8") as f:
+            json.dump(cleaned_smiles_mapping, f)
     
-    summary.loc[:, 'Smiles'] = summary.Smiles.apply(lambda x: smiles_mapping.get(x, x))
+    summary.loc[:, 'Smiles'] = summary.Smiles.apply(lambda x: cleaned_smiles_mapping.get(x, x))
     
     # Check the INCHI and SMILES are equivalent
     mask = (summary.Smiles != '') & (summary.INCHI != '')
@@ -562,7 +584,7 @@ def add_explained_intensity(summary, spectra):
     filter = (summary['ppmBetweenExpAndThMass'].notna() & summary['ppmBetweenExpAndThMass']<=50)
     summary.loc[filter, column_name_ppmBetweenExpAndThMass] = summary.loc[filter].parallel_apply(helper, axis=1)
             
-def postprocess_files(csv_path, mgf_path, output_csv_path, output_parquet_path, cleaned_mgf_path, includes_massbank=False, tautomerization_cache=None):
+def postprocess_files(csv_path, mgf_path, output_csv_path, output_parquet_path, cleaned_mgf_path, includes_massbank=False, smiles_mapping_cache=None):
     pandarallel.initialize(progress_bar=False, nb_workers=PARALLEL_WORKERS, use_memory_fs = False)
     
     summary = pd.read_csv(csv_path)
@@ -580,7 +602,7 @@ def postprocess_files(csv_path, mgf_path, output_csv_path, output_parquet_path, 
     # Clean smiles strings:
     print("Cleaning up smiles strings", flush=True)
     start = time.time()
-    summary = clean_smiles(summary, tautomerization_cache=tautomerization_cache)
+    summary = clean_smiles(summary, smiles_mapping_cache=smiles_mapping_cache)
     print("Done in {} seconds".format(datetime.timedelta(seconds=time.time() - start)), flush=True)
        
     # Clean up monoistopic masses:
@@ -652,7 +674,7 @@ def main():
     parser.add_argument('--output_parquet_path', type=str, default="ALL_GNPS_cleaned.parquet", help='Path to the output parquet file')
     parser.add_argument('--output_mgf_path', type=str, default="ALL_GNPS_cleaned.mgf", help='Path to the output mgf file')
     parser.add_argument('--includes_massbank', action='store_true', help='Whether the merged files include reparsed massbank entries.')
-    parser.add_argument('--tautomerization_cache', type=str, default=None, required=False, help='Path to the tautomerization cache file')
+    parser.add_argument('--smiles_mapping_cache', type=str, default=None, required=False, help='Path to the smiles cache file')
     args= parser.parse_args()
     
     csv_path                = str(args.input_csv_path)
@@ -660,11 +682,11 @@ def main():
     cleaned_csv_path        = str(args.output_csv_path)
     cleaned_parquet_path    = str(args.output_parquet_path)
     cleaned_mgf_path        = str(args.output_mgf_path)
-    tautomerization_cache   = str(args.tautomerization_cache)
+    smiles_mapping_cache   = str(args.smiles_mapping_cache)
 
     if not os.path.isfile(cleaned_csv_path):
         if not os.path.isfile(cleaned_parquet_path):
-            postprocess_files(csv_path, mgf_path, cleaned_csv_path, cleaned_parquet_path, cleaned_mgf_path, args.includes_massbank, tautomerization_cache=tautomerization_cache)
+            postprocess_files(csv_path, mgf_path, cleaned_csv_path, cleaned_parquet_path, cleaned_mgf_path, args.includes_massbank, smiles_mapping_cache=smiles_mapping_cache)
             
 if __name__ == '__main__':
     main()

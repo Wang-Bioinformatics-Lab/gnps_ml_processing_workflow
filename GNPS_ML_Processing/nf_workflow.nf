@@ -118,7 +118,7 @@ process postprocess {
   conda "$params.conda_path"
 
   publishDir "$params.output_dir", mode: 'copy'
-  publishDir "$TOOL_FOLDER", mode: 'copy', pattern: "tautomerization_cache.json", saveAs: { filename -> "tautomerization_cache.json" } // The script will create this file and copy it back
+  publishDir "$TOOL_FOLDER", mode: 'copy', pattern: "smiles_mapping_cache.json", saveAs: { filename -> "smiles_mapping_cache.json" } // The script will create this file and copy it back
 
   cache true
 
@@ -131,13 +131,13 @@ process postprocess {
   path "ALL_GNPS_cleaned.csv", emit: cleaned_csv
   path "ALL_GNPS_cleaned.parquet", emit: cleaned_parquet
   path "ALL_GNPS_cleaned.mgf", emit: cleaned_mgf
-  path "tautomerization_cache.json", includeInputs: true
+  path "smiles_mapping_cache.json", includeInputs: true
 
   script:
   if (params.include_massbank)
     """
-    cp $TOOL_FOLDER/tautomerization_cache.json ./tautomerization_cache.json
-    python3 $TOOL_FOLDER/GNPS2_Postprocessor.py --includes_massbank --tautomerization_cache "tautomerization_cache.json"
+    cp $TOOL_FOLDER/smiles_mapping_cache.json ./smiles_mapping_cache.json
+    python3 $TOOL_FOLDER/GNPS2_Postprocessor.py --includes_massbank --smiles_mapping_cache "smiles_mapping_cache.json"
     """
   else
     """
@@ -217,7 +217,7 @@ process matchms_filtering {
   publishDir "$params.output_dir", mode: 'copy'
   publishDir "$TOOL_FOLDER/matchms", mode: 'copy', pattern: "compound_name_annotation.csv", saveAs: { filename -> "pubchem_names.csv" } // The script will create this file and copy it back
 
-  cache false
+  cache true
 
   input:
   each cleaned_mgf_chunk
@@ -431,8 +431,8 @@ workflow {
   /*********** FROM HERE DOWN IS THE ML SPLITS ************/
   if (false) {
     // export_full_json(postprocess.out.cleaned_csv, postprocess.out.cleaned_mgf)
-  generate_subset(postprocess.out.cleaned_csv, postprocess.out.cleaned_parquet, postprocess.out.cleaned_mgf)    //, export_full_json.out.dummy
-  // if (false) {
+    generate_subset(postprocess.out.cleaned_csv, postprocess.out.cleaned_parquet, postprocess.out.cleaned_mgf)    //, export_full_json.out.dummy
+    // if (false) {
     calculate_similarities(generate_subset.out.output_mgf)
 
     // For the spectral similarity prediction task, we need to calculate all pairs similarity in the training set
