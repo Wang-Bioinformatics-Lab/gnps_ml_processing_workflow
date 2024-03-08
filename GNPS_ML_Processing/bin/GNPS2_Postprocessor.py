@@ -26,6 +26,14 @@ from formula_validation.IncorrectAdduct import IncorrectAdduct
 
 # os.environ['JOBLIB_TEMP_FOLDER'] = '/tmp'
 
+def extract_berkley_colision_energy(name):
+    energies = name.split("CollisionEnergy:")[1]
+    # break every two characters
+    energies = [energies[i:i+2] for i in range(0, len(energies), 2)]
+    energies = [int(e) for e in energies if e.isdigit()]
+    new_energy = round(np.mean(energies))
+    return new_energy
+
 def basic_cleaning(summary):
     # scan
     summary.scan = summary.scan.astype('int')
@@ -126,6 +134,20 @@ def basic_cleaning(summary):
     if sum(mask) > 0:
         print(f"Imputing {sum(mask)} collision energies using the Ion_Mode field")
         summary.loc[mask, 'collision_energy'] = 20
+
+    # for berkley dataset the collision energy is in the Compund_Name field
+    try:
+        fixable_BERKELEY =  (summary.Compund_Name.str.contains('CollisionEnergy')) & (summary.GNPS_library_membership == 'BERKELEY-LAB')
+        fixable_BERKELEY = fixable_BERKELEY.fillna(False)
+        mask = fixable_BERKELEY & (summary.collision_energy.isna())
+        mask = mask.fillna(False)
+
+        if sum(mask) > 0:
+            print(f"Imputing {sum(mask)} collision energies using the Compund_Name field")
+            summary.loc[mask, 'collision_energy'] = summary.Compund_Name.loc[mask].apply(lambda x: extract_berkley_colision_energy(x))
+            summary.loc[fixable_BERKELEY, 'Compund_Name'] = summary.Compund_Name.loc[fixable_BERKELEY].apply(lambda x: x.split("CollisionEnergy:")[0].strip())
+    except:
+        pass
     
     # Sometimes the collision energy is in the GNPS_inst field
     pattern = re.compile(r'(\d+)eV')
