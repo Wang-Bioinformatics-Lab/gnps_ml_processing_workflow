@@ -6,8 +6,27 @@ import pandas as pd
 from pyteomics import mgf
 from pyteomics.mgf import IndexedMGF
 from time import time
+from utils import missing_structure_check, greedy_subset
 
-def select_test(input_csv, input_mgf, num_test_points):
+
+def sample_spectra(summary, num_test_points):
+    return summary.sample(n=num_test_points)
+
+def sample_structures(summary, num_test_points):
+    if  missing_structure_check(summary):
+        raise ValueError("Found missing structures in summary.")
+    summary['InChIKey_smiles_14'] = summary['InChIKey_smiles'].str[:14]
+    # counts = summary['InChIKey_smiles_14'].value_counts()
+    # test_inchi_14 = set(greedy_subset(counts, num_test_points))
+    
+    # Randomly sample 14 values from the InChIKey_smiles_14 column
+    test_inchi_14 = np.random.choice(summary['InChIKey_smiles_14'].unique(), num_test_points, replace=False)
+    
+    test_rows = summary.loc[summary['InChIKey_smiles_14'].isin(test_inchi_14)]
+    
+    return test_rows
+
+def select_test(input_csv, input_mgf, num_test_points, sampling_strategy='structure'):
     """This function takes in an input_csv, an input_mgf, and the number of test points
         to be randomly generated. The function selects these test points and writes
         them to test_rows.csv, test_rows.mgf, train_rows.csv, and train_rows.mgf.
@@ -16,8 +35,13 @@ def select_test(input_csv, input_mgf, num_test_points):
         input_csv (_type_): _description_
         input_mgf (_type_): _description_
     """
-    summary = pd.read_csv(input_csv)#.head(100) #HEAD FOR DEBUG
     
+    if sampling_strategy not in ['random', 'structure']:
+        raise ValueError('Sampling strategy should be either "random" or "structure".')
+    
+    print("Loading Summary", flush=True)
+    summary = pd.read_csv(input_csv)#.head(100) #HEAD FOR DEBUG
+    print("Loading Spectra", flush=True)
     spectra     = IndexedMGF(input_mgf, index_by_scans=False)
     
     try:
@@ -39,7 +63,13 @@ def select_test(input_csv, input_mgf, num_test_points):
         raise ValueError('Number of Test Points is greater than number of rows in input_csv.')
     
     # Select Test Points
-    test_rows = summary.sample(n=num_test_points)
+    if sampling_strategy == 'random':
+        print("Sampling randomly", flush=True)
+        test_rows = sample_spectra(summary, num_test_points)
+    elif sampling_strategy == 'structure':
+        print("Sampling by structure", flush=True)
+        # test_rows = sample_structures(summary.iloc[0:500], 10)    #DEBUG
+        test_rows = sample_structures(summary, num_test_points)
     print("Total number of test rows: ", len(test_rows), flush=True)
     train_rows = summary.loc[~ summary.spectrum_id.isin(test_rows.spectrum_id)]
     print("Total number of potential training rows: ", len(train_rows), flush=True)

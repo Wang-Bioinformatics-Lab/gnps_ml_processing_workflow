@@ -12,13 +12,16 @@ FAST_SEARCH_LIBRARY_BIN = "$TOOL_FOLDER_LS/GNPS_FastSearch_Library/bin"
 // params.input_mgf = '/home/user/SourceCode/GNPS_ML_Processing_Workflow/GNPS_ML_Processing/nf_output/ALL_GNPS_cleaned.mgf'
 params.input_csv = '/home/user/SourceCode/GNPS_ML_Processing_Workflow/GNPS_ML_Processing/nf_output/summary/Structural_Similarity_Prediction.csv'
 params.input_mgf = '/home/user/SourceCode/GNPS_ML_Processing_Workflow/GNPS_ML_Processing/nf_output/spectra/Structural_Similarity_Prediction.mgf'
+// params.input_csv = '/home/user/SourceCode/GNPS_ML_Processing_Workflow/GNPS_ML_Processing/nf_outpucd t/summary/Orbitrap_Fragmentation_Prediction.csv'
+// params.input_mgf = '/home/user/SourceCode/GNPS_ML_Processing_Workflow/GNPS_ML_Processing/nf_output/spectra/Orbitrap_Fragmentation_Prediction.mgf'
 
-params.test_set_num = 0.10  // An integer (or float) representing the number (or percentage of) data points to use as a test set
+params.test_set_num = 500  // An integer (or float) representing the number (or percentage of) data points to use as a test set
 
 params.lowest_spectral_threshold = '0.6' 
-params.lowest_structural_threshold = '0.6' 
-params.thresholds = "0.6 0.7 0.8 0.9"
+params.lowest_structural_threshold = '0.2' 
+params.thresholds = "0.2 0.99"
 params.structural_similarity_fingerprint = "Morgan_2048_3"
+params.ion_mode = "positive"  // 'positive' or 'negative'
 
 // Library Search Parameters
 params.pm_tolerance       = 0.2
@@ -27,11 +30,36 @@ params.lower_delta        = 130  // To perform analog search, set lower_delta = 
 params.upper_delta        = 200
 
 /*
+ * This process selects the subset of data that is usable for ML (e.g., more than one peak, not excessively noisy, etc.)
+ * It also splits the data into the selected ion mode, and normalizes intensities.
+ */
+process select_data_for_ml {
+  conda "$TOOL_FOLDER_LS/conda_env.yml"
+
+  input:
+  path csv_file
+  path mgf_file
+
+  output:
+  path 'selected_summary.csv',  emit: selected_summary
+  path 'selected_spectra.mgf',  emit: selected_spectra
+
+  """
+  python3 $TOOL_FOLDER_LS/select_data.py \
+          --input_csv "$csv_file" \
+          --input_mgf "$mgf_file" \
+          --ion_mode $params.ion_mode
+  """
+}
+
+/*
  * Generates a random subset of params.test_set_num  data points to use as a test set
  * These data points should be consistent across splitting methodology
  */
 process generate_test_set {
   conda "$TOOL_FOLDER_LS/conda_env.yml"
+
+  cache true
 
   input:
   path csv_file
@@ -129,6 +157,8 @@ process structural_similarity_calculation {
   conda "$TOOL_FOLDER_LS/conda_env.yml"
   publishDir './nf_output', mode: 'copy'
 
+  cache true
+
   input:
   path train_rows_csv
   path test_rows_csv
@@ -149,6 +179,8 @@ process split_data {
   publishDir './nf_output', mode: 'copy'
   conda "$TOOL_FOLDER_LS/conda_env.yml"
 
+  cache false
+
   // Gather inputs avoiding name collisions
   input:
   path train_rows_csv, stageAs: 'train_rows.csv'
@@ -159,14 +191,10 @@ process split_data {
   path structural_similarities
 
   output:
-  path 'train_rows_spectral_*.csv', emit: train_rows_csv_spectral
-  path 'train_rows_spectral_*.mgf', emit: train_rows_mgf_spectral
-  path 'test_rows_spectral.csv',  emit: test_rows_csv_spectral, includeInputs: true
-  path 'test_rows_spectral.mgf',  emit: test_rows_mgf_spectral, includeInputs: true
-  path 'train_rows_structural_*.csv', emit: train_rows_csv_structural
-  path 'train_rows_structural_*.mgf', emit: train_rows_mgf_structural
-  path 'test_rows_structural.csv', emit: test_rows_csv_structural // Test structural split will have structure-less rows removed
-  path 'test_rows_structural.mgf', emit: test_rows_mgf_structural // Test structural split will have ststructure-less rows removed
+  path 'train_rows_*.csv'
+  path 'train_rows_*.mgf'
+  path 'test_rows_*.csv'
+  path 'test_rows_*.mgf'
   
   """
   python3 $TOOL_FOLDER_LS/split_data.py \
@@ -202,7 +230,8 @@ workflow {
   csv_file = Channel.fromPath(params.input_csv)
   mgf_file = Channel.fromPath(params.input_mgf)
 
-  generate_test_set(csv_file, mgf_file)
+  select_data_for_ml(csv_file, mgf_file)
+  generate_test_set(select_data_for_ml.out.selected_summary, select_data_for_ml.out.selected_spectra)
   build_library(generate_test_set.out.test_rows_mgf)
 
   spectral_similarity_calculation(build_library.out.libraries, generate_test_set.out.train_rows_mgf)
