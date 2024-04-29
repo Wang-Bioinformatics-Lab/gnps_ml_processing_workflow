@@ -160,6 +160,13 @@ def select_data(input_csv_path:str, input_mgf_path:str, ion_mode:str):
     logging.info("Loading mgf files")
     spectra = matchms.importing.load_from_mgf(input_mgf_path)
     
+    # Remove GNPS-LIBRARY from the train/test data
+    logging.info("Removing GNPS-LIBRARY from the data")
+    original_len = len(summary)
+    summary = summary.loc[summary['GNPS_library_membership'] != 'GNPS-LIBRARY']
+    logging.info("Original Summary Count: %s", original_len)
+    logging.info("Number of Spectra not in GNPS-LIBRARY: %s", len(summary))
+    
     # Split based on ion mode
     logging.info('Selected Ion Mode: %s', ion_mode)
     original_len = len(summary)
@@ -181,7 +188,9 @@ def select_data(input_csv_path:str, input_mgf_path:str, ion_mode:str):
     selected_summary, spectra = clean_spectra(selected_summary, spectra)
     logging.info("Cleaned Spectra in %s seconds", time() - start_time)
     
-    selected_spectra = [x for x in spectra if x.metadata.get("spectrum_id") in set(selected_summary.loc[:, "spectrum_id"].values)]
+    ids_to_keep = set(selected_summary.loc[:, "spectrum_id"].values)
+    
+    selected_spectra = [x for x in spectra if x.metadata.get("spectrum_id") in ids_to_keep]
     
     # Write positive and negative spectra
     logging.info("Writing Summary")

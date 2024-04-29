@@ -58,8 +58,9 @@ process select_data_for_ml {
  */
 process generate_test_set {
   conda "$TOOL_FOLDER_LS/conda_env.yml"
+  publishDir './nf_output', mode: 'copy'
 
-  cache true
+  cache false
 
   input:
   path csv_file
@@ -75,7 +76,10 @@ process generate_test_set {
   python3 $TOOL_FOLDER_LS/calc_test.py \
           --input_csv "$csv_file" \
           --input_mgf "$mgf_file" \
-          --num_test_points $params.test_set_num
+          --num_test_points $params.test_set_num \
+          --sampling_strategy "structure_smart" \
+          --threshold 0.5 \
+          --debug
   """
 }
 
@@ -232,19 +236,19 @@ workflow {
 
   select_data_for_ml(csv_file, mgf_file)
   generate_test_set(select_data_for_ml.out.selected_summary, select_data_for_ml.out.selected_spectra)
-  build_library(generate_test_set.out.test_rows_mgf)
+  // build_library(generate_test_set.out.test_rows_mgf)
 
-  spectral_similarity_calculation(build_library.out.libraries, generate_test_set.out.train_rows_mgf)
+  // spectral_similarity_calculation(build_library.out.libraries, generate_test_set.out.train_rows_mgf)
 
-  structural_similarity_calculation(generate_test_set.out.train_rows_csv, 
-                                    generate_test_set.out.test_rows_csv)
+  // structural_similarity_calculation(generate_test_set.out.train_rows_csv, 
+                                    // generate_test_set.out.test_rows_csv)
 
-  split_data(generate_test_set.out.train_rows_csv, 
-            generate_test_set.out.test_rows_csv, 
-            generate_test_set.out.train_rows_mgf, 
-            generate_test_set.out.test_rows_mgf,
-            spectral_similarity_calculation.out.spectral_similarities,
-            structural_similarity_calculation.out.structural_similarities)
+  // split_data(generate_test_set.out.train_rows_csv, 
+  //           generate_test_set.out.test_rows_csv, 
+  //           generate_test_set.out.train_rows_mgf, 
+  //           generate_test_set.out.test_rows_mgf,
+  //           spectral_similarity_calculation.out.spectral_similarities,
+  //           structural_similarity_calculation.out.structural_similarities)
 
   // output_handler(split_data.out.train_rows_csv_spectral, 
   //               split_data.out.test_rows_csv_spectral, 
