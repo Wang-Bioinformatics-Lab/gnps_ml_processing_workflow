@@ -7,6 +7,7 @@ from rdkit.Chem.AllChem import GetMorganFingerprintAsBitVect
 from rdkit.Chem import DataStructs
 from rdkit.DataStructs.cDataStructs import BulkTanimotoSimilarity
 from rdkit.Chem import MolStandardize, rdMolDescriptors, MolFromSmiles
+from rdkit.Chem.MolStandardize import rdMolStandardize
 import pandas as pd
 from pyteomics.mgf import IndexedMGF
 from tqdm import tqdm
@@ -534,44 +535,43 @@ def neutralize_atoms(smiles):
     
     return num_removed_charges, pos_and_neg, sum_of_charges, Chem.MolToSmiles(mol)
 
-# Code Credit: Yasin El Abiead
-def harmonize_smiles_rdkit(smiles, tautomer_limit = 900, skip_tautomerization=False):
-    if smiles is None or smiles == 'nan' or smiles == 'None' or smiles == '': return ''
+# Code Credit: Yasin El Abiead, with changes
+def harmonize_smiles_rdkit(smiles):
+    if smiles is None or smiles == 'nan' or smiles == 'None' or smiles == '': return {smiles:''}
     try:
         smiles = str(smiles)
         # take the largest covalently bound molecule
         smiles_largest = MolStandardize.fragment.LargestFragmentChooser(smiles).prefer_organic
         mol = Chem.MolFromSmiles(smiles_largest)
-
         if mol is None:
             # The files failed to parse, it should be removed
-            return ''
-        
-        monomass = rdMolDescriptors.CalcExactMolWt(mol)
-        if not skip_tautomerization:
-            # standardize tautomer
-            if monomass < tautomer_limit:
-                smiles_largest = MolStandardize.canonicalize_tautomer_smiles(smiles_largest)
-                mol = Chem.MolFromSmiles(smiles_largest)
-
+            return {smiles: ''}
         # remove unnecessary charges
         uc = MolStandardize.charge.Uncharger()
-        uncharged_mol = uc.uncharge(mol)
-        
+        uncharged_mol = uc.uncharge(mol)     
         # standardize the molecule
         lfc = MolStandardize.fragment.LargestFragmentChooser()
         standard_mol = lfc.choose(uncharged_mol)
-
         # remove stereochemistry
         Chem.RemoveStereochemistry(standard_mol)
-
         # get the standardized SMILES
         standard_smiles = Chem.MolToSmiles(standard_mol)
-        return standard_smiles
-
+        return {smiles: standard_smiles}
     except Exception as e:
         print(f"An error occurred with input {smiles}: {e}")
-        return ''
+        return {smiles: ''}
+    
+def tautomerize_smiles(smiles):
+    if smiles is None or smiles == 'nan' or smiles == 'None' or smiles == '': return {smiles:''}
+    params = rdMolStandardize.CleanupParameters()
+    params.maxTautomers = 100000
+    params.maxTransforms = 100000
+    te = rdMolStandardize.TautomerEnumerator(params)
+    mol = Chem.MolFromSmiles(smiles)
+    mol = te.Canonicalize(mol)
+    standard_smiles = Chem.MolToSmiles(mol)
+    del mol
+    return {smiles: standard_smiles}
     
 def INCHI_to_SMILES(inchi):
     if inchi is None or inchi == 'nan': return ''

@@ -63,7 +63,7 @@ def search_library(input_mgf,
             o.write(f"SCANS={scan}\n")
             o.write(f"CHARGE={charge}\n")
             o.write("MSLEVEL=2\n")
-            o.write(f"PEPMASS={spectrum['params']['pepmass'][0]}\n")
+            o.write(f"PEPMASS={spectrum['params']['precursor_mz']}\n")
             for peak in zip(spectrum['m/z array'], spectrum['intensity array']):
                 o.write(f"{peak[0]} {peak[1]}\n")
             o.write("END IONS\n")

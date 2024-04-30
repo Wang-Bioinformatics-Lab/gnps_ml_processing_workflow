@@ -32,7 +32,7 @@ def create_library(input_mgf, output_folder):
     library_spectra = IndexedMGF(input_mgf, index_by_scans=True)
 
     with open(temp_query_mgf, "w") as o:
-        for i, spectrum in tqdm(enumerate(library_spectra)):
+        for spectrum in tqdm(library_spectra):
             # scan = i + 1  # This was previously what was used, but we don't know that scans are contiguous, so we'll use the spectrum scans
             scan = spectrum['params']['scans']
             
@@ -50,7 +50,7 @@ def create_library(input_mgf, output_folder):
             o.write("SCANS={}\n".format(scan))
             o.write("CHARGE={}+\n".format(charge))
             o.write("MSLEVEL=2\n")
-            o.write("PEPMASS={}\n".format(spectrum['params']['pepmass'][0]))
+            o.write("PEPMASS={}\n".format(spectrum['params']['precursor_mz']))
             for peak in zip(spectrum['m/z array'], spectrum['intensity array']):
                 o.write("{} {}\n".format(peak[0], peak[1]))
             o.write("END IONS\n")

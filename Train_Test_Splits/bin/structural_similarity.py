@@ -18,10 +18,10 @@ def _generate_fingerprints_helper(smiles):
     if smiles is not None and smiles != 'nan':
         mol = Chem.MolFromSmiles(str(smiles), sanitize=True)
         if mol is not None:
-            return smiles, {'Morgan_2048_2': list(AllChem.GetMorganFingerprintAsBitVect(mol,2,useChirality=False,nBits=2048)),
-                            'Morgan_4096_2': list(AllChem.GetMorganFingerprintAsBitVect(mol,2,useChirality=False,nBits=4096)), 
-                            'Morgan_2048_3': list(AllChem.GetMorganFingerprintAsBitVect(mol,3,useChirality=False,nBits=2048)), 
-                            'Morgan_4096_3': list(AllChem.GetMorganFingerprintAsBitVect(mol,3,useChirality=False,nBits=4096))}
+            return smiles, {'Morgan_2048_2': AllChem.GetMorganFingerprintAsBitVect(mol,2,useChirality=False,nBits=2048),
+                            'Morgan_4096_2': AllChem.GetMorganFingerprintAsBitVect(mol,2,useChirality=False,nBits=4096), 
+                            'Morgan_2048_3': AllChem.GetMorganFingerprintAsBitVect(mol,3,useChirality=False,nBits=2048), 
+                            'Morgan_4096_3': AllChem.GetMorganFingerprintAsBitVect(mol,3,useChirality=False,nBits=4096)}
         else:
             raise NotImplementedError("Failed to parse smiles:", smiles)
     else:
@@ -61,22 +61,20 @@ def compute_similarities_square(train_df:pd.DataFrame,
         raise ValueError(f"Expected a Pandas DataFrame but got {type(test_df)}")
        
     grouped_train_df = train_df.groupby('Smiles')
+    train_smiles_mapping = {group_key: group_df['spectrum_id'].values for idx, (group_key, group_df) in enumerate(grouped_train_df)}
     train_df = train_df.drop_duplicates(subset='Smiles')
     
     grouped_test_df = test_df.groupby('Smiles')
+    test_smiles_mapping = {group_key: group_df['spectrum_id'].values for idx, (group_key, group_df) in enumerate(grouped_test_df)}
     test_df = test_df.drop_duplicates(subset='Smiles')
     
     pandarallel.initialize(progress_bar=False, nb_workers=PARALLEL_WORKERS, verbose=0)
-    train_fps   = train_df[fingerprint_column_name].parallel_apply(lambda x: CreateFromBitString(''.join(str(y) for y in x))).values
-    test_fps    = test_df[fingerprint_column_name].parallel_apply(lambda x: CreateFromBitString(''.join(str(y) for y in x))).values
-    train_fps   = list(train_fps)
-    test_fps    = list(test_fps)
-
-    # Indices are now non contiguous because the entries without structures are removed
-    # This will map back to the original spectrum_id
-    train_idx_mapping = {idx: group_df['spectrum_id'].values for idx, (_, group_df) in enumerate(grouped_train_df)}
-    test_idx_mapping = {idx: group_df['spectrum_id'].values for idx, (_, group_df) in enumerate(grouped_test_df)}
+    # train_df.loc[:, fingerprint_column_name] = train_df.loc[:, fingerprint_column_name].parallel_apply(lambda x: CreateFromBitString(''.join(str(y) for y in x))).values
+    # test_df.loc[:, fingerprint_column_name] = test_df.loc[:, fingerprint_column_name].parallel_apply(lambda x: CreateFromBitString(''.join(str(y) for y in x))).values
     
+    train_fps_mapping = dict(zip(train_df['Smiles'], train_df[fingerprint_column_name]))
+    test_fps_mapping = dict(zip(test_df['Smiles'], test_df[fingerprint_column_name]))
+
     # Cleanup variables to reduce memory overhead
     del grouped_train_df
     del train_df
@@ -90,8 +88,10 @@ def compute_similarities_square(train_df:pd.DataFrame,
         temp_writer = csv.DictWriter(f, fieldnames=fieldnames)
         temp_writer.writeheader()
     
-        for train_index, train_fp in enumerate(train_fps):
-            sims = BulkTanimotoSimilarity(train_fp, test_fps)
+        for smiles_i, train_fp in train_fps_mapping.items():
+            sims = BulkTanimotoSimilarity(train_fp, list(test_fps_mapping.values()))
+            
+            corresponding_smiles = list(test_fps_mapping.keys())
             
             # We only need the highest similarity (it's good enough to know it won't be in our train set)
             max_sim = -1.0
@@ -102,16 +102,17 @@ def compute_similarities_square(train_df:pd.DataFrame,
                     max_sim = this_sim
                     max_sim_index = j
             if max_sim != -1.0:
-                for edge_from in train_idx_mapping[train_index]:
+                for edge_from in train_smiles_mapping[smiles_i]:
                     # Note that this will output all test spectrum_ids that have an identical smiles. 
                     # This in not technically necessary but may be useful for debugging.
-                    for edge_to in test_idx_mapping[max_sim_index]:
-                        row = {
-                            'spectrumid1': edge_from,
-                            'spectrumid2': edge_to,  
-                            'Tanimoto_Similarity': max_sim
-                        }
-                        temp_writer.writerow(row)
+                    # We'll only take one example
+                    edge_to = test_smiles_mapping[corresponding_smiles[max_sim_index]][0]
+                    row = {
+                        'spectrumid1': edge_from,
+                        'spectrumid2': edge_to,  
+                        'Tanimoto_Similarity': max_sim
+                    }
+                    temp_writer.writerow(row)
 
 
 def generate_structural_similarity(train_csv, test_csv, similarity_threshold=0.7, fingerprint='Morgan_2048_3'):
@@ -121,14 +122,25 @@ def generate_structural_similarity(train_csv, test_csv, similarity_threshold=0.7
     train_df = train_df[train_df['Smiles'].notna()].reset_index(drop=True)
     test_df = test_df[test_df['Smiles'].notna()].reset_index(drop=True)
     
+    # To avoid outputing fingerprints
+    original_train_cols = train_df.columns
+    original_test_cols = test_df.columns
+    
+    print("Generating Train Fingerprints", flush=True)
     train_df = generate_fingerprints(train_df)
+    print("\tDone", flush=True)
+    print("Generating Test Fingerprints", flush=True)
     test_df = generate_fingerprints(test_df)
+    print("\tDone", flush=True)
     
-    train_df.to_csv('train_df.csv')
-    test_df.to_csv('test_df.csv')
-    
+    print("Computing similiarities", flush=True)
     compute_similarities_square(train_df, test_df, similarity_threshold=similarity_threshold, fingerprint_column_name=fingerprint)
+    print("\tDone", flush=True)
 
+    print("Writing Original Dataframes to CSV", flush=True)
+    train_df.loc[:,original_train_cols].to_csv('train_df.csv')
+    test_df.loc[:,original_test_cols].to_csv('test_df.csv')
+    
 def main():
     parser = argparse.ArgumentParser(description='Generate Structural Similarity')
     parser.add_argument('--train_csv', type=str, help='Input CSV')
