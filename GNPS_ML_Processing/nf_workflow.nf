@@ -1,24 +1,33 @@
 #!/usr/bin/env nextflow
 nextflow.enable.dsl=2
 
-// params.subset = "Orbitrap_Fragmentation_Prediction"
 params.split  = false
+params.matchms_pipeline = true //false
+params.export_json = true //false
 
-params.subset = "Structural_Similarity_Prediction"
-// params.subset = "MH_MNA_Translation"
-// params.subset = "GNPS_default"
+// Whether to subset the data for ML and perform basic cleaning
+params.select_clean_subset = false //true
+params.ion_mode = "positive"  // Which ion mode to select during cleaning
+// Which subset ot select, if select_clean_subset is true
+// "GNPS_default" for all, other options include "Orbitrap_Fragmentation_Prediction", "MH_MNA_Translation"
+params.subset = "Structural_Similarity_Prediction" // None
+// params.subset = "Structural_Similarity_Prediction" 
 
 params.output_dir = "./nf_output"
 params.GNPS_json_path = "None"
 
 use_default_path = true
 
-params.spectra_parallelism = 5000
+// How many chunks to split input files into for data extraction
+params.spectra_parallelism = 10000
 
-params.path_to_provenance = "/home/user/LabData/GNPS_Library_Provenance/"
+params.path_to_provenance = "/home/user/LabData/data/GNPS_Library_Provenance/GNPS_Library_Provenance/"
+
+params.path_to_nist = ""
 
 // If true, will download and reparse massbank, additionally removing all massbank entires from GNPS
 params.include_massbank = true
+params.include_riken = false //true
 
 // Workflow Boiler Plate
 params.OMETALINKING_YAML = "flow_filelinking.yaml"
@@ -73,8 +82,9 @@ process prep_params {
 process export {
     conda "$params.conda_path"
 
-    maxForks 8
-    errorStrategy 'retry'
+    maxForks 4
+    errorStrategy { sleep(Math.pow(2, task.attempt) * 200 as long); return 'retry' }
+    maxRetries 5
 
     input: 
     each input_file
@@ -89,6 +99,62 @@ process export {
     """
 }
 
+// Incorporate Spectra From Riken Libaries
+process export_riken {
+  conda "$params.conda_path"
+
+  maxForks 8
+  // errorStrategy { sleep(Math.pow(2, task.attempt) * 200 as long); return 'retry' }
+  // maxRetries 5
+
+  cache true
+
+  input:
+  each download_url
+
+  output:
+  path 'temp/*'
+
+  """
+  wget "$download_url"
+
+  filename=\$(basename $download_url)
+  filename_no_ext="\${filename%.*}"
+
+  mkdir -p "./temp/"
+
+  python3 $TOOL_FOLDER/MSP_ingest.py \
+          --msp_path "\$filename" \
+          --summary_output_path "./temp/RIKEN-\$filename_no_ext.csv" \
+          --spectra_output_path "./temp/RIKEN-\$filename_no_ext.mgf"
+  """
+}
+
+process export_nist {
+  conda "$params.conda_path"
+
+  cache true
+
+  input:
+  each mgf_file
+
+  output:
+  path 'temp/*'
+
+  """
+
+  filename=\$(basename $mgf_file)
+  filename_no_ext="\${filename%.*}"
+  mkdir -p "./temp/"
+  
+  python3 $TOOL_FOLDER/MGF_ingest.py \
+          --mgf_path "$mgf_file" \
+          --summary_output_path "./temp/MGF-Export-\$filename_no_ext.csv" \
+          --spectra_output_path "./temp/MGF-Export-\$filename_no_ext.mgf"
+  """
+  
+}
+
 // Merges all the exports together
 process merge_export {
   //conda "$params.conda_path/"
@@ -101,15 +167,29 @@ process merge_export {
   path './ALL_GNPS_merged.mgf'
   path './ALL_GNPS_merged.csv'
 
-  script:
-  if (params.include_massbank)
-    """
-    python3 $TOOL_FOLDER/merge_files.py --include_massbank 
-    """
+  """
+  if [ "$params.include_riken" == "true" ]; then
+    riken_flag="--include_riken"
   else
-    """
-    python3 $TOOL_FOLDER/merge_files.py 
-    """
+    riken_flag=""
+  fi
+
+  if [ "$params.include_massbank" == "true" ]; then
+    massbank_flag="--include_massbank"
+  else
+    massbank_flag=""
+  fi
+
+  if [ -n "$params.path_to_nist" ]; then
+    mgf_export_flag="--include_mgf_exports"
+  else
+    mgf_export_flag=""
+  fi
+
+  # Run the python script with the constructed flags
+  python3 $TOOL_FOLDER/merge_files.py \$riken_flag \$massbank_flag \$mgf_export_flag
+
+  """
 }
 
 // Cleaning work - unifying the Controlled Vocabulary
@@ -120,7 +200,7 @@ process postprocess {
   publishDir "$params.output_dir", mode: 'copy'
   publishDir "$TOOL_FOLDER", mode: 'copy', pattern: "smiles_mapping_cache.json", saveAs: { filename -> "smiles_mapping_cache.json" } // The script will create this file and copy it back
 
-  cache true
+  cache false //true
 
   input:
   path merged_csv
@@ -129,15 +209,19 @@ process postprocess {
 
   output:
   path "ALL_GNPS_cleaned.csv", emit: cleaned_csv
-  path "ALL_GNPS_cleaned.parquet", emit: cleaned_parquet
+  path "ALL_GNPS_cleaned.parquet", emit: cleaned_parquet, optional: true
   path "ALL_GNPS_cleaned.mgf", emit: cleaned_mgf
   path "smiles_mapping_cache.json", includeInputs: true
 
   script:
   if (params.include_massbank)
     """
+    if $params.include_riken; then
+      riken_flag="--includes_riken"
+    fi
+
     cp $TOOL_FOLDER/smiles_mapping_cache.json ./smiles_mapping_cache.json
-    python3 $TOOL_FOLDER/GNPS2_Postprocessor.py --includes_massbank --smiles_mapping_cache "smiles_mapping_cache.json"
+    python3 $TOOL_FOLDER/GNPS2_Postprocessor.py --includes_massbank --smiles_mapping_cache "smiles_mapping_cache.json" \$riken_flag
     """
   else
     """
@@ -268,13 +352,13 @@ process generate_subset {
 
   input:
   path cleaned_csv
-  path cleaned_parquet
+  // path cleaned_parquet
   path cleaned_mgf
   // val json_dummy          // Dummy input to force this process to run after the export_full_json process
 
   output:
   path "summary/*"
-  path "spectra/*.parquet", emit: output_parquet
+  path "spectra/*.parquet", emit: output_parquet, optional: true
   path "spectra/*.mgf", emit: output_mgf
   path "json_outputs/*.json", emit: output_json, optional: true
   path "util/*", optional: true
@@ -310,6 +394,28 @@ process generate_mgf {
   // }
   """
   python3 $TOOL_FOLDER/GNPS2_MGF_Generator.py -input_path "$parquet_file"
+  """
+}
+
+process select_data_for_ml {
+  conda "$params.conda_path"
+  publishDir "${params.output_dir}/ML_ready_subset_${params.ion_mode}/", mode: 'copy'
+
+  input:
+  path csv_file
+  path mgf_file
+
+  cache false
+
+  output:
+  path 'selected_summary.csv',  emit: selected_summary
+  path 'selected_spectra.mgf',  emit: selected_spectra
+
+  """
+  python3 $TOOL_FOLDER/select_data.py \
+          --input_csv "$csv_file" \
+          --input_mgf "$mgf_file" \
+          --ion_mode $params.ion_mode
   """
 }
 
@@ -407,14 +513,38 @@ workflow {
     temp_files = temp_files.concat(merge_export_massbank.out.merged_files)
   }
 
+  if (params.include_riken) {
+    riken_urls = Channel.of("http://prime.psc.riken.jp/compms/msdial/download/msp/MSMS-Neg-RikenOxPLs.msp",
+                            "http://prime.psc.riken.jp/compms/msdial/download/msp/MSMS-Pos-PlaSMA.msp",
+                            "http://prime.psc.riken.jp/compms/msdial/download/msp/MSMS-Neg-PlaSMA.msp",
+                            "http://prime.psc.riken.jp/compms/msdial/download/msp/BioMSMS-Pos-PlaSMA.msp",
+                            "http://prime.psc.riken.jp/compms/msdial/download/msp/BioMSMS-Neg-PlaSMA.msp",
+                            "http://prime.psc.riken.jp/compms/msdial/download/msp/MSMS-Neg-PFAS_20200806.msp",
+                            "http://prime.psc.riken.jp/compms/msdial/download/msp/MSMS-Pos-bmdms-np_20200811.msp"
+                            )
+    riken_files = export_riken(riken_urls)
+    temp_files = temp_files.concat(riken_files)
+
+  }
+
+  if (params.path_to_nist != "") {
+    nist_ch = Channel.fromPath(params.path_to_nist)
+    nist_files = export_nist(nist_ch)
+    temp_files = temp_files.concat(nist_files)
+  }
+    
   (merged_mgf, merged_csv) = merge_export(temp_files.collect())
+
+  
 
   // A python dictionary that maps GNPS adducts to a unified set of adducts used in the GNPS2 workflow
   adduct_mapping_ch = channel.fromPath("$TOOL_FOLDER/adduct_mapping.txt")
 
   postprocess(merged_csv, merged_mgf, adduct_mapping_ch)
 
-  export_full_json(postprocess.out.cleaned_csv, postprocess.out.cleaned_mgf)
+  if (params.export_json) {
+    export_full_json(postprocess.out.cleaned_csv, postprocess.out.cleaned_mgf)
+  }
   // cache_pubchem_names_for_matchms(postprocess.out.cleaned_mgf)
   // split_mgf_for_matchms_filtering(postprocess.out.cleaned_mgf)
 
@@ -424,38 +554,51 @@ workflow {
   * spoof_matchms_caching(postprocess.out.cleaned_csv) 
   * matchms_filtering(postprocess.out.cleaned_mgf, spoof_matchms_caching.out.cache_dummy)  
   *******/
-  matchms_filtering(postprocess.out.cleaned_mgf)
+  if (params.matchms_pipeline) {
+    matchms_filtering(postprocess.out.cleaned_mgf)
+  }
 
+  if ((params.select_clean_subset == false) && (params.subset != "None")) {
+    // Warn user that subset is not being generated
+    println "Subset generation is disabled, skipping subset generation"
+  }
 
+  if (params.select_clean_subset) {
+    // Perform basic data selection and cleaning for ML
+    select_data_for_ml(postprocess.out.cleaned_csv, postprocess.out.cleaned_mgf)
 
-  /*********** FROM HERE DOWN IS THE ML SPLITS ************/
-  if (false) {
-    // export_full_json(postprocess.out.cleaned_csv, postprocess.out.cleaned_mgf)
-    generate_subset(postprocess.out.cleaned_csv, postprocess.out.cleaned_parquet, postprocess.out.cleaned_mgf)    //, export_full_json.out.dummy
-    // if (false) {
-    calculate_similarities(generate_subset.out.output_mgf)
+    // If params.subset is None, don't generate any subsets
+    if (params.subset != "None") { 
+      /*********** FROM HERE DOWN IS THE ML SPLITS ************/
+      if (false) {
+        // export_full_json(postprocess.out.cleaned_csv, postprocess.out.cleaned_mgf)
+        generate_subset(select_data_for_ml.out.selected_summary, select_data_for_ml.out.selected_spectra)    //, export_full_json.out.dummy
+        // if (false) {
+        calculate_similarities(generate_subset.out.output_mgf)
 
-    // For the spectral similarity prediction task, we need to calculate all pairs similarity in the training set
-    if (params.subset == "GNPS_default" || params.subset == "Spectral_Similarity_Prediction") {
-      use_default_path = false
-      //// generate_subset.out.output_parquet.collect()  // Make sure this finishes first
-      //// channel.fromPath(".nf_output/Spectral_Similarity_Prediction.parquet") | generate_mgf
-      //generate_mgf(generate_subset.out.output_parquet)
-      //calculate_similarities(generate_mgf.out.output_mgf)
+        // For the spectral similarity prediction task, we need to calculate all pairs similarity in the training set
+        if (params.subset == "GNPS_default" || params.subset == "Spectral_Similarity_Prediction") {
+          use_default_path = false
+          //// generate_subset.out.output_parquet.collect()  // Make sure this finishes first
+          //// channel.fromPath(".nf_output/Spectral_Similarity_Prediction.parquet") | generate_mgf
+          //generate_mgf(generate_subset.out.output_parquet)
+          //calculate_similarities(generate_mgf.out.output_mgf)
 
-      publish_similarities_for_prediction(calculate_similarities.out.spectral_similarities)
+          publish_similarities_for_prediction(calculate_similarities.out.spectral_similarities)
 
-    }
-    // } else if (params.subset == "Spectral_Similarity_Prediction") {
-    //   generate_subset.out.output_parquet.collect()  // Make sure this finishes first
-    //   channel.fromPath(".nf_output/Spectral_Similarity_Prediction.parquet") | generate_mgf
-    //   // generate_mgf(generate_subset.out.output_parquet)
-    //   generate_mgf.out.output_mgf  | calculate_similarities 
-    //   publish_similarities_for_prediction(calculate_similarities.out.spectral_similarities)
-    // }
+        }
+        // } else if (params.subset == "Spectral_Similarity_Prediction") {
+        //   generate_subset.out.output_parquet.collect()  // Make sure this finishes first
+        //   channel.fromPath(".nf_output/Spectral_Similarity_Prediction.parquet") | generate_mgf
+        //   // generate_mgf(generate_subset.out.output_parquet)
+        //   generate_mgf.out.output_mgf  | calculate_similarities 
+        //   publish_similarities_for_prediction(calculate_similarities.out.spectral_similarities)
+        // }
 
-    if (params.split) {
-      calculate_similarities.out.spectral_similarities | split_subsets
+        if (params.split) {
+          calculate_similarities.out.spectral_similarities | split_subsets
+        }
+      }
     }
   }
 }

@@ -17,7 +17,8 @@ import time
 import datetime
 import argparse
 
-PARALLEL_WORKERS = 2
+PARALLEL_WORKERS = 1
+TAUTOMERIZATION_PARALLEL_WORKERS = min(os.cpu_count(), 16)
 
 import sys
 
@@ -103,9 +104,15 @@ def basic_cleaning(summary):
                 adduct = adduct[:-2] + "]1-"
             
         return adduct
-        
+    
+    original_adducts = summary.Adduct.copy(deep=True)
     summary.loc[:, 'Adduct'] = summary.Adduct.parallel_apply(helper)
+    failed_adducts = original_adducts.loc[summary.Adduct.isna()]    # Get the list of adducts the failed to map
+    start_count = len(summary)
     summary = summary[summary.Adduct.notna()]
+    print(f"Lost {start_count - len(summary)} entries due to unmappable adducts.")
+    print(failed_adducts.value_counts())
+    print(failed_adducts.value_counts().head(20))
     
     # Get a mask of non-matching adducts
     pattern = r'\[(\d)*M([\+-].*?)\](\d)([\+-])'
@@ -308,7 +315,7 @@ def clean_smiles(summary, smiles_mapping_cache=None):
         uncached_unique_smiles = uncached_unique_smiles[~uncached_unique_smiles.isin(cached_smiles_mapping.keys())]
                 
     # Returns a list of dicts
-    cleaned_smiles = Parallel(n_jobs=PARALLEL_WORKERS)(delayed(harmonize_smiles_rdkit)(x) for x in tqdm(uncached_unique_smiles))
+    cleaned_smiles = Parallel(n_jobs=TAUTOMERIZATION_PARALLEL_WORKERS)(delayed(harmonize_smiles_rdkit)(x) for x in tqdm(uncached_unique_smiles))
     # Merge into one dict
     cleaned_smiles_mapping = {}
     for mapping in cleaned_smiles:
@@ -317,7 +324,7 @@ def clean_smiles(summary, smiles_mapping_cache=None):
     # Get the unique cleaned_smiles and tautomerize
     print("\t Begining SMILES tautomerization", flush=True)
     unique_cleaned_smiles = pd.Series(list(cleaned_smiles_mapping.values())).unique()
-    cleaned_tautomers = Parallel(n_jobs=PARALLEL_WORKERS)(delayed(tautomerize_smiles)(x) for x in tqdm(unique_cleaned_smiles))
+    cleaned_tautomers = Parallel(n_jobs=TAUTOMERIZATION_PARALLEL_WORKERS)(delayed(tautomerize_smiles)(x) for x in tqdm(unique_cleaned_smiles))
     # Merge into one dict
     cleaned_tautomers_mapping = {}
     for mapping in cleaned_tautomers:
@@ -514,6 +521,8 @@ def propagate_GNPS_Inst_field(summary):
     summary.loc[(np.array([("ion trap" in x) or ('itms' in x) or ("lcq" in x) or ("qit" in x)  or ("lit" in x) or ("lc-esi-it" in x) for x in summary.GNPS_Inst]) & (summary.msMassAnalyzer == '')),"msMassAnalyzer"] = "ion trap"
     summary.loc[(np.array([("cid" in x) and ('lumos' in x) for x in summary.GNPS_Inst]) & (summary.msMassAnalyzer == '')),"msMassAnalyzer"] = "ion trap"
     summary.loc[(np.array([("hcd" in x) and ('lumos' in x) for x in summary.GNPS_Inst]) & (summary.msMassAnalyzer == '')),"msMassAnalyzer"] = "orbitrap"
+    # this one is a bit risky, but for nist data we need it
+    summary.loc[(np.array([("hcd" in x) for x in summary.GNPS_Inst]) & (summary.msMassAnalyzer == '')),"msMassAnalyzer"] = "orbitrap"
   
     # Manufacturer Info (Not Done)
     summary.loc[(np.array([bool("maxis" in x) for x in summary.GNPS_Inst]) & (summary.msManufacturer == "")),"msManufacturer"] = "Bruker Daltonics"
@@ -606,7 +615,7 @@ def add_explained_intensity(summary, spectra):
     filter = (summary['ppmBetweenExpAndThMass'].notna() & summary['ppmBetweenExpAndThMass']<=50)
     summary.loc[filter, column_name_ppmBetweenExpAndThMass] = summary.loc[filter].parallel_apply(helper, axis=1)
             
-def postprocess_files(csv_path, mgf_path, output_csv_path, output_parquet_path, cleaned_mgf_path, includes_massbank=False, smiles_mapping_cache=None):
+def postprocess_files(csv_path, mgf_path, output_csv_path, output_parquet_path, cleaned_mgf_path, includes_massbank=False, includes_riken=False, smiles_mapping_cache=None):
     pandarallel.initialize(progress_bar=False, nb_workers=PARALLEL_WORKERS, use_memory_fs = False)
     
     summary = pd.read_csv(csv_path)
@@ -614,6 +623,11 @@ def postprocess_files(csv_path, mgf_path, output_csv_path, output_parquet_path, 
     # If the merged files include massbank, drop the old massbank data
     if includes_massbank:
         summary = summary.loc[(summary.GNPS_library_membership != 'MASSBANK') & (summary.GNPS_library_membership != 'MASSBANKEU')]
+        
+    # The Riken import includes a full version of BMDMS with more spectra, so we'll drop the GNPS import
+    if includes_riken:
+        print("Droppping BMDMS-NP in favor of the Riken Verion")
+        summary = summary.loc[(summary.GNPS_library_membership != 'BMDMS-NP')]
 
     # Cleaning up files:
     print("Performing basic cleaning", flush=True)
@@ -683,9 +697,9 @@ def postprocess_files(csv_path, mgf_path, output_csv_path, output_parquet_path, 
     # print("Done in {} seconds".format(datetime.timedelta(seconds=time.time() - start)))
     
     print("Writing output files...", flush=True)
-    print("Writing parquet file", flush=True)
-    parquet_as_df = generate_parquet_df(cleaned_mgf_path)
-    parquet_as_df.to_parquet(output_parquet_path, index=False)
+    # print("Writing parquet file", flush=True)
+    # parquet_as_df = generate_parquet_df(cleaned_mgf_path)
+    # parquet_as_df.to_parquet(output_parquet_path, index=False)
     print("Postprocessing complete!", flush=True)
 
 def main():
@@ -696,6 +710,7 @@ def main():
     parser.add_argument('--output_parquet_path', type=str, default="ALL_GNPS_cleaned.parquet", help='Path to the output parquet file')
     parser.add_argument('--output_mgf_path', type=str, default="ALL_GNPS_cleaned.mgf", help='Path to the output mgf file')
     parser.add_argument('--includes_massbank', action='store_true', help='Whether the merged files include reparsed massbank entries.')
+    parser.add_argument('--includes_riken', action='store_true', help='Whether the merged files include reparsed riken (specifically BMDMS) entries.')
     parser.add_argument('--smiles_mapping_cache', type=str, default=None, required=False, help='Path to the smiles cache file')
     args= parser.parse_args()
     
@@ -708,7 +723,9 @@ def main():
 
     if not os.path.isfile(cleaned_csv_path):
         if not os.path.isfile(cleaned_parquet_path):
-            postprocess_files(csv_path, mgf_path, cleaned_csv_path, cleaned_parquet_path, cleaned_mgf_path, args.includes_massbank, smiles_mapping_cache=smiles_mapping_cache)
+            postprocess_files(csv_path, mgf_path, 
+                              cleaned_csv_path, cleaned_parquet_path, cleaned_mgf_path, 
+                              args.includes_massbank, args.includes_riken, smiles_mapping_cache=smiles_mapping_cache)
             
 if __name__ == '__main__':
     main()
