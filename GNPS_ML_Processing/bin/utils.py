@@ -638,6 +638,7 @@ def synchronize_spectra(input_path, output_path, summary, progress_bar=True):
             output_mgf.write("ION_MODE={}\n".format(row_dict['Ion_Mode']))
             output_mgf.write(f"SMILES={row_dict['Smiles']}\n")
             output_mgf.write("SCANS={}\n".format(row_dict['scan']))
+            output_mgf.write("MSLEVEL={}\n".format(spectra['params'].get('mslevel', 2)))
             if 'collision_energy' in row_dict:
                 collision_energy = row_dict.get('collision_energy')
                 if not is_nan(collision_energy):
