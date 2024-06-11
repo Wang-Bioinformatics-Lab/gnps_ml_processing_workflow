@@ -604,13 +604,13 @@ def synchronize_spectra(input_path, output_path, summary, progress_bar=True):
     """   
     for col_name in ['spectrum_id', 'scan', 'Charge', 'Adduct', 'Ion_Mode']:
         if col_name not in summary.columns:
-            raise ValueError("Summary must contain columns 'spectrum_id', 'scan', 'charge', 'Compund_Name', 'Adduct', 'Ion_Mode. \n \
+            raise ValueError("Summary must contain columns 'spectrum_id', 'scan', 'charge', 'Compound_Name', 'Adduct', 'Ion_Mode. \n \
                              Instead got columns {}".format(summary.columns))
     
     with open(output_path, 'w', encoding="utf-8") as output_mgf:
         input_mgf = IndexedMGF(input_path)
         
-        columns_to_sync = ['spectrum_id', 'scan', 'Charge', 'Compund_Name', 'Smiles']
+        columns_to_sync = ['spectrum_id', 'scan', 'Charge', 'Compound_Name', 'Smiles']
         optional_columns = ['collision_energy', 'msManufacturer', 'msMassAnalyzer', 'msIonisation', 'msDissociationMethod']
         for column in optional_columns:
             if column in summary.columns:
@@ -620,9 +620,9 @@ def synchronize_spectra(input_path, output_path, summary, progress_bar=True):
         
         # if progress_bar:
         #     print("Syncing MGF with summary")
-        #     mapping = tqdm(summary[['spectrum_id','scan','Charge','Compund_Name', 'Smiles']].itertuples())
+        #     mapping = tqdm(summary[['spectrum_id','scan','Charge','Compound_Name', 'Smiles']].itertuples())
         # else:
-        #     mapping = summary[['spectrum_id','scan','Charge','Compund_Name', 'Smiles']].itertuples()
+        #     mapping = summary[['spectrum_id','scan','Charge','Compound_Name', 'Smiles']].itertuples()
         
         for row_dict in summary.to_dict(orient="records"):
             spectra = input_mgf[row_dict['spectrum_id']]
@@ -630,10 +630,10 @@ def synchronize_spectra(input_path, output_path, summary, progress_bar=True):
                 raise ValueError("Sanity Check Failed. Expected specrum identifier did not match mgf spectrum identifier.")
             output_mgf.write("BEGIN IONS\n")
             output_mgf.write("PEPMASS={}\n".format(float(spectra['params']['pepmass'][0])))
-            output_mgf.write("CHARGE={}\n".format(row_dict['Charge']))
+            output_mgf.write("CHARGE={}\n".format(int(row_dict['Charge'])))
             output_mgf.write("TITLE={}\n".format(spectra['params']['title']))
             output_mgf.write("SPECTRUMID={}\n".format(row_dict['spectrum_id']))
-            output_mgf.write("COMPOUND_NAME={}\n".format(row_dict['Compund_Name']))
+            output_mgf.write("COMPOUND_NAME={}\n".format(row_dict['Compound_Name']))
             output_mgf.write("ADDUCT={}\n".format(row_dict['Adduct']))
             output_mgf.write("ION_MODE={}\n".format(row_dict['Ion_Mode']))
             output_mgf.write(f"SMILES={row_dict['Smiles']}\n")

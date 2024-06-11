@@ -25,6 +25,8 @@ analyzer_ids = networkx.ancestors(graph,'MS:1000443')
 retention_id = 'MS:1000894'
 collision_energy_id = 'MS:1000045'
 
+csv_headers = ['scan', 'spectrum_id','collision_energy','retention_time','Adduct','Compound_Source','Compound_Name','Precursor_MZ','ExactMass','Charge','Ion_Mode','Smiles','INCHI','InChIKey_smiles','InChIKey_inchi','msModel','msManufacturer','msDetector','msMassAnalyzer','msIonisation','msDissociationMethod','GNPS_library_membership','GNPS_Inst']
+
 def helper(process_num, scan_start, all_spectra_list, path_to_provenance):
     scan = scan_start
     file_not_found_count = 0
@@ -36,7 +38,7 @@ def helper(process_num, scan_start, all_spectra_list, path_to_provenance):
 
     output_mgf = open('./temp/temp_{}.mgf'.format(process_num), "w")
     output_csv = open('./temp/temp_{}.csv'.format(process_num), "w")
-    w = csv.DictWriter(output_csv, ['scan', 'spectrum_id','collision_energy','retention_time','Adduct','Compound_Source','Compund_Name','Precursor_MZ','ExactMass','Charge','Ion_Mode','Smiles','INCHI','InChIKey_smiles','InChIKey_inchi','msModel','msManufacturer','msDetector','msMassAnalyzer','msIonisation','msDissociationMethod','GNPS_library_membership','GNPS_Inst'])
+    w = csv.DictWriter(output_csv, csv_headers)
     if process_num == 0: w.writeheader()    # This way when we merge the csvs we only get one header
     
     for spectrum in t:
@@ -254,7 +256,7 @@ def helper(process_num, scan_start, all_spectra_list, path_to_provenance):
         summary_dict["InChIKey_inchi"] = spectrum.get("InChIKey_inchi")
         summary_dict["GNPS_Inst"] = spectrum.get("Instrument")
         summary_dict["GNPS_library_membership"] = spectrum.get("library_membership")
-        summary_dict["Compund_Name"] = spectrum.get("Compound_Name")    # Useful to build MONA api 
+        summary_dict["Compound_Name"] = spectrum.get("Compound_Name")    # Useful to build MONA api 
 
         w.writerow(summary_dict)
         

@@ -8,14 +8,16 @@ params.OMETAPARAM_YAML = "job_parameters.yaml"
 TOOL_FOLDER_LS = "$moduleDir/bin"
 FAST_SEARCH_LIBRARY_BIN = "$TOOL_FOLDER_LS/GNPS_FastSearch_Library/bin"
 
-// params.input_csv = '/home/user/SourceCode/GNPS_ML_Processing_Workflow/GNPS_ML_Processing/nf_output/ALL_GNPS_cleaned.csv'
-// params.input_mgf = '/home/user/SourceCode/GNPS_ML_Processing_Workflow/GNPS_ML_Processing/nf_output/ALL_GNPS_cleaned.mgf'
-params.input_csv = '/home/user/SourceCode/GNPS_ML_Processing_Workflow/GNPS_ML_Processing/nf_output/summary/Structural_Similarity_Prediction.csv'
-params.input_mgf = '/home/user/SourceCode/GNPS_ML_Processing_Workflow/GNPS_ML_Processing/nf_output/spectra/Structural_Similarity_Prediction.mgf'
-// params.input_csv = '/home/user/SourceCode/GNPS_ML_Processing_Workflow/GNPS_ML_Processing/nf_outpucd t/summary/Orbitrap_Fragmentation_Prediction.csv'
-// params.input_mgf = '/home/user/SourceCode/GNPS_ML_Processing_Workflow/GNPS_ML_Processing/nf_output/spectra/Orbitrap_Fragmentation_Prediction.mgf'
+// params.input_csv = '/home/user/SourceCode/GNPS_ML_Processing_Workflow/GNPS_ML_Processing/nf_output/summary/Structural_Similarity_Prediction.csv'
+// params.input_mgf = '/home/user/SourceCode/GNPS_ML_Processing_Workflow/GNPS_ML_Processing/nf_output/spectra/Structural_Similarity_Prediction.mgf'
+params.input_csv = "../GNPS_ML_Processing/nf_output/ML_ready_subset_positive/selected_summary.csv"
+params.input_mgf = "../GNPS_ML_Processing/nf_output/ML_ready_subset_positive/selected_spectra.mgf"
 
-params.test_set_num = 500  // An integer (or float) representing the number (or percentage of) data points to use as a test set
+// Which task subset to use
+params.subset = "Structural_Similarity_Prediction"
+params.split_type = "structure_smart"  // 'structure_smart', 'random' (random spectra), or 'structure' (random inchi14)
+
+params.test_set_num = 2300  // An integer (or float) representing the number (or percentage of) data points to use as a test set
 
 params.lowest_spectral_threshold = '0.6' 
 params.lowest_structural_threshold = '0.2' 
@@ -33,22 +35,45 @@ params.upper_delta        = 200
  * This process selects the subset of data that is usable for ML (e.g., more than one peak, not excessively noisy, etc.)
  * It also splits the data into the selected ion mode, and normalizes intensities.
  */
-process select_data_for_ml {
+// process select_data_for_ml {
+//   conda "$TOOL_FOLDER_LS/conda_env.yml"
+
+//   input:
+//   path csv_file
+//   path mgf_file
+
+//   output:
+//   path 'selected_summary.csv',  emit: selected_summary
+//   path 'selected_spectra.mgf',  emit: selected_spectra
+
+//   """
+//   python3 $TOOL_FOLDER_LS/select_data.py \
+//           --input_csv "$csv_file" \
+//           --input_mgf "$mgf_file" \
+//           --ion_mode $params.ion_mode
+//   """
+// }
+
+process generate_subset {
   conda "$TOOL_FOLDER_LS/conda_env.yml"
+ 
+  publishDir "./nf_output", mode: 'copy'
+
+  cache true
 
   input:
-  path csv_file
-  path mgf_file
+  path cleaned_csv
+  path cleaned_mgf
 
   output:
-  path 'selected_summary.csv',  emit: selected_summary
-  path 'selected_spectra.mgf',  emit: selected_spectra
+  path "summary/*", emit: output_summary
+  path "spectra/*.parquet", emit: output_parquet, optional: true
+  path "spectra/*.mgf", emit: output_mgf
+  path "json_outputs/*.json", emit: output_json, optional: true
+  path "util/*", optional: true
 
   """
-  python3 $TOOL_FOLDER_LS/select_data.py \
-          --input_csv "$csv_file" \
-          --input_mgf "$mgf_file" \
-          --ion_mode $params.ion_mode
+  python3 $TOOL_FOLDER_LS/subset_generator.py "$params.subset"
   """
 }
 
@@ -58,7 +83,7 @@ process select_data_for_ml {
  */
 process generate_test_set {
   conda "$TOOL_FOLDER_LS/conda_env.yml"
-  publishDir './nf_output', mode: 'copy'
+  publishDir "./nf_output/${params.subset}/${params.split_type}", mode: 'copy'
 
   cache false
 
@@ -77,7 +102,7 @@ process generate_test_set {
           --input_csv "$csv_file" \
           --input_mgf "$mgf_file" \
           --num_test_points $params.test_set_num \
-          --sampling_strategy "structure_smart" \
+          --sampling_strategy "$params.split_type" \
           --threshold 0.5 \
           --debug
   """
@@ -234,8 +259,12 @@ workflow {
   csv_file = Channel.fromPath(params.input_csv)
   mgf_file = Channel.fromPath(params.input_mgf)
 
-  select_data_for_ml(csv_file, mgf_file)
-  generate_test_set(select_data_for_ml.out.selected_summary, select_data_for_ml.out.selected_spectra)
+  // select_data_for_ml(csv_file, mgf_file)
+  // generate_test_set(select_data_for_ml.out.selected_summary, select_data_for_ml.out.selected_spectra)
+
+
+  generate_subset(csv_file, mgf_file)
+  generate_test_set(generate_subset.out.output_summary, generate_subset.out.output_mgf)
   // build_library(generate_test_set.out.test_rows_mgf)
 
   // spectral_similarity_calculation(build_library.out.libraries, generate_test_set.out.train_rows_mgf)

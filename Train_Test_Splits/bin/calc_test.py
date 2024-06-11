@@ -12,7 +12,7 @@ from rdkit.DataStructs import cDataStructs
 from rdkit import DataStructs
 from tqdm import tqdm
 from time import time
-from utils import missing_structure_check, greedy_subset
+from utils import missing_structure_check#, greedy_subset
 import matplotlib.pyplot as plt
 import logging
 
@@ -214,7 +214,10 @@ def random_tail_hybrid(summary, datapoints_per_bin:int=30, num_bins:int=20, pair
     
     return test_rows, train_rows
 
-def sample_structures_smart(summary, num_test_roots=500, test_path_len=3, test_edge_cutoff=0.70, bins=(0.2, 1.0, 17), maximum_training_set_reduction=0.80, datapoints_per_bin=50):
+# CHANGED FOR TESTING:
+# Original"  num_test_roots=500, test_path_len=3 data_points_per_bin=50, 
+
+def sample_structures_smart(summary, num_test_roots=0, test_path_len=0, test_edge_cutoff=0.70, bins=(0.2, 1.0, 17), maximum_training_set_reduction=0.80, datapoints_per_bin=143):
     """
     Randomly sample num_test_roots structures and then iteratively remove structures from the training set
     until each bin has at least 30 structures.
