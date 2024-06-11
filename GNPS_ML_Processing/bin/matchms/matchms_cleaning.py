@@ -1,6 +1,7 @@
 import os
 from matchms.filtering.default_pipelines import LIBRARY_CLEANING
 from matchms.Pipeline import Pipeline, create_workflow
+import matchms.filtering as msfilters
 import argparse
 import shutil
 
@@ -28,13 +29,44 @@ def main():
     new_cached_compound_name_annotation_path = "compound_name_annotation.csv"
     shutil.copy(args.cached_compound_name_annotation_path, new_cached_compound_name_annotation_path)
 
-    # Current
-    if not os.path.exists(os.path.join(results_folder, "library_cleaning.yaml")):
-        workflow = create_workflow( yaml_file_name=os.path.join(results_folder, "library_cleaning.yaml"),
-                                    query_filters=LIBRARY_CLEANING + [("derive_annotation_from_compound_name",
-                                                                    {"annotated_compound_names_file":new_cached_compound_name_annotation_path, "mass_tolerance": 0.1})])
-    else:
-        workflow = load_workflow_from_yaml_file(os.path.join(results_folder, "library_cleaning.yaml"))
+    
+    workflow = create_workflow(
+        yaml_file_name=os.path.join(results_folder, "matchms_pipeline_settings.yaml"),
+        query_filters=[
+            msfilters.require_correct_ms_level,
+            msfilters.make_charge_int,
+            msfilters.add_compound_name,
+            msfilters.derive_adduct_from_name,
+            msfilters.derive_formula_from_name,
+            msfilters.clean_compound_name,
+            msfilters.interpret_pepmass,
+            msfilters.add_precursor_mz,
+            msfilters.add_retention_index,
+            msfilters.add_retention_time,
+            msfilters.derive_ionmode,
+            msfilters.correct_charge,
+            msfilters.require_precursor_mz,
+            msfilters.harmonize_undefined_inchikey,
+            msfilters.harmonize_undefined_inchi,
+            msfilters.harmonize_undefined_smiles,
+            msfilters.repair_inchi_inchikey_smiles,
+            msfilters.clean_adduct,
+            msfilters.add_parent_mass,
+            (msfilters.derive_annotation_from_compound_name, {'annotated_compound_names_file': os.path.join(results_folder, new_cached_compound_name_annotation_path)}),
+            msfilters.derive_smiles_from_inchi,
+            msfilters.derive_inchi_from_smiles,
+            msfilters.derive_inchikey_from_inchi,
+            (msfilters.repair_smiles_of_salts, {"mass_tolerance": 0.1}),
+            (msfilters.repair_parent_mass_is_molar_mass, {"mass_tolerance": 0.1}),
+            (msfilters.repair_adduct_and_parent_mass_based_on_smiles, {"mass_tolerance": 0.1}),
+            msfilters.repair_not_matching_annotation,
+            msfilters.require_valid_annotation,
+            (msfilters.require_correct_ionmode, {"ion_mode_to_keep": "both"}),
+            (msfilters.require_parent_mass_match_smiles, {"mass_tolerance": 0.1}),
+            msfilters.require_matching_adduct_precursor_mz_parent_mass,
+            msfilters.require_matching_adduct_and_ionmode,
+            msfilters.normalize_intensities,
+    ])
 
     pipeline = Pipeline(workflow,
                         logging_file=os.path.join(results_folder, "library_cleaning_log.log"),

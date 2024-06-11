@@ -218,6 +218,8 @@ process postprocess {
     """
     if $params.include_riken; then
       riken_flag="--includes_riken"
+    else
+      riken_flag=""
     fi
 
     cp $TOOL_FOLDER/smiles_mapping_cache.json ./smiles_mapping_cache.json
