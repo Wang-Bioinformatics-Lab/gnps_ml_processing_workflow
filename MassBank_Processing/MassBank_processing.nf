@@ -88,7 +88,7 @@ process merge_export_massbank {
 }
 
 // Output the data into nf_output
-process output {
+process output_files {
   publishDir "./nf_output", mode: 'copy'
 
   input:
@@ -107,5 +107,5 @@ workflow {
   prep_params_massbank(fetch_data_massbank.out.blacklist, fetch_data_massbank.out.massbank_data)
   temp_files = export_massbank(fetch_data_massbank.out.massbank_data, prep_params_massbank.out.params)
   merged_files = merge_export_massbank(temp_files.collect())
-  output(merged_files)
+  output_files(merged_files)
 }
