@@ -685,7 +685,8 @@ def synchronize_spectra_to_json(input_mgf:str, output_path:str)->None:
         for m in input_mgf:
             spectra_dict[m['params']['title']] = {
                 'm/z array': list(m['m/z array']),
-                'intensity array': list(m['intensity array'])
+                'intensity array': list(m['intensity array']),
+                'precursor mz': m['params']['pepmass'][0],
             }
         
         json.dump(spectra_dict, output_json, indent=4)
