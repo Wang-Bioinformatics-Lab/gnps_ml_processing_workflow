@@ -10,7 +10,7 @@ from pyteomics.mgf import IndexedMGF
 import sys
 from glob import glob
 
-from GNPS2_JSON_Export import generate_json_mgf
+from GNPS2_JSON_Export import generate_json_mgf, synchronize_spectra_to_json
 from utils import build_tanimoto_similarity_list_precomputed, generate_fingerprints, harmonize_smiles_rdkit, synchronize_spectra, generate_parquet_df
 
 # import dask.dataframe as dd
@@ -121,7 +121,7 @@ def Orbitrap_Fragmentation_Prediction(summary_path:str, mgf_path:str):
     reduced_df.to_csv(csv_path, index=False)
     
     # Save to parquet
-    print("Scynchronizing spectra.", flush=True)
+    print("Synchronizing spectra.", flush=True)
     start_time = time.time()
     output_mgf_path = './spectra/Orbitrap_Fragmentation_Prediction.mgf'
     synchronize_spectra(mgf_path, output_mgf_path, reduced_df, progress_bar=True)
@@ -232,42 +232,54 @@ def Structural_Similarity_Prediction(summary_path:str, mgf_path:str):
                                             'msManufacturer':str,
                                             'msMassAnalyzer':str,
                                             'msModel':str})
-    
+    print(f"Read {len(df)} entries.", flush=True)
     df.Smiles = df.Smiles.astype(str)
     df = df[(df.Smiles.notnull()) & (df.Smiles != 'nan')]
-    
-    print("Generating fingerprints.", flush=True)
-    start_time = time.time()
-    df = generate_fingerprints(df)
-    print("Done in {:.2f} seconds.".format(time.time() - start_time), flush=True)
+    print(f"Filtered to {len(df)} entries (Removed nan smiles).", flush=True)
+
+    # Not currently in use    
+    # print("Generating fingerprints.", flush=True)
+    # start_time = time.time()
+    # df = generate_fingerprints(df)
+    # print("Done in {:.2f} seconds.".format(time.time() - start_time), flush=True)
     
     # Save to csv
     print("Writing structural similarity prediction subset to csv.", flush=True)
     csv_path = './summary/Structural_Similarity_Prediction.csv'
     df.to_csv(csv_path, index=False)
 
-    # Compute and Save Similarities
+    # Compute and Save Similarities # Currently not used by anything else
     # Only needs smiles, spectrum_id, and fingerprints (helps reduce memory usage)
-    print("Computing structural similarity sim matrix.", flush=True)
-    start_time = time.time()
-    min_df = df[['Smiles','spectrum_id','Morgan_2048_3']].copy()
+    # print("Computing structural similarity sim matrix.", flush=True)
+    # start_time = time.time()
+    # min_df = df[['Smiles','spectrum_id','Morgan_2048_3']].copy()
     
-    build_tanimoto_similarity_list_precomputed(min_df, './util/Structural_Similarity_Prediction_Pairs.json', similarity_threshold=0.0, truncate=(20,10))
-    print("Done in {:.2f} seconds.".format(time.time() - start_time), flush=True) 
+    # build_tanimoto_similarity_list_precomputed(min_df, './util/Structural_Similarity_Prediction_Pairs.json', similarity_threshold=0.0, truncate=(20,10))
+    # print("Done in {:.2f} seconds.".format(time.time() - start_time), flush=True) 
    
-    # Save to parquet
-    print("Scynchronizing spectra.", flush=True)
+    # Save to MGF
+    print("Synchronizing spectra.", flush=True)
     start_time = time.time()
     output_mgf_path = './spectra/Structural_Similarity_Prediction.mgf'
     synchronize_spectra(mgf_path, output_mgf_path, df, progress_bar=True)
     print("Done in {:.2f} seconds.".format(time.time() - start_time), flush=True)
-    print("Generating parquet file.", flush=True)
+
+    # Save to JSON
+    print("Generating json output.", flush=True)
     start_time = time.time()
-    parquet_as_df = generate_parquet_df(output_mgf_path)
-    parquet_as_df.to_parquet('./spectra/Structural_Similarity_Prediction.parquet')
+    json_path = './json_outputs/Structural_Similarity_Prediction.json'
+    synchronize_spectra_to_json(output_mgf_path, json_path)
     print("Done in {:.2f} seconds.".format(time.time() - start_time), flush=True)
+
+    # print("Generating parquet file.", flush=True)
+    # start_time = time.time()
+    # parquet_as_df = generate_parquet_df(output_mgf_path)
+    # parquet_as_df.to_parquet('./spectra/Structural_Similarity_Prediction.parquet')
+    # print("Done in {:.2f} seconds.".format(time.time() - start_time), flush=True)
     
     # Save to json
+    return
+    # Temporarily disabled to save time
     print("Generating json output.", flush=True)
     start_time = time.time()
     json_path = './json_outputs/Structural_Similarity_Prediction.json'

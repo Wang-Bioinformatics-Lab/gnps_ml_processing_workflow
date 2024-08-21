@@ -10,14 +10,16 @@ FAST_SEARCH_LIBRARY_BIN = "$TOOL_FOLDER_LS/GNPS_FastSearch_Library/bin"
 
 // params.input_csv = '/home/user/SourceCode/GNPS_ML_Processing_Workflow/GNPS_ML_Processing/nf_output/summary/Structural_Similarity_Prediction.csv'
 // params.input_mgf = '/home/user/SourceCode/GNPS_ML_Processing_Workflow/GNPS_ML_Processing/nf_output/spectra/Structural_Similarity_Prediction.mgf'
-params.input_csv = "../GNPS_ML_Processing/nf_output/ML_ready_subset_positive/selected_summary.csv"
-params.input_mgf = "../GNPS_ML_Processing/nf_output/ML_ready_subset_positive/selected_spectra.mgf"
+// params.input_csv = "../GNPS_ML_Processing/nf_output/ML_ready_subset_positive/selected_summary.csv"
+// params.input_mgf = "../GNPS_ML_Processing/nf_output/ML_ready_subset_positive/selected_spectra.mgf"
+params.input_csv = "./asms_data/Structural_Similarity_Prediction.csv"
+params.input_mgf = "./asms_data/Structural_Similarity_Prediction.mgf"
 
 // Which task subset to use
 params.subset = "Structural_Similarity_Prediction"
-params.split_type = "structure_smart"  // 'structure_smart', 'random' (random spectra), or 'structure' (random inchi14)
+params.split_type = "structure"//"structure_smart"  // 'basic_sampling_scheme', 'structure_smart', 'random' (random spectra), or 'structure' (random inchi14)
 
-params.test_set_num = 2300  // An integer (or float) representing the number (or percentage of) data points to use as a test set
+params.test_set_num = 500//2300 // random structure=16154  // An integer (or float) representing the number (or percentage of) data points to use as a test set
 
 params.lowest_spectral_threshold = '0.6' 
 params.lowest_structural_threshold = '0.2' 
@@ -94,8 +96,10 @@ process generate_test_set {
   output:
   path 'test_rows.csv',  emit: test_rows_csv
   path 'test_rows.mgf',  emit: test_rows_mgf
+  path 'test_rows.json', emit: test_rows_json
   path 'train_rows.csv', emit: train_rows_csv
   path 'train_rows.mgf', emit: train_rows_mgf
+  path 'train_rows.json', emit: train_rows_json
 
   """
   python3 $TOOL_FOLDER_LS/calc_test.py \
@@ -256,8 +260,8 @@ process output_handler {
 }
 
 workflow {
-  csv_file = Channel.fromPath(params.input_csv)
-  mgf_file = Channel.fromPath(params.input_mgf)
+  csv_file  = Channel.fromPath(params.input_csv)
+  mgf_file  = Channel.fromPath(params.input_mgf)
 
   // select_data_for_ml(csv_file, mgf_file)
   // generate_test_set(select_data_for_ml.out.selected_summary, select_data_for_ml.out.selected_spectra)
