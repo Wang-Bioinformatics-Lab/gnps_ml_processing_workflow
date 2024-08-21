@@ -413,6 +413,7 @@ process select_data_for_ml {
   output:
   path 'selected_summary.csv',  emit: selected_summary
   path 'selected_spectra.mgf',  emit: selected_spectra
+  path 'selected_spectra.json',  emit: selected_spectra_json
 
   """
   python3 $TOOL_FOLDER/select_data.py \
