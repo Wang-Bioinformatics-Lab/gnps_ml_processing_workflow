@@ -20,6 +20,7 @@ def main():
     parser.add_argument('--num_epochs', type=int, default=1800)
     parser.add_argument('--batch_size', type=int, default=32)
     parser.add_argument('--num_turns', type=int, default=2) # Default for MS2DeepScore Training is 2, Validation is 10
+    parser.add_argument('--mode', type=str, choices=['standard', 'filter', 'triplet'], default='standard')
     parser.add_argument('--filter', action='store_true', help='Use memory efficient mode')
     parser.add_argument('--seed', type=int, default=42, help='Random seed for reproducibility')
     # Parameters for filtering, only applys in memory efficent mode
@@ -38,14 +39,14 @@ def main():
     parser.add_argument('--strict_collision_energy', action='store_true', help="Require all pairs to have an associated collision energy.", default=False)
     args = parser.parse_args()
 
-    if not args.filter:
+    if not args.mode =='filter':
         # Ensure None of the filtering flags were set
         if not args.merge_on_lst is None:
-            raise ValueError("merge_on_lst is only compatible with memory efficient mode.")
+            raise ValueError("merge_on_lst is only compatible with --filter set.")
         if not args.mass_analyzer_lst is None:
-            raise ValueError("mass_analyzer_lst is only compatible with memory efficient mode.")
+            raise ValueError("mass_analyzer_lst is only compatible with --filter set.")
         if args.collision_energy_thresh != 5.0:
-            raise ValueError("collision_energy_thresh is only compatible with memory efficient mode.")
+            raise ValueError("collision_energy_thresh is only compatible with --filter set.")
 
     current_time = datetime.now().strftime("%d_%m_%Y_%H_%M_%S")
     print(os.path.join(args.save_dir, 'logs', f"presampling_{current_time}.log"), flush=True)
@@ -77,18 +78,19 @@ def main():
     
     logging.info("Loading data...")
     metadata = pd.read_csv(args.metadata)
-    all_inchikeys = metadata['InChIKey_smiles'].str[:14].values
-    unique_inchikeys = metadata['InChIKey_smiles'].str[:14].unique()
+    metadata['inchikey_14'] = metadata['InChIKey_smiles'].str[:14]
+    all_inchikeys = metadata['inchikey_14'].values
+    unique_inchikeys = metadata['inchikey_14'].unique()
     spectrum_ids = metadata['spectrum_id'].unique()
 
     reference_scores_df = pd.read_csv(args.tanimoto_scores_path, index_col=0)
     print(reference_scores_df.iloc[:5, :5])
     reference_scores_df = reference_scores_df.loc[unique_inchikeys, unique_inchikeys]
 
-    if args.filter:
-        metadata['inchikey_14'] = metadata['InChIKey_smiles'].str[:14]
-
+    headers = None
+    if args.mode == 'filter':
         logging.info("Creating FilteredPairsGenerator... (Computing Filtered Pairs on the Fly)")
+        headers = ['spectrumid1', 'spectrumid2', 'inchikey1', 'inchikey2', 'score']
         training_generator = FilteredPairsGenerator(metadata,
                                                     reference_scores_df,
                                                     same_prob_bins=same_prob_bins,
@@ -102,10 +104,15 @@ def main():
                                                     mass_analyzer_lst=args.mass_analyzer_lst,
                                                     collision_energy_thresh=args.collision_energy_thresh,
                                                     strict_collision_energy=args.strict_collision_energy)
-                                                        
+    elif args.mode == 'triplet':
+        logging.info("Creating DataGeneratorTriplets... (All-Pairs)")
+        raise NotImplementedError()
+        headers = ['anchor', 'positive', 'negative', 'anchor_inchikey', 'positive_inchikey', 'negative_inchikey', 'anchor_positive_score', 'anchor_negative_score']
+        # training_gnerator = DataGeneratorTriplets(all_inchikeys,
 
     else:
-        logging.info("Creating DataGeneratorAllInchikeys... (Using All Pairs)")
+        logging.info("Creating DataGeneratorAllInchikeys... (All-Pairs)")
+        headers = ['spectrumid1', 'spectrumid2', 'inchikey1', 'inchikey2', 'score']
         training_generator = DataGeneratorAllInchikeys(all_inchikeys,
                                                         spectrum_ids,
                                                         reference_scores_df,
@@ -128,4 +135,5 @@ def main():
 
 
 if __name__ == "__main__":
+
     main()

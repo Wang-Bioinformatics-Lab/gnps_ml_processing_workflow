@@ -114,7 +114,7 @@ class DataGeneratorAllInchikeys():
         assert len(matching_spectrum_id) > 0, f"No matching inchikey found (note: expected first 14 characters) {inchikey}"
         return self.spectrum_ids[np.random.choice(matching_spectrum_id)]
 
-    def _spectrum_pair_generator(self, batch_index: int) -> Iterator:
+    def _instance_generator(self, batch_index: int) -> Iterator:
         """
         Generate spectrum pairs for batch. For each 'source' inchikey pick an inchikey in the
         desired target score range. Then randomly get spectrums for this pair of inchikeys.
@@ -152,7 +152,7 @@ class DataGeneratorAllInchikeys():
         """
         if self.use_fixed_set and batch_index in self.fixed_set:
             return self.fixed_set[batch_index]
-        spectrum_pairs = self._spectrum_pair_generator(batch_index)
+        spectrum_pairs = self._instance_generator(batch_index)
         
         return spectrum_pairs
     
@@ -469,7 +469,7 @@ class FilteredPairsGenerator(DataGeneratorBase):
         assert len(matching_spectrum_id) > 0, f"No matching inchikey found (note: expected first 14 characters) {inchikey}"
         return self.spectrum_ids[np.random.choice(matching_spectrum_id)]
 
-    def _spectrum_pair_generator(self, batch_index: int) -> Iterator:
+    def _instance_generator(self, batch_index: int) -> Iterator:
         """
         Generate spectrum pairs for batch. For each 'source' inchikey pick an inchikey in the
         desired target score range. Then randomly get spectrums for this pair of inchikeys.
@@ -527,7 +527,7 @@ class FilteredPairsGenerator(DataGeneratorBase):
         """
         if self.use_fixed_set and batch_index in self.fixed_set:
             return self.fixed_set[batch_index]
-        spectrum_pairs = self._spectrum_pair_generator(batch_index)
+        spectrum_pairs = self._instance_generator(batch_index)
         
         return spectrum_pairs
     
@@ -538,5 +538,173 @@ class FilteredPairsGenerator(DataGeneratorBase):
     def on_epoch_end(self):
         """Updates indexes after each epoch"""
         self.indexes = np.tile(np.arange(len(self.reference_scores_df)), int(self.num_turns))
+        if self.shuffle:
+            np.random.shuffle(self.indexes)
+
+class DataGeneratorTriplets():
+    """
+    Generate training triplets as described in "Emergence of molecular structures from 
+    repository-scale self-supervised learning on tandem mass spectra."
+    See: https://doi.org/10.26434/chemrxiv-2023-kss3r-v2
+
+    This generator will provide training data by iterating over each InchiKey in the
+    dataset with a non-identical InChiKey within em_difference_threshold Da and at least
+    two spectra. It will then randomly pick two spectra corresponding to this InchiKey and one
+    negative sample corresponding to the non-identical InChiKey within the specified mass
+    tolerance.
+    """
+
+    def __init__(self, metadata_table: pd.DataFrame,
+                reference_scores_df: pd.DataFrame,
+                shuffle:bool=True,
+                random_seed:int=42,
+                num_turns:int=2,
+                batch_size:int=32,
+                use_fixed_set:bool=False,
+                em_difference_threshold:float=0.05):
+        """Generates data for training a siamese Keras model.
+
+        Parameters
+        ----------
+        metadata_table : pd.DataFrame
+            Metadata table with the columns 'spectrum_id' and 'InChIKey_smiles_14'.
+        shuffle : bool, optional
+            Whether to shuffle the data, by default True.
+        random_seed : int, optional
+            Random seed for reproducibility, by default 42.
+        num_turns : int, optional
+            Number of turns to generate, by default 2.
+        batch_size : int, optional
+            Batch size, by default 32.
+        use_fixed_set : bool, optional
+            Whether to use a fixed set of data, by default False.
+        em_difference_threshold : float, optional
+            Maximum allowed difference in exact mass for an InChiKey to be used as a negative sample, by default 0.05.
+        """
+        self.em_difference_threshold = em_difference_threshold
+
+        self.metadata_table = metadata_table
+        self.spectrum_ids = self.metadata_table['spectrum_id']
+        if 'InChIKey_smiles_14' in self.metadata_table.columns:
+            self.spectrum_inchikeys = self.metadata_table['InChIKey_smiles_14']
+        elif 'InChIKey_smiles' in self.metadata_table.columns:
+            self.metadata_table['InChIKey_smiles_14'] = self.metadata_table['InChIKey_smiles'].str[:14]
+            self.spectrum_inchikeys = self.metadata_table['InChIKey_smiles_14']
+        else:
+            raise ValueError("No InChIKey column found in metadata_table. Please provide one.")
+
+        print(f"Got {len(self.spectrum_inchikeys)} inchikeys and {len(self.spectrum_ids)} spectrum ids.")
+        print(f"Got {len(np.unique(self.spectrum_inchikeys))} unique inchikeys.")
+        
+        # Get most common weight of each inchikey
+        inchikey_mol_wt_mapping = metadata_table.groupby('InChIKey_smiles_14')['ExactMass'].agg(lambda x: pd.Series.mode(x).iloc[0])
+
+        outer = np.abs(np.subtract.outer(inchikey_mol_wt_mapping.values, inchikey_mol_wt_mapping.values))
+        # Set diag to inf
+        np.fill_diagonal(outer, np.inf)
+        # Convert to dataframe
+        inchikey_mol_wt_diff_df = pd.DataFrame(outer, index=inchikey_mol_wt_mapping.index, columns=inchikey_mol_wt_mapping.index)
+        # Get all inchikeys with a mass difference < thresh Da to another inchikey
+        relevant_inchis = inchikey_mol_wt_diff_df.loc[inchikey_mol_wt_diff_df.min() < self.em_difference_threshold].index
+        self.inchikey_mol_wt_diff_df = inchikey_mol_wt_diff_df.loc[relevant_inchis, relevant_inchis]
+        self.metadata_table = self.metadata_table.loc[self.metadata_table['InChIKey_smiles_14'].isin(relevant_inchis)]
+        self.spectrum_inchikeys = self.spectrum_inchikeys.loc[self.spectrum_ids.index]
+        self.spectrum_ids = self.spectrum_ids.loc[self.spectrum_inchikeys.index]
+        self.possible_anchors = self.metadata_table.groupby('InChIKey_smiles_14').filter(lambda x: len(x) > 1)['InChIKey_smiles_14'].unique()
+
+        assert len(self.spectrum_inchikeys) == len(self.spectrum_ids), "Inchikeys and spectrum ids must have the same length."
+        print("After Triplet Criteria Applied:")
+        print(f"Got {len(self.spectrum_inchikeys)} inchikeys and {len(self.spectrum_ids)} spectrum ids.")
+        print(f"Got {len(np.unique(self.spectrum_inchikeys))} unique inchikeys.")
+
+        self.shuffle = shuffle
+        self.reference_scores_df = reference_scores_df
+        self.random_seed = random_seed
+        self.num_turns = num_turns
+        self.batch_size = batch_size
+        self.use_fixed_set = use_fixed_set
+
+        self.fixed_set = {}
+
+        self.on_epoch_end()
+
+    def __len__(self):
+        """Denotes the number of batches per epoch
+        NB1: self.reference_scores_df only contains 'selected' inchikeys, see `self._data_selection`.
+        NB2: We don't see all data every epoch, because the last half-empty batch is omitted.
+        This is expected behavior, with the shuffling this is OK.
+        """
+        return int(self.num_turns) * int(np.floor(len(self.possible_anchors) / self.batch_size))
+
+    def _get_hard_negative(self, anchor_inchikey):
+        """Fetches a hard negative for a given anchor inchikey as defined in 
+        https://doi.org/10.26434/chemrxiv-2023-kss3r-v2.
+        
+        Molecular mass difference < self.em_difference_threshold Da with a different inchikey.
+        """
+        matching_inchikeys = self.inchikey_mol_wt_diff_df.loc[anchor_inchikey]
+        matching_inchikeys = matching_inchikeys[matching_inchikeys < self.em_difference_threshold].index
+        if len(matching_inchikeys) == 0:
+            raise ValueError(f"No matching inchikey found for {anchor_inchikey}")
+        inchikey = np.random.choice(matching_inchikeys)
+        return inchikey, self._get_spectrum_sample_with_inchikey(inchikey, 1)[0]
+
+    def _get_anchor_positive(self, anchor_inchikey):
+        """Fetches a positive sample for a given anchor inchikey as defined in
+        https://doi.org/10.26434/chemrxiv-2023-kss3r-v2.
+        
+        Positive sample should have an identical inchikey.
+        """
+        sampled = self._get_spectrum_sample_with_inchikey(anchor_inchikey, 2)
+        return sampled[0], sampled[1]
+        
+    def _get_spectrum_sample_with_inchikey(self, inchikey: str, count: int) -> str:
+        """
+        Get a random spectrum matching the `inchikey` argument. NB: A compound (identified by an
+        inchikey) can have multiple measured spectrums in a binned spectrum dataset.
+        """
+        matching_spectrum_id = np.where(self.spectrum_inchikeys == inchikey)[0]
+        assert len(matching_spectrum_id) > 0, f"No matching inchikey found (note: expected first 14 characters) {inchikey}"
+        return self.spectrum_ids[np.random.choice(matching_spectrum_id, count, replace=False)]
+
+    def _instance_generator(self, batch_index: int) -> Iterator:
+        """
+        Generate spectrum pairs for batch. For each 'source' inchikey pick an inchikey in the
+        desired target score range. Then randomly get spectrums for this pair of inchikeys.
+        """
+        batch_size = self.batch_size
+        # Go through all indexes
+        indexes = self.indexes[batch_index * batch_size:(batch_index + 1) * batch_size]
+
+        for index in indexes:
+            anchor_inchikey = self.possible_anchors.index[index]
+            positive_inchikey = anchor_inchikey
+            # Randomly pick the desired target score range and pick matching inchikey
+            anchor_id, positive_id = self._get_anchor_positive(anchor_inchikey)
+            negative_inchikey, negative_id = self._get_hard_negative(anchor_inchikey)
+            anchor_positive_score = self.reference_scores_df.loc[anchor_inchikey, positive_inchikey]
+            anchor_negative_score = self.reference_scores_df.loc[anchor_inchikey, negative_inchikey]
+
+            yield anchor_id, positive_id, negative_id, anchor_inchikey, positive_inchikey, negative_inchikey, anchor_positive_score, anchor_negative_score
+
+    def __getitem__(self, batch_index: int):
+        """Generate one batch of data.
+
+        If use_fixed_set=True we try retrieving the batch from self.fixed_set (or store it if
+        this is the first epoch). This ensures a fixed set of data is generated each epoch.
+        """
+        if self.use_fixed_set and batch_index in self.fixed_set:
+            return self.fixed_set[batch_index]
+        spectrum_pairs = self._instance_generator(batch_index)
+        
+        return spectrum_pairs
+       
+    def __iter__(self):
+        for i in range(len(self)):
+            yield self.__getitem__(i)
+
+    def on_epoch_end(self):
+        """Updates indexes after each epoch"""
+        self.indexes = np.tile(np.arange(len(self.possible_anchors)), int(self.num_turns))
         if self.shuffle:
             np.random.shuffle(self.indexes)
