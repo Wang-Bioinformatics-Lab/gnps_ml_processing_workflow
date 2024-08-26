@@ -33,8 +33,46 @@ params.fragment_tolerance = 0.2
 params.lower_delta        = 130  // To perform analog search, set lower_delta = upper_delta =0
 params.upper_delta        = 200
 
-// Submodule for batch generation
+// Batch Global Generation Parameters
+params.num_epochs = 150
+params.split_size = 10  // How many epochs each worker has, num_epochs should be divisible by this number
+params.batch_size = 32
+params.num_turns = 2
+params.save_dir = "./nf_output/${params.subset}/${params.split_type}/"
 
+// Which mass analyzers to include in filtered data.
+params.mass_analyzer_lst = "" // Default is "", which is all mass analyzers. Otherwise, a semicolon delimited list of mass analyzers to include
+
+// Paralellism for test set creation
+params.parallelism = 15
+
+
+// Submodule for batch generation
+include { sampleSeveralEpochs as unfiltered_train_sampler } from '../Prebatch/presample_and_assemble_data.nf'
+include { assembleEpochs      as unfiltered_train_assembler } from '../Prebatch/presample_and_assemble_data.nf'
+include { sampleSeveralEpochs as unfiltered_val_sampler } from '../Prebatch/presample_and_assemble_data.nf'
+include { assembleEpochs      as unfiltered_val_assembler } from '../Prebatch/presample_and_assemble_data.nf'
+include { sampleSeveralEpochs as filtered_train_sampler } from '../Prebatch/presample_and_assemble_data.nf'
+include { assembleEpochs      as filtered_train_assembler } from '../Prebatch/presample_and_assemble_data.nf'
+include { sampleSeveralEpochs as filtered_val_sampler } from '../Prebatch/presample_and_assemble_data.nf'
+include { assembleEpochs      as filtered_val_assembler } from '../Prebatch/presample_and_assemble_data.nf'
+include { sampleSeveralEpochs as unfiltered_biased_train_sampler } from '../Prebatch/presample_and_assemble_data.nf'
+include { assembleEpochs      as unfiltered_biased_train_assembler } from '../Prebatch/presample_and_assemble_data.nf'
+include { sampleSeveralEpochs as unfiltered_biased_val_sampler } from '../Prebatch/presample_and_assemble_data.nf'
+include { assembleEpochs      as unfiltered_biased_val_assembler } from '../Prebatch/presample_and_assemble_data.nf'
+include { sampleSeveralEpochs as filtered_biased_train_sampler } from '../Prebatch/presample_and_assemble_data.nf'
+include { assembleEpochs      as filtered_biased_train_assembler } from '../Prebatch/presample_and_assemble_data.nf'
+include { sampleSeveralEpochs as filtered_biased_val_sampler } from '../Prebatch/presample_and_assemble_data.nf'
+include { assembleEpochs      as filtered_biased_val_assembler } from '../Prebatch/presample_and_assemble_data.nf'
+include { sampleSeveralEpochs as filtered_strict_ce_train_sampler } from '../Prebatch/presample_and_assemble_data.nf'
+include { assembleEpochs      as filtered_strict_ce_train_assembler } from '../Prebatch/presample_and_assemble_data.nf'
+include { sampleSeveralEpochs as filtered_strict_ce_val_sampler } from '../Prebatch/presample_and_assemble_data.nf'
+include { assembleEpochs      as filtered_strict_ce_val_assembler } from '../Prebatch/presample_and_assemble_data.nf'
+
+
+include { exhaustivePairEnumeration as unfiltered_test_enumerator } from '../Prebatch/presample_and_assemble_data.nf'
+include { exhaustivePairEnumeration as filtered_test_enumerator } from '../Prebatch/presample_and_assemble_data.nf'
+include { exhaustivePairEnumeration as filtered_strict_ce_test_enumerator } from '../Prebatch/presample_and_assemble_data.nf'
 
 /*
  * This process selects the subset of data that is usable for ML (e.g., more than one peak, not excessively noisy, etc.)
@@ -86,7 +124,7 @@ process calculate_pairwise_similarity {
   conda "$TOOL_FOLDER_LS/conda_env.yml"
   // publishDir "./nf_output", mode: 'copy'
 
-  cache false
+  cache true
 
   input:
   path metadata_csv
@@ -300,7 +338,217 @@ workflow {
   calculate_pairwise_similarity(generate_subset.out.output_summary)
   generate_test_set(generate_subset.out.output_summary, calculate_pairwise_similarity.out.pairwise_similarities, generate_subset.out.output_mgf)  
 
-  parameter_ch = Channel
+  // To split the epochs
+  epoch_ch = Channel.of(1..params.num_epochs/params.split_size)
+  val_epoch_ch = Channel.of(1,)
+
+  // Unfiltered
+  unfiltered_train_sampler(
+                      epoch_ch,
+                      generate_test_set.out.train_rows_csv, 
+                      generate_test_set.out.train_similarities_csv, 
+                      tuple(  params.batch_size,
+                              params.num_turns,
+                              "standard",  // mode
+                              "",  // mass_analyzer_lst
+                              10,  // num_bins
+                              "", // exponential_bins
+                              false, // strict_collision_energy
+                              false, // force_one_epoch
+                              "train_unfiltered.hdf5", // output_name
+                          ))
+  unfiltered_train_assembler(unfiltered_train_sampler.out.prebatched_files.collect(), 
+                            unfiltered_train_sampler.out.name_file.take(1))
+
+  unfiltered_val_sampler(
+                          val_epoch_ch,
+                          generate_test_set.out.val_rows_csv, 
+                          generate_test_set.out.val_similarities_csv, 
+                          tuple(  params.batch_size,
+                                  params.num_turns,
+                                  "standard",  // mode
+                                  "",   // mass_analyzer_lst
+                                  10,  // num_bins
+                                  "", // exponential_bins
+                                  false, // strict_collision_energy
+                                  true, // force_one_epoch
+                                  "val_unfiltered.hdf5", // output_name
+                              ))
+  unfiltered_val_assembler(unfiltered_val_sampler.out.prebatched_files.collect(), 
+                            unfiltered_val_sampler.out.name_file.take(1))
+
+  // Filtered
+  filtered_train_sampler(
+                      epoch_ch,
+                      generate_test_set.out.train_rows_csv, 
+                      generate_test_set.out.train_similarities_csv, 
+                      tuple(  params.batch_size,
+                              params.num_turns,
+                              "filter",  // mode
+                              params.mass_analyzer_lst,
+                              10,  // num_bins
+                              "", // exponential_bins
+                              false, // strict_collision_energy
+                              false, // force_one_epoch
+                              "train_filtered.hdf5", // output_name
+                          ))
+  filtered_train_assembler(filtered_train_sampler.out.prebatched_files.collect(), 
+                            filtered_train_sampler.out.name_file.take(1))
+
+  filtered_val_sampler(
+                      val_epoch_ch,
+                      generate_test_set.out.val_rows_csv,
+                      generate_test_set.out.val_similarities_csv, 
+                      tuple(  params.batch_size,
+                              params.num_turns,
+                              "filter",  // mode
+                              params.mass_analyzer_lst,
+                              10,  // num_bins
+                              "", // exponential_bins
+                              false, // strict_collision_energy
+                              true, // force_one_epoch
+                              "val_filtered.hdf5", // output_name
+                          ))
+  filtered_val_assembler(filtered_val_sampler.out.prebatched_files.collect(),
+                          filtered_val_sampler.out.name_file.take(1))
+
+  // Unfiltered Biased
+  unfiltered_biased_train_sampler(
+                      epoch_ch,
+                      generate_test_set.out.train_rows_csv, 
+                      generate_test_set.out.train_similarities_csv, 
+                      tuple(  params.batch_size,
+                              params.num_turns,
+                              "standard",  // filter
+                              "",  // mass_analyzer_lst
+                              20,  // num_bins
+                              0.3, // exponential_bins
+                              false, // strict_collision_energy
+                              false, // force_one_epoch
+                              "train_unfiltered_biased.hdf5", // output_name
+                          ))
+  unfiltered_biased_train_assembler(unfiltered_biased_train_sampler.out.prebatched_files.collect(), 
+                            unfiltered_biased_train_sampler.out.name_file.take(1))
+
+  unfiltered_biased_val_sampler(
+                      val_epoch_ch,
+                      generate_test_set.out.val_rows_csv,
+                      generate_test_set.out.val_similarities_csv, 
+                      tuple(  params.batch_size,
+                              params.num_turns,
+                              "standard",  // mode
+                              "",  // mass_analyzer_lst
+                              20,  // num_bins
+                              0.3, // exponential_bins
+                              false, // strict_collision_energy
+                              true, // force_one_epoch
+                              "val_unfiltered_biased.hdf5", // output_name
+                          ))
+  unfiltered_biased_val_assembler(unfiltered_biased_val_sampler.out.prebatched_files.collect(),
+                          unfiltered_biased_val_sampler.out.name_file.take(1))
+
+  // Filtered Biased
+  filtered_biased_train_sampler(
+                      epoch_ch,
+                      generate_test_set.out.train_rows_csv, 
+                      generate_test_set.out.train_similarities_csv, 
+                      tuple(  params.batch_size,
+                              params.num_turns,
+                              "filter",  // mode
+                              params.mass_analyzer_lst,
+                              20,  // num_bins
+                              0.3, // exponential_bins
+                              false, // strict_collision_energy
+                              false, // force_one_epoch
+                              "train_filtered_biased.hdf5", // output_name
+                          ))
+  filtered_biased_train_assembler(filtered_biased_train_sampler.out.prebatched_files.collect(), 
+                            filtered_biased_train_sampler.out.name_file.take(1))  
+
+  filtered_biased_val_sampler(
+                      val_epoch_ch,
+                      generate_test_set.out.val_rows_csv,
+                      generate_test_set.out.val_similarities_csv, 
+                      tuple(  params.batch_size,
+                              params.num_turns,
+                              "filter",  // mode
+                              params.mass_analyzer_lst,
+                              20,  // num_bins
+                              0.3, // exponential_bins
+                              false, // strict_collision_energy
+                              true, // force_one_epoch
+                              "val_filtered_biased.hdf5", // output_name
+                          ))
+
+  filtered_biased_val_assembler(filtered_biased_val_sampler.out.prebatched_files.collect(),
+                          filtered_biased_val_sampler.out.name_file.take(1))
+
+  // Filtered Strict CE
+  filtered_strict_ce_train_sampler(
+                      epoch_ch,
+                      generate_test_set.out.train_rows_csv, 
+                      generate_test_set.out.train_similarities_csv, 
+                      tuple(  params.batch_size,
+                              params.num_turns,
+                              "filter",  // mode
+                              params.mass_analyzer_lst,
+                              10,  // num_bins
+                              "", // exponential_bins
+                              true, // strict_collision_energy
+                              false, // force_one_epoch
+                              "train_filtered_strict_collision_energy.hdf5", // output_name
+                          ))
+  filtered_strict_ce_train_assembler(filtered_strict_ce_train_sampler.out.prebatched_files.collect(), 
+                            filtered_strict_ce_train_sampler.out.name_file.take(1))
+
+  filtered_strict_ce_val_sampler(
+                      val_epoch_ch,
+                      generate_test_set.out.val_rows_csv,
+                      generate_test_set.out.val_similarities_csv, 
+                      tuple(  params.batch_size,
+                              params.num_turns,
+                              "filter",  // mode
+                              params.mass_analyzer_lst,
+                              10,  // num_bins
+                              "", // exponential_bins
+                              true, // strict_collision_energy
+                              true, // force_one_epoch
+                              "val_filtered_strict_collision_energy.hdf5", // output_name
+                          ))
+
+  filtered_strict_ce_val_assembler(filtered_strict_ce_val_sampler.out.prebatched_files.collect(),
+                          filtered_strict_ce_val_sampler.out.name_file.take(1))
+
+  // Unfiltered Test
+  unfiltered_test_enumerator(generate_test_set.out.test_rows_csv, 
+                             generate_test_set.out.test_similarities_csv,
+                             generate_test_set.out.train_test_similarities_csv,
+                             tuple( false, // mode
+                                    "", // mass_analyzer_lst
+                                    false // strict_collision_energy
+                             )
+                            )
+
+  // Filtered Test
+  filtered_test_enumerator(generate_test_set.out.test_rows_csv, 
+                           generate_test_set.out.test_similarities_csv,
+                           generate_test_set.out.train_test_similarities_csv,
+                           tuple( true, // mode
+                                  params.mass_analyzer_lst, // mass_analyzer_lst
+                                  false // strict_collision_energy
+                           )
+                          )
+
+  // Filtered Test (Strict CE)
+  filtered_strict_ce_test_enumerator(generate_test_set.out.test_rows_csv, 
+                           generate_test_set.out.test_similarities_csv,
+                           generate_test_set.out.train_test_similarities_csv,
+                           tuple( true, // mode
+                                  params.mass_analyzer_lst, // mass_analyzer_lst
+                                  true // strict_collision_energy
+                           )
+                          )
+
   // build_library(generate_test_set.out.test_rows_mgf)
 
   // spectral_similarity_calculation(build_library.out.libraries, generate_test_set.out.train_rows_mgf)

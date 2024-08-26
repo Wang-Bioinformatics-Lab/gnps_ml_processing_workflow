@@ -13,7 +13,7 @@ import time
 
 import pickle
 
-from generator_filtered_pairs import FilteredPairsGenerator
+from data_generators import FilteredPairsGenerator
 
 def build_pairs( main_inchikey,
                 inchikey_list,
@@ -163,7 +163,7 @@ def build_test_pairs_list(  test_summary_path:str,
                             pairwise_similarities_path:str,
                             train_test_similarity_path:str,
                             output_path:str,
-                            n_jobs:int=1,,
+                            n_jobs:int=1,
                             merge_on_lst=None,
                             mass_analyzer_lst=None,
                             collision_energy_thresh=5.0,

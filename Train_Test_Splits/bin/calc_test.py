@@ -1530,7 +1530,7 @@ def select_test(args):
     val_inchis = val_rows['InChIKey_smiles'].str[:14].unique()
     mgf.write(spectra[[str(spectrum_id) for spectrum_id in val_rows['spectrum_id']]], output='val_rows.mgf')
     # Write subsection of train-test similarity matrix
-    val_similaries = all_pairs_similarities.loc[val_inchis, test_inchis]
+    val_similaries = all_pairs_similarities.loc[val_inchis, val_inchis]
     val_similaries.to_csv('val_similarities.csv')
     logging.info("Done in %.2f seconds.", time() - start_time)
 
