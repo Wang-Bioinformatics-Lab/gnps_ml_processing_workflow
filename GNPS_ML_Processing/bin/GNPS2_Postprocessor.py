@@ -8,6 +8,7 @@ from pyteomics.mgf import IndexedMGF
 import re
 from tqdm import tqdm
 from utils import harmonize_smiles_rdkit, tautomerize_smiles, neutralize_atoms, INCHI_to_SMILES, synchronize_spectra, generate_parquet_df
+from utils import synchronize_spectra_to_json
 from rdkit import Chem
 from rdkit.Chem import Descriptors
 import json
@@ -26,6 +27,8 @@ from formula_validation.Formula import Formula
 from formula_validation.Adduct import Adduct
 from formula_validation.IncorrectFormula import IncorrectFormula
 from formula_validation.IncorrectAdduct import IncorrectAdduct
+
+tqdm.pandas()
 
 # os.environ['JOBLIB_TEMP_FOLDER'] = '/tmp'
 
@@ -607,7 +610,7 @@ def add_columns_formula_analysis(summary):
     summary[column_name_ppmBetweenExpAndThMass] = summary.parallel_apply(helper, axis=1).astype(float)
     
 def add_explained_intensity(summary, spectra):
-    indexed_mgf = IndexedMGF(spectra,index_by_scans=True)
+    spectra_dict = json.load(open(spectra, 'r'))
     
     column_name_ppmBetweenExpAndThMass='explainable_intensity'
     
@@ -616,9 +619,7 @@ def add_explained_intensity(summary, spectra):
             smiles = str(row['Smiles'])
             if smiles != '':
                 # Build a dictionary of mz, intensity
-                this_spectra = indexed_mgf[row['scan']]
-                if this_spectra['params']['title'] != row['spectrum_id']:
-                    raise ValueError(f"Spectrum ID mismatch: {this_spectra['params']['title']} and {row['spectrum_id']}")
+                this_spectra = spectra_dict[str(row['spectrum_id'])]
                
                 mzs = this_spectra['m/z array']
                 intensities = this_spectra['intensity array']
@@ -630,10 +631,12 @@ def add_explained_intensity(summary, spectra):
             return 'nan'
         except Exception as e:
             print(e, file=sys.stderr)
+            # raise e
             return 'nan'
             
-    filter = (summary['ppmBetweenExpAndThMass'].notna() & summary['ppmBetweenExpAndThMass']<=50)
-    summary.loc[filter, column_name_ppmBetweenExpAndThMass] = summary.loc[filter].parallel_apply(helper, axis=1)
+    mask = (summary['ppmBetweenExpAndThMass'].notna() & summary['ppmBetweenExpAndThMass']<=50)    # We will throw these out later anyways, do this to save time
+    summary.loc[mask, column_name_ppmBetweenExpAndThMass] = summary.loc[mask].progress_apply(helper, axis=1)
+    return summary
             
 def postprocess_files(csv_path, mgf_path, output_csv_path, output_parquet_path, cleaned_mgf_path, includes_massbank=False, includes_riken=False, smiles_mapping_cache=None):
     pandarallel.initialize(progress_bar=False, nb_workers=PARALLEL_WORKERS, use_memory_fs = False)
@@ -722,13 +725,18 @@ def postprocess_files(csv_path, mgf_path, output_csv_path, output_parquet_path, 
     # print("Writing csv file", flush=True)
     # summary.to_csv(output_csv_path, index=False)
 
-    # # Calculate explained intensity
+    # Calculate explained intensity
     # print("Calculating explained intensity")
     # start = time.time()
-    # add_explained_intensity(summary, mgf_path)
+    # summary = add_explained_intensity(summary, cleaned_mgf_path.replace('.mgf', '.json'))
     # print("Done in {} seconds".format(datetime.timedelta(seconds=time.time() - start)))
+
+    # Save a second time around
+    # print("Writing csv file", flush=True)
+    # summary.to_csv(output_csv_path, index=False)
+    # print("Done")
     
-    print("Writing output files...", flush=True)
+    # print("Writing output files...", flush=True)
     # print("Writing parquet file", flush=True)
     # parquet_as_df = generate_parquet_df(cleaned_mgf_path)
     # parquet_as_df.to_parquet(output_parquet_path, index=False)
