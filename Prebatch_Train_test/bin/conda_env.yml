@@ -1,0 +1,14 @@
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.11
+  - numpy=1.24.4
+  - pandas=2.0.3
+  - dask=2024.3.0
+  - snappy
+  - tqdm
+  - conda-forge::pytables
+  - pip:
+    - ms2deepscore==1.0.0
+    - typing_extensions==4.7.1

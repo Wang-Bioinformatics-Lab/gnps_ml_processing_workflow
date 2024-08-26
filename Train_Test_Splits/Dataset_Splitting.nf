@@ -10,14 +10,14 @@ FAST_SEARCH_LIBRARY_BIN = "$TOOL_FOLDER_LS/GNPS_FastSearch_Library/bin"
 
 // params.input_csv = '/home/user/SourceCode/GNPS_ML_Processing_Workflow/GNPS_ML_Processing/nf_output/summary/Structural_Similarity_Prediction.csv'
 // params.input_mgf = '/home/user/SourceCode/GNPS_ML_Processing_Workflow/GNPS_ML_Processing/nf_output/spectra/Structural_Similarity_Prediction.mgf'
-// params.input_csv = "../GNPS_ML_Processing/nf_output/ML_ready_subset_positive/selected_summary.csv"
-// params.input_mgf = "../GNPS_ML_Processing/nf_output/ML_ready_subset_positive/selected_spectra.mgf"
-params.input_csv = "./asms_data/Structural_Similarity_Prediction.csv"
-params.input_mgf = "./asms_data/Structural_Similarity_Prediction.mgf"
+params.input_csv = "../GNPS_ML_Processing/nf_output/ML_ready_subset_positive/selected_summary.csv"
+params.input_mgf = "../GNPS_ML_Processing/nf_output/ML_ready_subset_positive/selected_spectra.mgf"
+// params.input_csv = "./asms_data/Structural_Similarity_Prediction.csv"
+// params.input_mgf = "./asms_data/Structural_Similarity_Prediction.mgf"
 
 // Which task subset to use
 params.subset = "Structural_Similarity_Prediction"
-params.split_type = "structure"//"structure_smart"  // 'basic_sampling_scheme', 'structure_smart', 'random' (random spectra), or 'structure' (random inchi14)
+params.split_type = "sample_structures_smart_inchikey"//"structure_smart"  // 'basic_sampling_scheme', 'structure_smart', 'random' (random spectra), or 'structure' (random inchi14)
 
 params.test_set_num = 500//2300 // random structure=16154  // An integer (or float) representing the number (or percentage of) data points to use as a test set
 
@@ -32,6 +32,9 @@ params.pm_tolerance       = 0.2
 params.fragment_tolerance = 0.2
 params.lower_delta        = 130  // To perform analog search, set lower_delta = upper_delta =0
 params.upper_delta        = 200
+
+// Submodule for batch generation
+
 
 /*
  * This process selects the subset of data that is usable for ML (e.g., more than one peak, not excessively noisy, etc.)
@@ -79,6 +82,23 @@ process generate_subset {
   """
 }
 
+process calculate_pairwise_similarity {
+  conda "$TOOL_FOLDER_LS/conda_env.yml"
+  // publishDir "./nf_output", mode: 'copy'
+
+  cache false
+
+  input:
+  path metadata_csv
+
+  output:
+  path 'pairwise_similarities.csv', emit: pairwise_similarities
+
+  """
+  python3 $TOOL_FOLDER_LS/calculate_pairwise_similarity.py --input_metadata $metadata_csv --output_filename pairwise_similarities.csv
+  """
+}
+
 /*
  * Generates a random subset of params.test_set_num  data points to use as a test set
  * These data points should be consistent across splitting methodology
@@ -87,23 +107,32 @@ process generate_test_set {
   conda "$TOOL_FOLDER_LS/conda_env.yml"
   publishDir "./nf_output/${params.subset}/${params.split_type}", mode: 'copy'
 
-  cache false
+  cache true
 
   input:
   path csv_file
+  path pairwise_similarities
   path mgf_file
 
   output:
   path 'test_rows.csv',  emit: test_rows_csv
   path 'test_rows.mgf',  emit: test_rows_mgf
   path 'test_rows.json', emit: test_rows_json
+  path 'test_similarities.csv', emit: test_similarities_csv
   path 'train_rows.csv', emit: train_rows_csv
   path 'train_rows.mgf', emit: train_rows_mgf
   path 'train_rows.json', emit: train_rows_json
+  path 'train_similarities.csv', emit: train_similarities_csv
+  path 'val_rows.csv', emit: val_rows_csv
+  path 'val_rows.mgf', emit: val_rows_mgf
+  path 'val_rows.json', emit: val_rows_json
+  path 'val_similarities.csv', emit: val_similarities_csv
+  path 'train_test_similarities.csv', emit: train_test_similarities_csv
 
   """
   python3 $TOOL_FOLDER_LS/calc_test.py \
           --input_csv "$csv_file" \
+          --input_similarities "$pairwise_similarities" \
           --input_mgf "$mgf_file" \
           --num_test_points $params.test_set_num \
           --sampling_strategy "$params.split_type" \
@@ -268,7 +297,10 @@ workflow {
 
 
   generate_subset(csv_file, mgf_file)
-  generate_test_set(generate_subset.out.output_summary, generate_subset.out.output_mgf)
+  calculate_pairwise_similarity(generate_subset.out.output_summary)
+  generate_test_set(generate_subset.out.output_summary, calculate_pairwise_similarity.out.pairwise_similarities, generate_subset.out.output_mgf)  
+
+  parameter_ch = Channel
   // build_library(generate_test_set.out.test_rows_mgf)
 
   // spectral_similarity_calculation(build_library.out.libraries, generate_test_set.out.train_rows_mgf)
