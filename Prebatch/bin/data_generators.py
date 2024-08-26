@@ -607,15 +607,19 @@ class DataGeneratorTriplets():
         # Get all inchikeys with a mass difference < thresh Da to another inchikey
         relevant_inchis = inchikey_mol_wt_diff_df.loc[inchikey_mol_wt_diff_df.min() < self.em_difference_threshold].index
         self.inchikey_mol_wt_diff_df = inchikey_mol_wt_diff_df.loc[relevant_inchis, relevant_inchis]
+       
         self.metadata_table = self.metadata_table.loc[self.metadata_table['InChIKey_smiles_14'].isin(relevant_inchis)]
-        self.spectrum_inchikeys = self.spectrum_inchikeys.loc[self.spectrum_ids.index]
-        self.spectrum_ids = self.spectrum_ids.loc[self.spectrum_inchikeys.index]
+        
+        self.spectrum_inchikeys = self.metadata_table['InChIKey_smiles_14'].values
+        self.spectrum_ids       = self.metadata_table['spectrum_id'].values
+        
         self.possible_anchors = self.metadata_table.groupby('InChIKey_smiles_14').filter(lambda x: len(x) > 1)['InChIKey_smiles_14'].unique()
 
         assert len(self.spectrum_inchikeys) == len(self.spectrum_ids), "Inchikeys and spectrum ids must have the same length."
         print("After Triplet Criteria Applied:")
         print(f"Got {len(self.spectrum_inchikeys)} inchikeys and {len(self.spectrum_ids)} spectrum ids.")
         print(f"Got {len(np.unique(self.spectrum_inchikeys))} unique inchikeys.")
+        print(f"Got {len(self.possible_anchors)} possible anchors.")
 
         self.shuffle = shuffle
         self.reference_scores_df = reference_scores_df
@@ -677,7 +681,7 @@ class DataGeneratorTriplets():
         indexes = self.indexes[batch_index * batch_size:(batch_index + 1) * batch_size]
 
         for index in indexes:
-            anchor_inchikey = self.possible_anchors.index[index]
+            anchor_inchikey = self.possible_anchors[index]
             positive_inchikey = anchor_inchikey
             # Randomly pick the desired target score range and pick matching inchikey
             anchor_id, positive_id = self._get_anchor_positive(anchor_inchikey)

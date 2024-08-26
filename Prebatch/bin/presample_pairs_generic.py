@@ -8,7 +8,7 @@ import pickle
 from tqdm import tqdm
 from datetime import datetime
 from typing import Iterator, List, NamedTuple, Optional
-from data_generators import DataGeneratorAllInchikeys, FilteredPairsGenerator
+from data_generators import DataGeneratorAllInchikeys, FilteredPairsGenerator, DataGeneratorTriplets
 import warnings
 
 def main():
@@ -76,6 +76,7 @@ def main():
     else:
         same_prob_bins = list(zip(np.linspace(0, 0.9, args.num_bins), np.linspace(0.1, 1, args.num_bins)))
     
+    # Common preprocessing
     logging.info("Loading data...")
     metadata = pd.read_csv(args.metadata)
     metadata['inchikey_14'] = metadata['InChIKey_smiles'].str[:14]
@@ -106,9 +107,15 @@ def main():
                                                     strict_collision_energy=args.strict_collision_energy)
     elif args.mode == 'triplet':
         logging.info("Creating DataGeneratorTriplets... (All-Pairs)")
-        raise NotImplementedError()
         headers = ['anchor', 'positive', 'negative', 'anchor_inchikey', 'positive_inchikey', 'negative_inchikey', 'anchor_positive_score', 'anchor_negative_score']
-        # training_gnerator = DataGeneratorTriplets(all_inchikeys,
+        training_generator = DataGeneratorTriplets(metadata,
+                                                reference_scores_df,
+                                                shuffle=True,
+                                                random_seed=args.seed,
+                                                num_turns=num_turns,
+                                                batch_size=batch_size,
+                                                use_fixed_set=False,
+                                                em_difference_threshold=0.05)
 
     else:
         logging.info("Creating DataGeneratorAllInchikeys... (All-Pairs)")
@@ -131,7 +138,7 @@ def main():
             for batch_num, batch in enumerate(tqdm(training_generator, desc=f"Epoch {epoch_num}")):
                 # Save the batch DataFrame to the hdf5 file
                 batch_accumulator.extend(list(batch))
-            store.put(group_name, pd.DataFrame(batch_accumulator, columns=['spectrumid1', 'spectrumid2', 'inchikey1', 'inchikey2', 'score']), format='table')
+            store.put(group_name, pd.DataFrame(batch_accumulator, columns=headers), format='table')
 
 
 if __name__ == "__main__":
