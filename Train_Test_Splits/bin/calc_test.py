@@ -545,10 +545,15 @@ def basic_sampling_scheme(summary,
 
     return test_rows, train_rows
 
-# CHANGED FOR TESTING:
-# Original"  num_test_roots=500, test_path_len=3 data_points_per_bin=50, 
-
-def sample_structures_smart(summary, num_test_roots=500, test_path_len=3, test_edge_cutoff=0.70, bins=(0.2, 1.0, 17), maximum_training_set_reduction=0.80, datapoints_per_bin=143):
+def sample_structures_smart_inchikey(summary,
+                                    similarity_matrix,
+                                    num_test_roots=500,
+                                    test_path_len=3,
+                                    test_edge_cutoff=0.70,
+                                    bins=(0.2, 1.0, 17),
+                                    maximum_training_set_reduction=0.80, 
+                                    datapoints_per_bin=143,
+                                    move_structures=False):
     """
     Randomly sample num_test_roots structures and then iteratively remove structures from the training set
     until each bin has at least 30 structures.
@@ -556,6 +561,8 @@ def sample_structures_smart(summary, num_test_roots=500, test_path_len=3, test_e
     Parameters:
     summary: pd.DataFrame
         The summary dataframe
+    similarity_matrix: pd.DataFrame
+        The similarity matrix of the structures with index and columns as the InChIKey_smiles_14
     num_test_roots: int
         The number of structures to randomly sample. Used as the root for the random walks
     test_path_len: int
@@ -568,117 +575,91 @@ def sample_structures_smart(summary, num_test_roots=500, test_path_len=3, test_e
         The maximum fraction of the training set that can be removed
     datapoints_per_bin: int
         The number of datapoints to have in each bin
+    move_structures: bool
+        Whether to move structures from the training set to the test set or remove them entirely.
     """
-    
-    # Remove BMDMS-NP from contention
-    summary = summary.loc[summary['GNPS_library_membership'] != 'BMDMS-NP']
     
     if  missing_structure_check(summary):
         raise ValueError("Found missing structures in summary.")
     summary['InChIKey_smiles_14'] = summary['InChIKey_smiles'].str[:14]
     
     # Now that we have our "test set" we want remove training points to force the max train-test similarity
-    unique_structures = list(summary['InChIKey_smiles_14'].unique())
-    logging.info("Computing Test Set By Sampling the Tail of the Similarity Matrix")
-    logging.info("Computing Fingerprints")
-    fps = [Chem.RDKFingerprint(Chem.MolFromSmiles(summary.loc[summary.InChIKey_smiles_14 == x, 'Smiles'].iloc[0])) 
-           for x in tqdm(unique_structures)]
+    # Get unique structures by inchikey14, get corresponding smiles
+    inchikey_smiles_mapping = summary.groupby('InChIKey_smiles_14')['Smiles'].agg(lambda x: pd.Series.mode(x).iloc[0])
+    unique_inchikeys = inchikey_smiles_mapping.index
+    unique_smiles = inchikey_smiles_mapping.values
 
-    # Create similarity matrix
-    logging.info("Computing Similarity Matrix")
-    # sim_matrix = parallel_compute_similarity_matrix(fps, unique_structures)
-    sim_matrix = np.zeros((len(fps), len(fps)))
-    for i, fp1 in enumerate(tqdm(fps)):
-        sim_matrix[i, i] = -1
-        for j in range(i+1, len(fps)):
-            fp2 = fps[j]
-            sim_matrix[i, j] = DataStructs.TanimotoSimilarity(fp1, fp2)
-            sim_matrix[j, i] = sim_matrix[i, j]
-    sim_matrix = pd.DataFrame(sim_matrix, index=unique_structures, columns=unique_structures)
-    print(sim_matrix)
+    logging.info("Reading Precomputed Similarity Matrix")
+    sim_matrix = pd.read_csv(similarity_matrix, index_col=0)
+
+    if not all([x in sim_matrix.index.values for x in unique_inchikeys]):
+        raise ValueError("Not all unique inchikeys are in the similarity matrix index.")
+    if not all([x in sim_matrix.columns.values for x in unique_inchikeys]):
+        raise ValueError("Not all unique inchikeys are in the similarity matrix columns.")
+
+    logging.info("Computing Test Set By Sampling the Tail of the Similarity Matrix")
     
     # For bins with less than datapoints_per_bin structures, sample all
     test_set = []
-    training_set = unique_structures
+    training_set = unique_inchikeys
     train_test_similarity = sim_matrix.loc[test_set, training_set]
     train_test_bins = pd.cut(train_test_similarity.max(axis=1), np.linspace(bins[0], bins[1], bins[2]))
     tail_structures = []
     sim_matrix_bins = pd.cut(sim_matrix.max(axis=1), np.linspace(bins[0], bins[1], bins[2]))
     for bin_, group in sim_matrix.groupby(sim_matrix_bins):
-        if len(group) > int(datapoints_per_bin):    # Add a bit of padding since these values will shift around once we start removing training structures
+        if len(group) > int(datapoints_per_bin):
             tail_structures.extend(group.sample(int(datapoints_per_bin)).index)
         else:
             tail_structures.extend(group.index)
-    logging.info("Got %i tail structures", len(tail_structures))
-    
-    # Potential Test Smiles (We Will Require that they're not from MassBank to reduce diversity, boosting pairwise similarity in the test set)
-    structure_options = summary.loc[['MSBNK' not in x for x in summary['spectrum_id']]].InChIKey_smiles_14
+
+    logging.info("Sampled %i tail structures", len(tail_structures))
     
     # Random walk matrix
     random_walk_matrix = sim_matrix.copy(deep=True)
     random_walk_matrix[random_walk_matrix < test_edge_cutoff] = 0
     random_walk_matrix[random_walk_matrix >= test_edge_cutoff] = 1
     
-    # DEBUG, print count > 0
-    print("DEBUG, Count > 0: ", (random_walk_matrix > 0).sum().sum(), flush=True)
-    
-    
     # Randomly sample values from the InChIKey_smiles_14 column
     logging.debug("Sampling %i random structures to start the test set.", num_test_roots)
-    test_inchi_14 = np.random.choice(structure_options, num_test_roots, replace=False)
-    print(f"DEBUG, Sampled {num_test_roots} random structures to start the test set.", flush=True)
-    print(f"DEBUG, structure_options[:10]: {structure_options[:10]}", flush=True)
-    print(f"DEBUG, Test InChI 14: {test_inchi_14}", flush=True)
-    corresponding_smiles = summary.loc[summary['InChIKey_smiles_14'].isin(test_inchi_14)]['InChIKey_smiles_14'].unique()
-    print(f"DEBUG, Corresponding Smiles: {corresponding_smiles}", flush=True)
+    structure_options = list(set(summary['InChIKey_smiles_14'].unique()) - set(tail_structures))
+    rw_roots = np.random.choice(structure_options, num_test_roots, replace=False)           # structure_options not defined
+
     random_walk_structures = []
     logging.debug("Performing random walks of length %i from the test set roots.", test_path_len)
-    for root in corresponding_smiles:
+    for root in rw_roots:
         # Random Walk
         current = root
         for i in range(test_path_len):
             neighbors = random_walk_matrix.loc[current, :]
             neighbors = neighbors[neighbors == 1]
-            print("DEBUG, Neighbors: ", neighbors, flush=True)
             if len(neighbors) == 0:
                 break
             current = np.random.choice(neighbors.index)
             random_walk_structures.append(current)
-    # Convert random walk smiles to inchi_14
-    random_walk_structures = summary.loc[summary['InChIKey_smiles_14'].isin(random_walk_structures)]['InChIKey_smiles_14'].unique()
-    test_inchi_14 = np.concatenate([test_inchi_14, random_walk_structures])
+
+    # Concatenate random walk roots and samples nodes
+    random_walk_structures = np.concatenate([rw_roots, random_walk_structures])
             
-    print("Sampled %i nodes from random walks.", len(random_walk_structures))
-    print("Sampled %i structures from random walks.", len(random_walk_structures))
+    logging.info("Sampled %i nodes from random walks.", len(random_walk_structures))
               
-    tail_inchi_14 = summary.loc[summary['Smiles'].isin(tail_structures)]['InChIKey_smiles_14'].unique()
-    test_inchi_14 = np.unique(np.concatenate([test_inchi_14, tail_inchi_14]))
+    test_set = np.unique(np.concatenate([random_walk_structures, tail_structures]))
     
-    # Get corresponding smiles strings
-    test_set = summary.loc[summary['InChIKey_smiles_14'].isin(test_inchi_14)]['InChIKey_smiles_14'].unique()
-    training_set = summary.loc[~summary['InChIKey_smiles_14'].isin(test_inchi_14)]['InChIKey_smiles_14'].unique()
-    
-    # # To the test set, add 0.05 * num_test_roots of high similarity inchis to ensure these pairs are sampled
-    # high_similarity_smiles = sim_matrix.loc[test_set, training_set].max(axis=1).sort_values(ascending=False).head(int(0.05 * num_test_roots)).index.values
-    # logging.debug("Adding an additional %i high similarity structures to the test set", len(high_similarity_smiles))
-    # test_inchi_14 = np.concatenate([test_inchi_14, summary.loc[summary['Smiles'].isin(high_similarity_smiles)]['InChIKey_smiles_14'].unique()])
-    
-    # Get corresponding smiles strings
-    test_set = summary.loc[summary['InChIKey_smiles_14'].isin(test_inchi_14)]['InChIKey_smiles_14'].unique()
-    training_set = summary.loc[~summary['InChIKey_smiles_14'].isin(test_inchi_14)]['InChIKey_smiles_14'].unique()
-    
+    # Get training structures by removing the test structures
+    training_set = summary.loc[~summary['InChIKey_smiles_14'].isin(test_set), 'InChIKey_smiles_14'].unique()
+        
     train_test_similarity = sim_matrix.loc[test_set, training_set]
     
     train_test_bins = pd.cut(train_test_similarity.max(axis=1), np.linspace(bins[0], bins[1], bins[2]))
     grouped_train_test_sim_matrix = train_test_similarity.max(axis=1).groupby(train_test_bins)
     groups = sorted(list(grouped_train_test_sim_matrix.groups.keys()), key=lambda x: x.right)
-    # current_bin_sizes = [len(grouped_train_test_sim_matrix.get_group(group)) for group in groups]
     current_bin_sizes = grouped_train_test_sim_matrix.size()
+    # DEBUG
+    print("Current Bin Sizes:")
+    print(current_bin_sizes)
     bin_to_optimize = 0
 
     inital_bins = grouped_train_test_sim_matrix.count()
 
-    # train_sims = sim_matrix.loc[training_set, training_set]
     initial_train_size = len(training_set)
 
     total_num_structures_lost = 0
@@ -717,9 +698,14 @@ def sample_structures_smart(summary, num_test_roots=500, test_path_len=3, test_e
             # Remove all of it's neighbors greater than the upper_bound from the trianing set
             structures_to_remove = ((train_test_similarity >= upper_bound).loc[to_move] >= upper_bound).any(axis='index')
             structures_to_remove = structures_to_remove[structures_to_remove].index.values
-            training_set = list(set(training_set) - set(structures_to_remove))
-            total_num_structures_lost += len(set(structures_to_remove))
-            logging.debug("Removing %i structures", len(set(structures_to_remove)))
+            if not move_structures:
+                training_set = list(set(training_set) - set(structures_to_remove))
+                total_num_structures_lost += len(set(structures_to_remove))
+                logging.debug("Removing %i structures", len(set(structures_to_remove)))
+            else:
+                test_set.extend(structures_to_remove)
+                training_set = list(set(training_set) - set(structures_to_remove))
+                logging.debug("Moving %i structures", len(set(structures_to_remove)))
             
             # Removing structures that go outside of our range, to help reduce confusion later
             structures_to_remove = train_test_similarity.loc[train_test_similarity.max(axis=1) < bins[0]].index.values
@@ -743,13 +729,13 @@ def sample_structures_smart(summary, num_test_roots=500, test_path_len=3, test_e
 
     final_bins = grouped_train_test_sim_matrix.count()
     
-    test_rows = summary.loc[summary['Smiles'].isin(test_set)]
+    test_rows = summary.loc[summary['InChIKey_smiles_14'].isin(test_set)]
     # TEMP: As a temporary measure, remove the BMDMS-NP from the test set
     # The wide range of collision energies is causing issues
     test_rows = test_rows.loc[test_rows['GNPS_library_membership'] != 'BMDMS-NP']
     
     
-    train_rows = summary.loc[summary['Smiles'].isin(training_set)]
+    train_rows = summary.loc[summary['InChIKey_smiles_14'].isin(training_set)]
     logging.info("Number of test rows: %i", len(test_rows))
     logging.info("Number of test structures: %i", len(test_set))
     logging.info("Number of training rows: %i", len(train_rows))
@@ -804,31 +790,6 @@ def sample_structures_smart(summary, num_test_roots=500, test_path_len=3, test_e
         # plt.xlabel('Pairwise Similarity')
         # plt.ylabel('Number of Pairs')
         # plt.savefig('pairwise_similarities_all_spectra.png')
-
-        # Plot train-test similarity vs pairwise similarity
-        test_pairs = test_rows[['spectrum_id', 'InChIKey_smiles_14']]
-        test_pairs = test_pairs.set_index('spectrum_id')
-        # Cartesian product to form all pairs
-        test_pairs = test_pairs.assign(key=1).merge(test_pairs.assign(key=1), on='key').drop('key', axis=1)
-        # Get the similarity of the to spectra to the training set
-        test_pairs['train_test_similarity'] = sim_matrix.loc[test_pairs['InChIKey_smiles_14_x'], test_pairs['InChIKey_smiles_14_y']].values
-        # Average the similarity
-        test_pairs['train_test_similarity'] = test_pairs['train_test_similarity'].apply(lambda x: np.mean(x))
-        # Get the pairwise similarity
-        test_pairs['pairwise_similarity'] = test_sims.loc[test_pairs['InChIKey_smiles_14_x'], test_pairs['InChIKey_smiles_14_y']].values
-
-        plt.figure(figsize=(10,10))
-        plt.title("Pairwise Similarity vs Train-Test Similarity")
-
-        train_test_bins = pd.cut(train_test_similarity.max(axis=1),  np.linspace(bins[0], bins[1], bins[2]))
-        grouped_train_test_sim_matrix = train_test_similarity.max(axis=1).groupby(train_test_bins)
-        
-        # Plot the the pairwise similarity vs avg train-test similarity using imshow
-        plt.imshow(np.histogram2d(test_pairs['pairwise_similarity'], test_pairs['train_test_similarity'], bins=20)[0], cmap='viridis', origin='lower', extent=[0.2, 1, 0.2, 1])
-
-        plt.xlabel('Pairwise Similarity')
-        plt.ylabel('Train-Test Similarity')
-        plt.savefig('pairwise_vs_train_test_similarity.png')
         
         logging.getLogger().setLevel(logging.DEBUG)
     
@@ -922,8 +883,8 @@ def sample_structures_smart_asms(summary, num_test_roots=500, test_path_len=3, t
     random_walk_structures = summary.loc[summary['Smiles'].isin(random_walk_structures)]['InChIKey_smiles_14'].unique()
     test_inchi_14 = np.concatenate([test_inchi_14, random_walk_structures])
             
-    print("Sampled %i nodes from random walks.", len(random_walk_structures))
-    print("Sampled %i structures from random walks.", len(random_walk_structures))
+    logging.info("Sampled %i nodes from random walks.", len(random_walk_structures))
+    logging("Sampled %i structures from random walks.", len(random_walk_structures))
               
     tail_inchi_14 = summary.loc[summary['Smiles'].isin(tail_structures)]['InChIKey_smiles_14'].unique()
     test_inchi_14 = np.unique(np.concatenate([test_inchi_14, tail_inchi_14]))
@@ -1447,6 +1408,7 @@ def select_test(args):
 
     Args:
         input_csv (_type_): _description_
+        input_similarities (_type_): _description_
         input_mgf (_type_): _description_
     """
     
@@ -1457,7 +1419,7 @@ def select_test(args):
     sampling_strategy = args.sampling_strategy
     threshold = float(args.threshold) if args.threshold is not None else None
     
-    if sampling_strategy not in ['basic_sampling_scheme', 'random', 'structure', 'tail', 'umbrella', 'structure_smart', 'random_tail_hybrid']:
+    if sampling_strategy not in ['basic_sampling_scheme', 'random', 'structure', 'tail', 'umbrella', 'structure_smart', 'random_tail_hybrid', 'sample_structures_smart_inchikey']:
         raise ValueError(f'Sampling strategy should be either "random", "structure", "tail", or "umbrella" but got {sampling_strategy}.')
     
     print("Loading Summary", flush=True)
@@ -1484,6 +1446,10 @@ def select_test(args):
         if num_test_points > len(summary):
             raise ValueError('Number of Test Points is greater than number of rows in input_csv.')
         
+    if sampling_strategy not in ['random', 'structure', 'sample_structures_smart_inchikey'] and \
+        args.input_similarities is not None:
+            raise ValueError("Input similarities are not required for this sampling strategy.")
+
     # Select Test Points
     if sampling_strategy == 'random':
         logging.info("Sampling randomly")
@@ -1496,6 +1462,9 @@ def select_test(args):
         logging.info("Sampling by structure smart")
         # test_rows, train_rows = sample_structures_smart(summary)
         test_rows, train_rows = sample_structures_smart_asms(summary, test_edge_cutoff=threshold)
+    elif sampling_strategy == 'sample_structures_smart_inchikey':
+        logging.info("Sampling by structure smart inchikey")
+        test_rows, train_rows = sample_structures_smart_inchikey(summary, args.input_similarities, test_edge_cutoff=threshold)
     elif sampling_strategy == 'tail':
         logging.info("Sampling by structure tail")
         test_rows, train_rows = sample_structures_smart_tail(summary)
@@ -1518,20 +1487,59 @@ def select_test(args):
     test_ids = test_rows['spectrum_id'].values
     train_ids = train_rows['spectrum_id'].values
     
-    print("Writing Test Rows")
+    # Get validations set from 500 inchikeys
+    logging.info("Splitting into Train and Validation Sets")
+    train_rows['temp_col'] = train_rows['InChIKey_smiles'].str[:14]
+    random_sample = np.random.choice(train_rows['temp_col'].unique(), size=500, replace=False)
+    val_rows   = train_rows.loc[train_rows['temp_col'].isin(random_sample)]
+    train_rows = train_rows.loc[~train_rows['temp_col'].isin(random_sample)]
+    logging.info("Number of validation rows: %i", len(val_rows))
+    logging.info("Number of training rows: %i", len(train_rows))
+    logging.info("Number of validation structures: %i", len(val_rows['temp_col'].unique()))
+    logging.info("Number of training structures: %i", len(train_rows['temp_col'].unique()))
+    val_rows.drop(columns=['temp_col'], inplace=True)
+    train_rows.drop(columns=['temp_col'], inplace=True)
+
+    all_pairs_similarities = pd.read_csv(args.input_similarities, index_col=0)
+
+    logging.info("Writing Test Rows")
     start_time = time()
     # Write Test Rows
     test_rows.to_csv('test_rows.csv', index=False)
-    mgf.write(spectra[[str(spectrum_id) for spectrum_id in test_ids]],  output='test_rows.mgf')
+    test_inchis = test_rows['InChIKey_smiles'].str[:14].unique()
+    mgf.write(spectra[[str(spectrum_id) for spectrum_id in test_rows['spectrum_id']]],  output='test_rows.mgf')
+    # Write subsection of train-test similarity matrix
+    test_similaries = all_pairs_similarities.loc[test_inchis, test_inchis]
+    test_similaries.to_csv('test_similarities.csv')
     logging.info("Done in %.2f seconds.", time() - start_time)
     
     logging.info("Writing Train Rows.")
     start_time = time()
     # Write Train Rows
     train_rows.to_csv('train_rows.csv', index=False)
-    mgf.write(spectra[[str(spectrum_id) for spectrum_id in train_ids]],  output='train_rows.mgf')
+    mgf.write(spectra[[str(spectrum_id) for spectrum_id in train_rows['spectrum_id']]],  output='train_rows.mgf')
+    # Write subsection of train-test similarity matrix
+    train_similaries = all_pairs_similarities.loc[train_rows['InChIKey_smiles'].str[:14].unique(), train_rows['InChIKey_smiles'].str[:14].unique()]
+    train_similaries.to_csv('train_similarities.csv')
     logging.info("Done in %.2f seconds.", time() - start_time)
 
+    logging.info("Writing Validation Rows.")
+    start_time = time()
+    # Write Validation Rows
+    val_rows.to_csv('val_rows.csv', index=False)
+    val_inchis = val_rows['InChIKey_smiles'].str[:14].unique()
+    mgf.write(spectra[[str(spectrum_id) for spectrum_id in val_rows['spectrum_id']]], output='val_rows.mgf')
+    # Write subsection of train-test similarity matrix
+    val_similaries = all_pairs_similarities.loc[val_inchis, test_inchis]
+    val_similaries.to_csv('val_similarities.csv')
+    logging.info("Done in %.2f seconds.", time() - start_time)
+
+    # Write train-test similarity matrix
+    logging.info("Writing Train-Test Similarity Matrix")
+    start_time = time()
+    all_pairs_similarities.loc[train_rows['InChIKey_smiles'].str[:14].unique(), test_inchis].to_csv('train_test_similarities.csv')
+    logging.info("Done in %.2f seconds.", time() - start_time)
+    
     # Write training and test rows to json
     logging.info("Writing Train Spectra to JSON")
     start_time = time()
@@ -1543,10 +1551,16 @@ def select_test(args):
     synchronize_spectra_to_json('test_rows.mgf', 'test_rows.json')
     logging.info("Done in %.2f seconds.", time() - start_time)
 
+    logging.info("Writing Validation Spectra to JSON")
+    start_time = time()
+    synchronize_spectra_to_json('val_rows.mgf', 'val_rows.json')
+    logging.info("Done in %.2f seconds.", time() - start_time)
+
 
 def main():
     parser = argparse.ArgumentParser(description='Create Parallel Parameters.')
     parser.add_argument('--input_csv', type=str, help='Input CSV')
+    parser.add_argument('--input_similarities', type=str, help='Input Similarities')
     parser.add_argument('--input_mgf', type=str, help='Input MGF')
     parser.add_argument('--num_test_points', help='Number of Test Points')
     parser.add_argument('--sampling_strategy', help='Sampling Strategy')
