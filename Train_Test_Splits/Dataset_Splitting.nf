@@ -145,7 +145,7 @@ process generate_test_set {
   conda "$TOOL_FOLDER_LS/conda_env.yml"
   publishDir "./nf_output/${params.subset}/${params.split_type}", mode: 'copy'
 
-  cache true
+  cache false
 
   input:
   path csv_file

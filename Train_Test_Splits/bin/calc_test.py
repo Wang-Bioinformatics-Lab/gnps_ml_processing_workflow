@@ -550,8 +550,8 @@ def sample_structures_smart_inchikey(summary,
                                     num_test_roots=500,
                                     test_path_len=3,
                                     test_edge_cutoff=0.70,
-                                    bins=(0.2, 1.0, 17),
-                                    maximum_training_set_reduction=0.80, 
+                                    bins=(0.2, 1, 17),
+                                    maximum_training_set_reduction=0.80,
                                     datapoints_per_bin=143,
                                     move_structures=False):
     """
@@ -591,6 +591,8 @@ def sample_structures_smart_inchikey(summary,
 
     logging.info("Reading Precomputed Similarity Matrix")
     sim_matrix = pd.read_csv(similarity_matrix, index_col=0)
+    # Zero out the diagonal
+    np.fill_diagonal(sim_matrix.values, 0)
 
     if not all([x in sim_matrix.index.values for x in unique_inchikeys]):
         raise ValueError("Not all unique inchikeys are in the similarity matrix index.")
@@ -618,11 +620,13 @@ def sample_structures_smart_inchikey(summary,
     random_walk_matrix = sim_matrix.copy(deep=True)
     random_walk_matrix[random_walk_matrix < test_edge_cutoff] = 0
     random_walk_matrix[random_walk_matrix >= test_edge_cutoff] = 1
-    
+
     # Randomly sample values from the InChIKey_smiles_14 column
     logging.debug("Sampling %i random structures to start the test set.", num_test_roots)
-    structure_options = list(set(summary['InChIKey_smiles_14'].unique()) - set(tail_structures))
-    rw_roots = np.random.choice(structure_options, num_test_roots, replace=False)           # structure_options not defined
+    structure_options = list(set(summary['InChIKey_smiles_14'].unique()))   #  - set(tail_structures)
+    # Only take structure options with degree greater than 3
+    structure_options = [x for x in structure_options if random_walk_matrix.loc[x].sum() > 3]
+    rw_roots = np.random.choice(structure_options, num_test_roots, replace=False)
 
     random_walk_structures = []
     logging.debug("Performing random walks of length %i from the test set roots.", test_path_len)
@@ -641,6 +645,7 @@ def sample_structures_smart_inchikey(summary,
     random_walk_structures = np.concatenate([rw_roots, random_walk_structures])
             
     logging.info("Sampled %i nodes from random walks.", len(random_walk_structures))
+    logging.info("Sampled %i unique nodes from random walks.", len(np.unique(random_walk_structures)))
               
     test_set = np.unique(np.concatenate([random_walk_structures, tail_structures]))
     
@@ -884,7 +889,7 @@ def sample_structures_smart_asms(summary, num_test_roots=500, test_path_len=3, t
     test_inchi_14 = np.concatenate([test_inchi_14, random_walk_structures])
             
     logging.info("Sampled %i nodes from random walks.", len(random_walk_structures))
-    logging("Sampled %i structures from random walks.", len(random_walk_structures))
+    logging.info("Sampled %i structures from random walks.", len(random_walk_structures))
               
     tail_inchi_14 = summary.loc[summary['Smiles'].isin(tail_structures)]['InChIKey_smiles_14'].unique()
     test_inchi_14 = np.unique(np.concatenate([test_inchi_14, tail_inchi_14]))
@@ -1448,7 +1453,7 @@ def select_test(args):
         
     if sampling_strategy not in ['random', 'structure', 'sample_structures_smart_inchikey'] and \
         args.input_similarities is not None:
-            raise ValueError("Input similarities are not required for this sampling strategy.")
+            logging.warning("Input similarities are not required for this sampling strategy and will be ignored.")
 
     # Select Test Points
     if sampling_strategy == 'random':
