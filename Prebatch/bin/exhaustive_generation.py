@@ -43,7 +43,7 @@ def build_pairs( main_inchikey,
         min_main_train_test_sim  = train_test_sim_dict[main_inchikey]['min']
         mean_main_train_test_sim = train_test_sim_dict[main_inchikey]['mean']
 
-        columns=['inchikey1', 'inchikey2','spectrumid1', 'spectrumid2', 'ground_truth_similarity', 'inchikey1_max_test_sim', 'inchikey2_max_test_sim', 'mean_max_train_test_sim', 'mean_mean_train_test_sim',
+        columns=['inchikey1', 'inchikey2','spectrumid1', 'spectrumid2', 'precursor_ppm_diff', 'ground_truth_similarity', 'inchikey1_max_test_sim', 'inchikey2_max_test_sim', 'mean_max_train_test_sim', 'mean_mean_train_test_sim',
                 'max_max_train_test_sim', 'max_mean_train_test_sim', 'max_min_train_test_sim']
 
 
@@ -87,10 +87,13 @@ def build_pairs( main_inchikey,
                 if valid_pairs is not None:
                     if spectrum_id_i not in valid_spectra_1_ids:
                         continue
+                    spectrum_i_pm = summary.loc[spectrum_id_i, ['Precursor_MZ']].values[0]
+
                 for spectrum_id_j in spectrum_id_list_j:
                     if valid_pairs is not None:
                         if spectrum_id_j not in valid_pairs.loc[spectrum_id_i, ['spectrum_id_2']].values:
                             continue
+                    spectrum_j_pm = summary.loc[spectrum_id_j, ['Precursor_MZ']].values[0]
                     # The only time this computation will cross below the main diagonal.
                     # (in terms of spectrum_ids) is when the inchikeys are the same.
                     # When this happens, we only want to compute the similarity once so
@@ -99,10 +102,15 @@ def build_pairs( main_inchikey,
                         if spectrum_id_i < spectrum_id_j:
                             continue
                     
+                    mz_diff = abs(spectrum_i_pm - spectrum_j_pm)
+                    smaller_mz = min(spectrum_i_pm, spectrum_j_pm)
+                    pm_ppm_diff = (mz_diff / smaller_mz) * 1e6
+
                     output_list.append((main_inchikey,
                                         inchikey_j,
                                         spectrum_id_i,
                                         spectrum_id_j,
+                                        pm_ppm_diff,
                                         gt,
                                         max_main_train_test_sim,
                                         max_j_train_test_sim,
