@@ -545,6 +545,17 @@ def basic_sampling_scheme(summary,
 
     return test_rows, train_rows
 
+# TODO: MAKE THIS A FUNCTINOAL PARAMETER
+# def sample_structures_smart_inchikey(summary,
+#                                     similarity_matrix,
+#                                     num_test_roots=750,
+#                                     test_path_len=4,
+#                                     test_edge_cutoff=0.70,
+#                                     bins=(0.4, 1, 13),
+#                                     maximum_training_set_reduction=0.80,
+#                                     tail_points_per_bin=150,
+#                                     datapoints_per_bin=350,
+#                                     move_structures=False):
 def sample_structures_smart_inchikey(summary,
                                     similarity_matrix,
                                     num_test_roots=500,
@@ -552,6 +563,7 @@ def sample_structures_smart_inchikey(summary,
                                     test_edge_cutoff=0.70,
                                     bins=(0.2, 1, 17),
                                     maximum_training_set_reduction=0.80,
+                                    tail_points_per_bin=143,
                                     datapoints_per_bin=143,
                                     move_structures=False):
     """
@@ -601,7 +613,7 @@ def sample_structures_smart_inchikey(summary,
 
     logging.info("Computing Test Set By Sampling the Tail of the Similarity Matrix")
     
-    # For bins with less than datapoints_per_bin structures, sample all
+    # For bins with less than tail_points_per_bin structures, sample all
     test_set = []
     training_set = unique_inchikeys
     train_test_similarity = sim_matrix.loc[test_set, training_set]
@@ -609,8 +621,8 @@ def sample_structures_smart_inchikey(summary,
     tail_structures = []
     sim_matrix_bins = pd.cut(sim_matrix.max(axis=1), np.linspace(bins[0], bins[1], bins[2]))
     for bin_, group in sim_matrix.groupby(sim_matrix_bins):
-        if len(group) > int(datapoints_per_bin):
-            tail_structures.extend(group.sample(int(datapoints_per_bin)).index)
+        if len(group) > int(tail_points_per_bin):
+            tail_structures.extend(group.sample(int(tail_points_per_bin)).index)
         else:
             tail_structures.extend(group.index)
 

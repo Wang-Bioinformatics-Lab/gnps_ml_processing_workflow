@@ -46,6 +46,8 @@ def build_pairs( main_inchikey,
         columns=['inchikey1', 'inchikey2','spectrumid1', 'spectrumid2', 'precursor_ppm_diff', 'ground_truth_similarity', 'inchikey1_max_test_sim', 'inchikey2_max_test_sim', 'mean_max_train_test_sim', 'mean_mean_train_test_sim',
                 'max_max_train_test_sim', 'max_mean_train_test_sim', 'max_min_train_test_sim']
 
+        
+        spectrum_id_pm_dict = summary.loc[:, ['spectrum_id', 'Precursor_MZ']].set_index('spectrum_id').to_dict()['Precursor_MZ']
 
         output_list = []
         curr_buffer_size = buffer_size
@@ -87,13 +89,13 @@ def build_pairs( main_inchikey,
                 if valid_pairs is not None:
                     if spectrum_id_i not in valid_spectra_1_ids:
                         continue
-                    spectrum_i_pm = summary.loc[spectrum_id_i, ['Precursor_MZ']].values[0]
+                spectrum_i_pm = float(spectrum_id_pm_dict[spectrum_id_i])
 
                 for spectrum_id_j in spectrum_id_list_j:
                     if valid_pairs is not None:
                         if spectrum_id_j not in valid_pairs.loc[spectrum_id_i, ['spectrum_id_2']].values:
                             continue
-                    spectrum_j_pm = summary.loc[spectrum_id_j, ['Precursor_MZ']].values[0]
+                    spectrum_j_pm = float(spectrum_id_pm_dict[spectrum_id_j])
                     # The only time this computation will cross below the main diagonal.
                     # (in terms of spectrum_ids) is when the inchikeys are the same.
                     # When this happens, we only want to compute the similarity once so
