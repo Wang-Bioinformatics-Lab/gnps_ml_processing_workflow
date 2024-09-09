@@ -90,78 +90,78 @@ def sample_structures(summary, num_test_points, coverage_threshold=2.6):
     logging.info("Number of training rows: %i", len(train_rows))
     logging.info("Number of training structures: %i", len(unique_train_inchis))
 
-    logging.info("Computing Similarity Matrix")
-    # sim_matrix = parallel_compute_similarity_matrix(fps, unique_structures)
-    fps = [Chem.RDKFingerprint(Chem.MolFromSmiles(summary.loc[summary.InChIKey_smiles_14 == x, 'Smiles'].iloc[0])) for x in tqdm(unique_structures)]
-    sim_matrix = np.zeros((len(fps), len(fps)))
-    for i, fp1 in enumerate(tqdm(fps)):
-        sim_matrix[i, i] = -1
-        for j in range(i+1, len(fps)):
-            fp2 = fps[j]
-            sim_matrix[i, j] = DataStructs.TanimotoSimilarity(fp1, fp2)
-            sim_matrix[j, i] = sim_matrix[i, j]
-    sim_matrix = pd.DataFrame(sim_matrix, index=unique_structures, columns=unique_structures)
+    # logging.info("Computing Similarity Matrix")
+    # # sim_matrix = parallel_compute_similarity_matrix(fps, unique_structures)
+    # fps = [Chem.RDKFingerprint(Chem.MolFromSmiles(summary.loc[summary.InChIKey_smiles_14 == x, 'Smiles'].iloc[0])) for x in tqdm(unique_structures)]
+    # sim_matrix = np.zeros((len(fps), len(fps)))
+    # for i, fp1 in enumerate(tqdm(fps)):
+    #     sim_matrix[i, i] = -1
+    #     for j in range(i+1, len(fps)):
+    #         fp2 = fps[j]
+    #         sim_matrix[i, j] = DataStructs.TanimotoSimilarity(fp1, fp2)
+    #         sim_matrix[j, i] = sim_matrix[i, j]
+    # sim_matrix = pd.DataFrame(sim_matrix, index=unique_structures, columns=unique_structures)
     
-    logging.info("Calculating test pairs")
-    test_pairs = get_pairs(unique_train_inchis, unique_test_inchis, test_rows, sim_matrix)
-    logging.info("Number of test structure pairs: %i", len(test_pairs))
+    # logging.info("Calculating test pairs")
+    # test_pairs = get_pairs(unique_train_inchis, unique_test_inchis, test_rows, sim_matrix)
+    # logging.info("Number of test structure pairs: %i", len(test_pairs))
 
-    # Create linear bins for the histogram
-    linear_bins = np.linspace(0.2, 1, 21)
+    # # Create linear bins for the histogram
+    # linear_bins = np.linspace(0.2, 1, 21)
 
-    # Compute the 2D histogram
-    logging.info("Computing 2D histogram")
+    # # Compute the 2D histogram
+    # logging.info("Computing 2D histogram")
 
-    # Create random_sampling_heatmaps directory if it doesn't exist
-    if not os.path.exists('./random_sampling_heatmaps'):
-        os.makedirs('./random_sampling_heatmaps', exist_ok=True)
+    # # Create random_sampling_heatmaps directory if it doesn't exist
+    # if not os.path.exists('./random_sampling_heatmaps'):
+    #     os.makedirs('./random_sampling_heatmaps', exist_ok=True)
 
-    hist, xedges, yedges = np.histogram2d(test_pairs['train_test_similarity'], test_pairs['pairwise_similarity'], bins=[linear_bins, linear_bins])
+    # hist, xedges, yedges = np.histogram2d(test_pairs['train_test_similarity'], test_pairs['pairwise_similarity'], bins=[linear_bins, linear_bins])
 
-    # Apply logarithmic transformation to the histogram values (avoid log(0) by adding a small constant)
-    hist_log = np.log10(hist + 1)  # log10 is log base 10, adding 1 to handle zero values
+    # # Apply logarithmic transformation to the histogram values (avoid log(0) by adding a small constant)
+    # hist_log = np.log10(hist + 1)  # log10 is log base 10, adding 1 to handle zero values
 
-    # Save unthresholded heatmap
-    plt.figure(figsize=(10, 10))
-    plt.title(f"Pairwise Similarity vs Train-Test Similarity \n \
-                Random Sampling {num_test_points} structures")
-    # Plot the pairwise similarity vs avg train-test similarity using imshow
-    plt.imshow(hist_log.T, cmap='viridis', origin='lower', extent=[0.2, 1, 0.2, 1])
+    # # Save unthresholded heatmap
+    # plt.figure(figsize=(10, 10))
+    # plt.title(f"Pairwise Similarity vs Train-Test Similarity \n \
+    #             Random Sampling {num_test_points} structures")
+    # # Plot the pairwise similarity vs avg train-test similarity using imshow
+    # plt.imshow(hist_log.T, cmap='viridis', origin='lower', extent=[0.2, 1, 0.2, 1])
 
-    plt.ylabel('Pairwise Similarity')
-    plt.xlabel('Train-Test Similarity')
+    # plt.ylabel('Pairwise Similarity')
+    # plt.xlabel('Train-Test Similarity')
 
-    plt.colorbar(label='Log Count')
-    plt.savefig(f'./random_sampling_heatmaps/random_sampling_{num_test_points}_structures_unthresholded.png')
+    # plt.colorbar(label='Log Count')
+    # plt.savefig(f'./random_sampling_heatmaps/random_sampling_{num_test_points}_structures_unthresholded.png')
 
-    # Save unthresholded heatmap to csv
-    np.savetxt(f'./random_sampling_heatmaps/random_sampling_{num_test_points}_structures_unthresholded.csv', hist_log, delimiter=',')
-    # Save no log heatmap to csv
-    np.savetxt(f'./random_sampling_heatmaps/random_sampling_{num_test_points}_structures_unthresholded_no_log.csv', hist, delimiter=',')
+    # # Save unthresholded heatmap to csv
+    # np.savetxt(f'./random_sampling_heatmaps/random_sampling_{num_test_points}_structures_unthresholded.csv', hist_log, delimiter=',')
+    # # Save no log heatmap to csv
+    # np.savetxt(f'./random_sampling_heatmaps/random_sampling_{num_test_points}_structures_unthresholded_no_log.csv', hist, delimiter=',')
 
-    # Apply coverage threshold
-    if coverage_threshold is not None:
-        hist_log[hist_log < coverage_threshold] = np.nan
+    # # Apply coverage threshold
+    # if coverage_threshold is not None:
+    #     hist_log[hist_log < coverage_threshold] = np.nan
 
-        # Get percent coverage
-        percent_coverage = np.sum(~np.isnan(hist_log)) / hist_log.size
-    else:
-        percent_coverage = None
+    #     # Get percent coverage
+    #     percent_coverage = np.sum(~np.isnan(hist_log)) / hist_log.size
+    # else:
+    #     percent_coverage = None
 
-    # Plot the histogram
-    logging.info("Plotting histogram")
-    logging.getLogger().setLevel(logging.INFO)
-    plt.figure(figsize=(10, 10))
-    plt.title(f"Pairwise Similarity vs Train-Test Similarity \n \
-                Random Sampling {num_test_points} structures Coverage: {coverage_threshold} \n % Coverage: {percent_coverage}")
-    # Plot the pairwise similarity vs avg train-test similarity using imshow
-    plt.imshow(hist_log.T, cmap='viridis', origin='lower', extent=[0.2, 1, 0.2, 1])
+    # # Plot the histogram
+    # logging.info("Plotting histogram")
+    # logging.getLogger().setLevel(logging.INFO)
+    # plt.figure(figsize=(10, 10))
+    # plt.title(f"Pairwise Similarity vs Train-Test Similarity \n \
+    #             Random Sampling {num_test_points} structures Coverage: {coverage_threshold} \n % Coverage: {percent_coverage}")
+    # # Plot the pairwise similarity vs avg train-test similarity using imshow
+    # plt.imshow(hist_log.T, cmap='viridis', origin='lower', extent=[0.2, 1, 0.2, 1])
 
-    plt.ylabel('Pairwise Similarity')
-    plt.xlabel('Train-Test Similarity')
+    # plt.ylabel('Pairwise Similarity')
+    # plt.xlabel('Train-Test Similarity')
 
-    plt.colorbar(label='Log Count')
-    plt.savefig(f'./random_sampling_heatmaps/random_sampling_{num_test_points}_structures.png')
+    # plt.colorbar(label='Log Count')
+    # plt.savefig(f'./random_sampling_heatmaps/random_sampling_{num_test_points}_structures.png')
 
     
     return test_rows, train_rows
@@ -545,17 +545,6 @@ def basic_sampling_scheme(summary,
 
     return test_rows, train_rows
 
-# TODO: MAKE THIS A FUNCTINOAL PARAMETER
-# def sample_structures_smart_inchikey(summary,
-#                                     similarity_matrix,
-#                                     num_test_roots=750,
-#                                     test_path_len=4,
-#                                     test_edge_cutoff=0.70,
-#                                     bins=(0.4, 1, 13),
-#                                     maximum_training_set_reduction=0.80,
-#                                     tail_points_per_bin=150,
-#                                     datapoints_per_bin=350,
-#                                     move_structures=False):
 def sample_structures_smart_inchikey(summary,
                                     similarity_matrix,
                                     num_test_roots=500,
