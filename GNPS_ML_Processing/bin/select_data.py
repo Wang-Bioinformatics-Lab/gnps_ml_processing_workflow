@@ -6,7 +6,7 @@ import logging
 from time import time
 from tqdm import tqdm
 import sys
-from utils import synchronize_spectra
+from utils import synchronize_spectra, synchronize_spectra_to_json
 import pyteomics.mgf as py_mgf
 
 
@@ -149,28 +149,38 @@ def basic_spectral_filter(summary:pd.DataFrame, spectra:list,
     """
     # Apply filters that apply to summary
     time_start = time()
+    org_len = len(summary)
+    logging.info("Original Summary Count: %s", org_len)
     if require_structure:
         summary = summary.loc[~summary.Smiles.isna()]
         summary = summary.loc[~summary.INCHI.isna()]
         summary = summary.loc[~summary.InChIKey_smiles.isna()]
-    print("Filtered missing structures in", time() - time_start, "seconds")
+    logging.info("Filtered missing structures in %s seconds", time() - time_start, )
+    logging.info("New Summary Count: %s Length difference: %s", len(summary), org_len - len(summary))
+
     time_start = time()
+    org_len = len(summary)
     if max_precursor_mz is not None:
         summary = summary.loc[summary.Precursor_MZ <= max_precursor_mz]
-    print("Filtered by precursor_mz in", time() - time_start, "seconds")
+    logging.info("Filtered by precursor_mz in %s seconds", time() - time_start)
+    logging.info("New Summary Count: %s Length difference: %s", len(summary), org_len - len(summary))
+
     time_start = time()
+    org_len = len(summary)
     if max_precursor_ppm_error is not None:
         if require_structure and missing_structure_check(summary):
             raise ValueError("""Found missing structures in summary, but max_precursor_ppm_error is not None.
                              Please remove missing structures or set require_structure=True.""")
         summary = summary.loc[summary.ppmBetweenExpAndThMass <= max_precursor_ppm_error]
-    print("Filtered by precursor_mz error in", time() - time_start, "seconds")
+    logging.info("Filtered by precursor_mz error in %s seconds", time() - time_start)
+    logging.info("New Summary Count: %s Length difference: %s", len(summary), org_len - len(summary))
 
     allowed_ids = set(summary.loc[:, "spectrum_id"].values)
 
     time_start = time()
+    org_len = len(spectra)
     spectra = [x for x in spectra if x.metadata.get("spectrum_id") in allowed_ids]
-    print("Removed filtered spectra from spectra list in", time() - time_start, "seconds")
+    logging.info("Removed filtered spectra from spectra list in %s seconds", time() - time_start)
     
     return summary, spectra
 
@@ -192,7 +202,7 @@ def select_data(input_csv_path:str, input_mgf_path:str, ion_mode:str):
 
     # Load mgf files
     logging.info("Loading mgf files")
-    spectra = matchms.importing.load_from_mgf(input_mgf_path)
+    spectra = list(matchms.importing.load_from_mgf(input_mgf_path))
     
     # Remove GNPS-LIBRARY from the train/test data
     logging.info("Removing GNPS-LIBRARY from the data")
@@ -200,6 +210,14 @@ def select_data(input_csv_path:str, input_mgf_path:str, ion_mode:str):
     summary = summary.loc[summary['GNPS_library_membership'] != 'GNPS-LIBRARY']
     logging.info("Original Summary Count: %s", original_len)
     logging.info("Number of Spectra not in GNPS-LIBRARY: %s", len(summary))
+
+    # Remove BMDMS from the train/test data
+    logging.info("Removing BMDMS from the data")
+    original_len = len(summary)
+    summary = summary.loc[summary['GNPS_library_membership'] != 'BMDMS-NP']
+    summary = summary.loc[summary['GNPS_library_membership'] != 'MSMS-Pos-bmdms-np_20200811'] # If RIKEN is imported
+    logging.info("Original Summary Count: %s", original_len)
+    logging.info("Number of Spectra not in BMDMS: %s", len(summary))
     
     # Split based on ion mode
     logging.info('Selected Ion Mode: %s', ion_mode)
@@ -239,7 +257,7 @@ def select_data(input_csv_path:str, input_mgf_path:str, ion_mode:str):
     logging.info("Wrote selected_summary.csv in %s seconds", time() - start_time)
     
     logging.info("Writing Spectra")
-    start_time = time()   
+    start_time = time()
     
     # matchms.exporting.save_as_mgf(selected_spectra, 'selected_spectra.mgf')
     
@@ -256,6 +274,11 @@ def select_data(input_csv_path:str, input_mgf_path:str, ion_mode:str):
     py_mgf.write(output_gen(), 'selected_spectra.mgf', file_mode="w")
     
     logging.info("Wrote selected_spectra.mgf in %s seconds", time() - start_time)
+
+    logging.info("Writing Spectra to JSON")
+    start_time = time()
+    synchronize_spectra_to_json('selected_spectra.mgf', 'selected_spectra.json')
+    logging.info("Wrote selected_spectra.json in %s seconds", time() - start_time)
 
 def main():
     parser = argparse.ArgumentParser(description='Create Parallel Parameters.')

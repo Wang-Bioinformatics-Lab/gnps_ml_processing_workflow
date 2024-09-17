@@ -665,6 +665,31 @@ def synchronize_spectra(input_path, output_path, summary, progress_bar=True):
                 output_mgf.write("{} {}\n".format(peak[0], peak[1]))
 
             output_mgf.write("END IONS\n")
+
+def synchronize_spectra_to_json(input_mgf:str, output_path:str)->None:
+    """This function takes an input mgf and converts it to a json 
+    peak list. The output is keyed by spectrum_id and contains the m/z 
+    and intensity arrays.
+
+    Args:
+        input_mgf (str): Path to the input mgf.
+        output_path (str): Path to save the output json.
+
+    returns:
+        None
+    """ 
+    with open(output_path, 'w', encoding='utf-8') as output_json:
+        input_mgf = IndexedMGF(input_mgf)
+        spectra_dict = {}
+        
+        for m in input_mgf:
+            spectra_dict[m['params']['title']] = {
+                'm/z array': list(m['m/z array']),
+                'intensity array': list(m['intensity array']),
+                'precursor mz': m['params']['pepmass'][0],
+            }
+        
+        json.dump(spectra_dict, output_json, indent=4)
                 
 def generate_parquet_df(input_mgf):
     """

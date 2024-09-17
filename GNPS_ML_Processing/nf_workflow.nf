@@ -6,7 +6,7 @@ params.matchms_pipeline = true //false
 params.export_json = true //false
 
 // Whether to subset the data for ML and perform basic cleaning
-params.select_clean_subset = false //true
+params.select_clean_subset = true
 params.ion_mode = "positive"  // Which ion mode to select during cleaning
 // Which subset ot select, if select_clean_subset is true
 // "GNPS_default" for all, other options include "Orbitrap_Fragmentation_Prediction", "MH_MNA_Translation"
@@ -27,7 +27,7 @@ params.path_to_nist = ""
 
 // If true, will download and reparse massbank, additionally removing all massbank entires from GNPS
 params.include_massbank = true
-params.include_riken = false //true
+params.include_riken = false
 
 // Workflow Boiler Plate
 params.OMETALINKING_YAML = "flow_filelinking.yaml"
@@ -200,7 +200,7 @@ process postprocess {
   publishDir "$params.output_dir", mode: 'copy'
   publishDir "$TOOL_FOLDER", mode: 'copy', pattern: "smiles_mapping_cache.json", saveAs: { filename -> "smiles_mapping_cache.json" } // The script will create this file and copy it back
 
-  cache false //true
+  cache false
 
   input:
   path merged_csv
@@ -211,6 +211,7 @@ process postprocess {
   path "ALL_GNPS_cleaned.csv", emit: cleaned_csv
   path "ALL_GNPS_cleaned.parquet", emit: cleaned_parquet, optional: true
   path "ALL_GNPS_cleaned.mgf", emit: cleaned_mgf
+  path "ALL_GNPS_cleaned.json", emit: cleaned_json
   path "smiles_mapping_cache.json", includeInputs: true
 
   script:
@@ -412,6 +413,7 @@ process select_data_for_ml {
   output:
   path 'selected_summary.csv',  emit: selected_summary
   path 'selected_spectra.mgf',  emit: selected_spectra
+  path 'selected_spectra.json',  emit: selected_spectra_json
 
   """
   python3 $TOOL_FOLDER/select_data.py \
@@ -572,7 +574,7 @@ workflow {
     // If params.subset is None, don't generate any subsets
     if (params.subset != "None") { 
       /*********** FROM HERE DOWN IS THE ML SPLITS ************/
-      if (false) {
+      if (false) { // Moved to train-test split
         // export_full_json(postprocess.out.cleaned_csv, postprocess.out.cleaned_mgf)
         generate_subset(select_data_for_ml.out.selected_summary, select_data_for_ml.out.selected_spectra)    //, export_full_json.out.dummy
         // if (false) {

@@ -8,6 +8,7 @@ from pyteomics.mgf import IndexedMGF
 import re
 from tqdm import tqdm
 from utils import harmonize_smiles_rdkit, tautomerize_smiles, neutralize_atoms, INCHI_to_SMILES, synchronize_spectra, generate_parquet_df
+from utils import synchronize_spectra_to_json
 from rdkit import Chem
 from rdkit.Chem import Descriptors
 import json
@@ -27,6 +28,8 @@ from formula_validation.Adduct import Adduct
 from formula_validation.IncorrectFormula import IncorrectFormula
 from formula_validation.IncorrectAdduct import IncorrectAdduct
 
+tqdm.pandas()
+
 # os.environ['JOBLIB_TEMP_FOLDER'] = '/tmp'
 
 def extract_berkley_colision_energy(name):
@@ -44,8 +47,11 @@ def basic_cleaning(summary):
     # Precursor MZ
     # Drop all entries with precursor mz <= 1
     summary.loc[:, 'Precursor_MZ'] = summary.Precursor_MZ.astype('float')
+    org_len = len(summary)
     summary = summary.loc[summary.Precursor_MZ > 1]
+    print(f"Dropped {org_len - len(summary)} entries with Precursor_MZ <= 1")
 
+    org_len = len(summary)
     # smiles
     summary.loc[:,'Smiles'] = summary.Smiles.astype(str).parallel_apply(lambda x: x.strip() )
     summary.loc[:,'Smiles'] = summary.Smiles.parallel_apply(lambda x: '' if ('N/A' in x) or ('nan' in x) else x)
@@ -79,6 +85,7 @@ def basic_cleaning(summary):
     summary.loc[[('prestwick' in x) or ('nih natural product library' == x)  or('nih pharmacologically active library' == x) for x in summary.Compound_Source], 'Compound_Source'] = "isolated"
     summary.loc[[('lysate' == x)  for x in summary.Compound_Source], 'Compound_Source'] = "crude"
     
+    print(f"Lost {org_len - len(summary)} entries due to basic cleaning.")
     
     # Adduct translation from chemical names to adduct formulas -> 'M+TFA-H': '[M+C2HF3O2-H]-'
     # Adduct Table Credit: Yasin El Abiead
@@ -120,7 +127,9 @@ def basic_cleaning(summary):
     if sum(mask) > 0:
         print(f"Warning: {sum(mask)} entries have Adducts that are not in the expected format, these will be removed.")
         print(summary.Adduct.loc[mask].value_counts().head(10))
+    org_len = len(summary)
     summary = summary.loc[~mask]
+    print("New Length: ", len(summary))
 
     # Conversion of numerical columns to numerical types to protect against contamination
     summary.loc[:,'Precursor_MZ'] = summary.Precursor_MZ.astype(float)
@@ -129,22 +138,27 @@ def basic_cleaning(summary):
     
     # Charge
     # Mask whether charge is equal to adduct charge
+    org_len = len(summary)
     adduct_charges = summary.Adduct.apply(lambda x: int(x[-1] + x.split(']')[-1][:-1]))
     mask = (summary.Charge != adduct_charges)
     if sum(mask) > 0:
         print(f"Warning: {sum(mask)} entries have Charge and Adduct Charge that are not equivalent, Adduct Charge will be prefered.")
         print(f"Of the {sum(mask)} entires, {sum(mask & (summary.Charge == 0))} have Charge of 0.")
     summary.loc[mask, 'Charge'] = adduct_charges[mask]
+    print(f"Lost {org_len - len(summary)} entries due to Charge and Adduct Charge disagreement.")
 
     # Collision Energy
     # Rather nicely, sometimes the collision energy is in the ion mode field, but we'll prefer the raw file data
+    org_len = len(summary)
     summary.loc[:,'Ion_Mode'] = summary.Ion_Mode.apply(lambda x: str(x).strip().lower())   
     mask = (summary.Ion_Mode == 'positive-20ev') & (summary.collision_energy.isna())
     if sum(mask) > 0:
         print(f"Imputing {sum(mask)} collision energies using the Ion_Mode field")
         summary.loc[mask, 'collision_energy'] = 20
+    print(f"Lost {org_len - len(summary)} entries due to Ion_Mode collision energy imputation.")
 
     # for berkley dataset the collision energy is in the Compund_Name field
+    org_len = len(summary)
     try:
         fixable_BERKELEY =  (summary.Compund_Name.str.contains('CollisionEnergy')) & (summary.GNPS_library_membership == 'BERKELEY-LAB')
         fixable_BERKELEY = fixable_BERKELEY.fillna(False)
@@ -157,8 +171,10 @@ def basic_cleaning(summary):
             summary.loc[fixable_BERKELEY, 'Compund_Name'] = summary.Compund_Name.loc[fixable_BERKELEY].apply(lambda x: x.split("CollisionEnergy:")[0].strip())
     except:
         pass
+    print(f"Lost {org_len - len(summary)} entries due to Compund_Name collision energy imputation.")
     
     # Sometimes the collision energy is in the GNPS_inst field
+    org_len = len(summary)
     pattern = re.compile(r'(\d+)eV')
     extracted_eV = summary.GNPS_Inst.apply(lambda x: re.search(pattern, str(x)))
     extracted_eV = extracted_eV.apply(lambda x: x.group(1) if x is not None else None)
@@ -171,8 +187,10 @@ def basic_cleaning(summary):
     pattern = re.compile(r'(\d+)')
     extracted_eV = summary.collision_energy.apply(lambda x: re.search(pattern, str(x)))
     summary.loc[:,'collision_energy'] = extracted_eV.apply(lambda x: x.group(1) if x is not None else None).astype(float)
+    print(f"Lost {org_len - len(summary)} entries due to GNPS_Inst collision energy imputation.")
     
     # Ion Mode
+    org_len = len(summary)
     summary.loc[:,'Ion_Mode'] = summary.Ion_Mode.parallel_apply(lambda x: '' if ('n/a' in x) or ('nan' in x) or ('unknown' in x) else x)
     summary.loc[summary.Ion_Mode == 'positive-20ev','Ion_Mode'] = 'positive'
     # We'll infer any missing ion modes from the charge
@@ -193,11 +211,14 @@ def basic_cleaning(summary):
     if sum(mask) > 0:
         print(f"Correcting {sum(mask)} negative ion modes using the Charge field.")
         summary.loc[mask, 'Ion_Mode'] = 'positive'
+    print(f"Lost {org_len - len(summary)} entries due to Ion_Mode imputation.")
 
     # Manufacturer
+    org_len = len(summary)
     summary.loc[:,'msManufacturer'] = summary.msManufacturer.astype('str')
     summary.loc[['thermo' in x.lower() for x in summary.msManufacturer], 'msManufacturer'] = 'Thermo'
     summary.loc[:,'msManufacturer'] = summary.msManufacturer.parallel_apply(lambda x: '' if ('n/a' in x) or ('nan' in x) else x)
+    print(f"Lost {org_len - len(summary)} entries due to Manufacturer cleaning.")
 
     # msMassAnalyzer
     # This cleanup address lists of mass analyzers from mzML and mzXML files
@@ -469,7 +490,9 @@ def check_M_H_adducts(summary):
         
     # Drop everything we didn't update
     # i.e. keep everything that we corrected the adduct of, didn't have SMILES, or we didn't change the charge of
+    old_len = len(summary)
     summary = summary.loc[(incorrect_adduct_mask) | (~mask) | (num_removed_charges == 0)]
+    print(f"Dropped {old_len - len(summary)} entries due to suspected [M]+/- adducts that could not be fixed.")
     
     return summary
 
@@ -587,7 +610,7 @@ def add_columns_formula_analysis(summary):
     summary[column_name_ppmBetweenExpAndThMass] = summary.parallel_apply(helper, axis=1).astype(float)
     
 def add_explained_intensity(summary, spectra):
-    indexed_mgf = IndexedMGF(spectra,index_by_scans=True)
+    spectra_dict = json.load(open(spectra, 'r'))
     
     column_name_ppmBetweenExpAndThMass='explainable_intensity'
     
@@ -596,9 +619,7 @@ def add_explained_intensity(summary, spectra):
             smiles = str(row['Smiles'])
             if smiles != '':
                 # Build a dictionary of mz, intensity
-                this_spectra = indexed_mgf[row['scan']]
-                if this_spectra['params']['title'] != row['spectrum_id']:
-                    raise ValueError(f"Spectrum ID mismatch: {this_spectra['params']['title']} and {row['spectrum_id']}")
+                this_spectra = spectra_dict[str(row['spectrum_id'])]
                
                 mzs = this_spectra['m/z array']
                 intensities = this_spectra['intensity array']
@@ -610,10 +631,12 @@ def add_explained_intensity(summary, spectra):
             return 'nan'
         except Exception as e:
             print(e, file=sys.stderr)
+            # raise e
             return 'nan'
             
-    filter = (summary['ppmBetweenExpAndThMass'].notna() & summary['ppmBetweenExpAndThMass']<=50)
-    summary.loc[filter, column_name_ppmBetweenExpAndThMass] = summary.loc[filter].parallel_apply(helper, axis=1)
+    mask = (summary['ppmBetweenExpAndThMass'].notna() & summary['ppmBetweenExpAndThMass']<=50)    # We will throw these out later anyways, do this to save time
+    summary.loc[mask, column_name_ppmBetweenExpAndThMass] = summary.loc[mask].progress_apply(helper, axis=1)
+    return summary
             
 def postprocess_files(csv_path, mgf_path, output_csv_path, output_parquet_path, cleaned_mgf_path, includes_massbank=False, includes_riken=False, smiles_mapping_cache=None):
     pandarallel.initialize(progress_bar=False, nb_workers=PARALLEL_WORKERS, use_memory_fs = False)
@@ -633,42 +656,49 @@ def postprocess_files(csv_path, mgf_path, output_csv_path, output_parquet_path, 
     print("Performing basic cleaning", flush=True)
     start = time.time()
     summary = basic_cleaning(summary)
+    print(f"Length of summary after basic cleaning: {len(summary)}")
     print("Done in {} seconds".format(datetime.timedelta(seconds=time.time() - start)), flush=True)
     
     # Clean smiles strings:
     print("Cleaning up smiles strings", flush=True)
     start = time.time()
     summary = clean_smiles(summary, smiles_mapping_cache=smiles_mapping_cache)
+    print(f"Length of summary after smiles cleaning: {len(summary)}")
     print("Done in {} seconds".format(datetime.timedelta(seconds=time.time() - start)), flush=True)
        
     # Clean up monoistopic masses:
     print("Cleaning up monoisotopic masses", flush=True)
     start = time.time()
     summary = validate_monoisotopic_masses(summary)
+    print(f"Length of summary after monoisotopic mass cleaning: {len(summary)}")
     print("Done in {} seconds".format(datetime.timedelta(seconds=time.time() - start)), flush=True)
     
     # Check M+H adducts should not be [M]+:
     print("Checking for missing [M]+ Adducts")
     start = time.time()
     summary = check_M_H_adducts(summary)
+    print(f"Length of summary after checking for missing [M]+ adducts: {len(summary)}")
     print("Done in {} seconds".format(datetime.timedelta(seconds=time.time() - start)), flush=True)
     
     # Exploiting GNPS_Inst annotations:
     print("Attempting to propagate user instrument annotations", flush=True)
     start = time.time()
     summary = propagate_GNPS_Inst_field(summary)
+    print(f"Length of summary after propagating GNPS_Inst field: {len(summary)}")
     print("Done in {} seconds".format(datetime.timedelta(seconds=time.time() - start)), flush=True)
 
     # Exploiting Some of the info in msModel
     print("Attempting to propagate msModel field", flush=True)
     start = time.time()
     summary = propagate_msModel_field(summary)
+    print(f"Length of summary after propagating msModel field: {len(summary)}")
     print("Done in {} seconds".format(datetime.timedelta(seconds=time.time() - start)), flush=True)
 
     # Calculating ppm error
     print("Calculating ppm error", flush=True)
     start = time.time()
     add_columns_formula_analysis(summary)
+    print(f"Length of summary after calculating ppm error: {len(summary)}")
     print("Done in {} seconds".format(datetime.timedelta(seconds=time.time() - start)), flush=True)
     
     # Cleanup scan numbers, scan numbers will be reset in mgf by synchronize spectra
@@ -685,18 +715,28 @@ def postprocess_files(csv_path, mgf_path, output_csv_path, output_parquet_path, 
     start = time.time()
     synchronize_spectra(mgf_path, cleaned_mgf_path, summary)
     print("Done in {} seconds".format(datetime.timedelta(seconds=time.time() - start)), flush=True)
+    print("Writing json spectra file", flush=True)
+    start = time.time()
+    synchronize_spectra_to_json(cleaned_mgf_path, cleaned_mgf_path.replace('.mgf', '.json'))
+    print("Done in {} seconds".format(datetime.timedelta(seconds=time.time() - start)), flush=True)
+
     
     # # Because calculating explained intensity is slow, we'll save an output file just in case
     # print("Writing csv file", flush=True)
     # summary.to_csv(output_csv_path, index=False)
 
-    # # Calculate explained intensity
+    # Calculate explained intensity
     # print("Calculating explained intensity")
     # start = time.time()
-    # add_explained_intensity(summary, mgf_path)
+    # summary = add_explained_intensity(summary, cleaned_mgf_path.replace('.mgf', '.json'))
     # print("Done in {} seconds".format(datetime.timedelta(seconds=time.time() - start)))
+
+    # Save a second time around
+    # print("Writing csv file", flush=True)
+    # summary.to_csv(output_csv_path, index=False)
+    # print("Done")
     
-    print("Writing output files...", flush=True)
+    # print("Writing output files...", flush=True)
     # print("Writing parquet file", flush=True)
     # parquet_as_df = generate_parquet_df(cleaned_mgf_path)
     # parquet_as_df.to_parquet(output_parquet_path, index=False)
@@ -758,5 +798,5 @@ def test_propagate_GNPS_Inst_field():
         pd.set_option('display.max_rows', None)
         pd.set_option('display.max_columns', None)
         print(inconsistent_rows)
-        inconsistent_rows.to_csv('./GNPS_inst_test_output.csv')        
+        inconsistent_rows.to_csv('./GNPS_inst_test_output.csv')
         raise AssertionError("The GNPS_Inst field is not being propagated correctly")

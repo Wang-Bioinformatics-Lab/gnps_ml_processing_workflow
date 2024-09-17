@@ -4,7 +4,9 @@ import pandas as pd
 import json
 from time import time
 from tqdm import tqdm
+from pyteomics.mgf import IndexedMGF
 import os
+from pathlib import Path
 
 def generate_json_parquet(parquet_path:str, csv_path:str, output_path:str):
     """Generate a json file containing all the metadata in the specified csv and the spectrum in 
@@ -51,7 +53,37 @@ def generate_json_parquet(parquet_path:str, csv_path:str, output_path:str):
             counter += 1
         json_file.write("]")
     print(f"Completed in {time() - start_time} seconds.")
+    
+def synchronize_spectra_to_json(input_mgf:str, output_path:str)->None:
+    """This function takes an input mgf and converts it to a json 
+    peak list. The output is keyed by spectrum_id and contains the m/z 
+    and intensity arrays.
+
+    Args:
+        input_mgf (str): Path to the input mgf.
+        output_path (str): Path to save the output json.
+
+    returns:
+        None
+    """ 
+
+    output_path = Path(output_path)
+    # Create parent directories if needed
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    with open(output_path, 'w', encoding='utf-8') as output_json:
+        input_mgf = IndexedMGF(input_mgf)
+        spectra_dict = {}
         
+        for m in input_mgf:
+            spectra_dict[m['params']['title']] = {
+                'm/z array': list(m['m/z array']),
+                'intensity array': list(m['intensity array']),
+                'precursor mz': m['params']['pepmass'][0],
+            }
+        
+        json.dump(spectra_dict, output_json, indent=4)
+
 def generate_json_mgf(mgf_path:str, csv_path:str, output_path:str, progress_bar=True, per_library=False):
     """Generates a gnps-style json file containing all of the spectra in the mgf and the corresponding metadata in the csv
 
