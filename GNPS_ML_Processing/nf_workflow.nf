@@ -231,72 +231,6 @@ process postprocess {
     python3 $TOOL_FOLDER/GNPS2_Postprocessor.py
     """
 }
-
-// // A serial piece of code to cache the PubChem names for MatchMS Filtering
-// // Doing so avoids excessive parallel API calls
-// process cache_pubchem_names_for_matchms {
-//   publishDir "./bin/matchms", mode: 'copy'
-//   conda "$TOOL_FOLDER/gnps_ml_processing_matchms.yml"
-
-//   maxForks 1
-
-//   cache true
-
-//   input:
-//   path cleaned_mgf
-
-//   output:
-//   path "pubchem_names.csv", includeInputs: true, emit: pubchem_names
-
-//   """
-//   python3 $TOOL_FOLDER/matchms/cache_pubchem_names_for_matchms.py --input_mgf_path ${cleaned_mgf} \
-//                                                                   --cached_compound_name_annotation_path "$TOOL_FOLDER/matchms/pubchem_names.csv"
-//   """
-// }
-
-// Splits the output mgf into smaller chunks to parallelize MatchMS Filtering
-process split_mgf_for_matchms_filtering {
-  conda "$params.matchms_conda_path"
-
-  cache true
-
-  input:
-  path cleaned_mgf
-
-  output: 
-  path "mgf_chunks/*", emit: mgf_chunks
-
-  // The below script has an optional argument --splitsize, which defaults to 1000. This can be changed to increase or decrease the number of mgf files
-  """
-  python3 $TOOL_FOLDER/matchms/split_mgf_for_matchms_filtering.py --input_mgf_path ${cleaned_mgf} \
-                                                                  --output_path "./mgf_chunks"
-  """
-}
-
-/* This process reads the csv file, and appends all CCMS IDs to the pubchem name searching cache file to signficantly
-reduce the number of api calls */
-process spoof_matchms_caching {
-  // Curerntly deprecated, see TODO in workflow
-  conda "$params.matchms_conda_path"
-  publishDir "$TOOL_FOLDER/matchms", mode: 'copy', pattern: "compound_name_annotation.csv", saveAs: { filename -> "pubchem_names.csv" } // The script will create this file and copy it back
-
-  cache 'lenient'
-
-  input:
-  path cleaned_csv
-
-  output:
-  path "compound_name_annotation.csv"
-  path "dummy.txt", emit: cache_dummy
-
-  """
-  python3 $TOOL_FOLDER/matchms/spoof_matchms_caching.py --input_csv_path ${cleaned_csv} \
-                                                        --cached_compound_name_annotation_path "$TOOL_FOLDER/matchms/pubchem_names.csv"
-  
-  touch dummy.txt
-  """
-}
-
 // Incoperate MatchMS Filtering into the Pipeline
 process matchms_filtering {
   conda "$params.matchms_conda_path"
@@ -378,23 +312,8 @@ process generate_mgf {
   each parquet_file
 
   output:
-  path "*.mgf", emit: output_mgf//, optional: true
+  path "*.mgf", emit: output_mgf
 
-  // The default path will process all files while the other path will process only the spectral_similarity_prediction subset
-  //old if 
-  //python3 $TOOL_FOLDER/GNPS2_MGF_Generator.py -p "$params.parallelism"
-  //old else
-  // // python3 $TOOL_FOLDER/GNPS2_MGF_Generator.py -p "$params.parallelism" -path "./Spectral_Similarity_Prediction.parquet"
-  
-  // if (use_default_path) {
-  //   """ 
-  //   python3 $TOOL_FOLDER/GNPS2_MGF_Generator.py -input_path $parquet_file -output_path ${name}.mgf"
-  //   """
-  // } else {
-  //   """
-  //   python3 $TOOL_FOLDER/GNPS2_MGF_Generator.py -input_path "./Spectral_Similarity_Prediction.parquet" -output_path "./Spectral_Similarity_Prediction.mgf"
-  //   """
-  // }
   """
   python3 $TOOL_FOLDER/GNPS2_MGF_Generator.py -input_path "$parquet_file"
   """
@@ -549,15 +468,7 @@ workflow {
   if (params.export_json) {
     export_full_json(postprocess.out.cleaned_csv, postprocess.out.cleaned_mgf)
   }
-  // cache_pubchem_names_for_matchms(postprocess.out.cleaned_mgf)
-  // split_mgf_for_matchms_filtering(postprocess.out.cleaned_mgf)
 
-  /******* 
-  * Since every time the cache is used matchms reopens the csv, it's actually faster to just 
-  * let the API calls fail, fixing this is TODO
-  * spoof_matchms_caching(postprocess.out.cleaned_csv) 
-  * matchms_filtering(postprocess.out.cleaned_mgf, spoof_matchms_caching.out.cache_dummy)  
-  *******/
   if (params.matchms_pipeline) {
     matchms_filtering(postprocess.out.cleaned_mgf)
   }
@@ -571,38 +482,5 @@ workflow {
     // Perform basic data selection and cleaning for ML
     select_data_for_ml(postprocess.out.cleaned_csv, postprocess.out.cleaned_mgf)
 
-    // If params.subset is None, don't generate any subsets
-    if (params.subset != "None") { 
-      /*********** FROM HERE DOWN IS THE ML SPLITS ************/
-      if (false) { // Moved to train-test split
-        // export_full_json(postprocess.out.cleaned_csv, postprocess.out.cleaned_mgf)
-        generate_subset(select_data_for_ml.out.selected_summary, select_data_for_ml.out.selected_spectra)    //, export_full_json.out.dummy
-        // if (false) {
-        calculate_similarities(generate_subset.out.output_mgf)
-
-        // For the spectral similarity prediction task, we need to calculate all pairs similarity in the training set
-        if (params.subset == "GNPS_default" || params.subset == "Spectral_Similarity_Prediction") {
-          use_default_path = false
-          //// generate_subset.out.output_parquet.collect()  // Make sure this finishes first
-          //// channel.fromPath(".nf_output/Spectral_Similarity_Prediction.parquet") | generate_mgf
-          //generate_mgf(generate_subset.out.output_parquet)
-          //calculate_similarities(generate_mgf.out.output_mgf)
-
-          publish_similarities_for_prediction(calculate_similarities.out.spectral_similarities)
-
-        }
-        // } else if (params.subset == "Spectral_Similarity_Prediction") {
-        //   generate_subset.out.output_parquet.collect()  // Make sure this finishes first
-        //   channel.fromPath(".nf_output/Spectral_Similarity_Prediction.parquet") | generate_mgf
-        //   // generate_mgf(generate_subset.out.output_parquet)
-        //   generate_mgf.out.output_mgf  | calculate_similarities 
-        //   publish_similarities_for_prediction(calculate_similarities.out.spectral_similarities)
-        // }
-
-        if (params.split) {
-          calculate_similarities.out.spectral_similarities | split_subsets
-        }
-      }
-    }
   }
 }
