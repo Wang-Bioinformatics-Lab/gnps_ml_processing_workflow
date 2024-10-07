@@ -16,7 +16,7 @@ dependencies:
   - requests=2.31.0
   - beautifulsoup4=4.12.2
   - lxml=4.8.0
-  - bioconda::matchms
+  - bioconda::matchms=0.18.0
   - pip
   - pip:
     - obonet==1.0.0
