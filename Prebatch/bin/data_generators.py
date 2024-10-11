@@ -354,6 +354,11 @@ class FilteredPairsGenerator(DataGeneratorBase):
 
         local_reference_scores_df = self.reference_scores_dict[inchikey1]
 
+        # Safety in the case this has no filtered pair
+        if self.ignore_equal_pairs:
+            if len(local_reference_scores_df) == 1:
+                return None
+
         while inchikey2 is None:
             matching_inchikeys = self.reference_scores_df.index[
                 (self.reference_scores_df[inchikey1] > low - extend_range)
@@ -366,9 +371,6 @@ class FilteredPairsGenerator(DataGeneratorBase):
                 matching_inchikeys = matching_inchikeys[matching_inchikeys != inchikey1]
             if len(matching_inchikeys) > 0:
                 inchikey2 = np.random.choice(matching_inchikeys)
-            # DEBUG
-            # else:
-            #     return None
 
             extend_range += 0.1
         return inchikey2
@@ -482,7 +484,11 @@ class FilteredPairsGenerator(DataGeneratorBase):
         # indexes = self.indexes[batch_index * batch_size:(batch_index + 1) * batch_size]
 
         target_score_range = same_prob_bins[np.random.choice(np.arange(len(same_prob_bins)))]
-        while curr_batch_size < batch_size:
+
+        num_attempts = 0
+
+        while curr_batch_size < batch_size and num_attempts < batch_size **2:
+            num_attempts +=1
             index = self.indexes[self.curr_index]
             self.curr_index += 1
             if self.curr_index >= len(self.reference_scores_df):
@@ -491,7 +497,6 @@ class FilteredPairsGenerator(DataGeneratorBase):
             # Randomly pick the desired target score range and pick matching inchikey
             inchikey2 = self._find_match_in_range(inchikey1, target_score_range)
             if inchikey2 is None:
-                # DEBUG
                 continue
 
             spectrumid1, spectrumid2 = self.get_spectrum_pair_with_inchikey(inchikey1, inchikey2)
@@ -507,6 +512,9 @@ class FilteredPairsGenerator(DataGeneratorBase):
 
             batch_data.append((spectrumid1, spectrumid2, inchikey1, inchikey2, score))
         
+        if curr_batch_size < batch_size:
+            raise ValueError(f"Could not generate a full batch of {batch_size} in {num_attempts} attempts.")
+
         # Since we're not using a subprocess, it's probably slightly more efficent to get the data in one chunk
         # then yield it in the generator
         for data in batch_data:
