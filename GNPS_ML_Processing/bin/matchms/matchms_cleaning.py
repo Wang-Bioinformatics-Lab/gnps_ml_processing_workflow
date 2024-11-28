@@ -52,7 +52,7 @@ def main():
             msfilters.repair_inchi_inchikey_smiles,
             msfilters.clean_adduct,
             msfilters.add_parent_mass,
-            (msfilters.derive_annotation_from_compound_name, {'annotated_compound_names_file': os.path.join(results_folder, new_cached_compound_name_annotation_path)}),
+            # (msfilters.derive_annotation_from_compound_name, {'annotated_compound_names_file': os.path.join(results_folder, new_cached_compound_name_annotation_path)}),
             msfilters.derive_smiles_from_inchi,
             msfilters.derive_inchi_from_smiles,
             msfilters.derive_inchikey_from_inchi,
@@ -71,10 +71,18 @@ def main():
     pipeline = Pipeline(workflow,
                         logging_file=os.path.join(results_folder, "library_cleaning_log.log"),
                         logging_level="WARNING")
+    
+    ## DEBUG
+    print("Current directory contents:", os.listdir())
+    print(os.listdir(results_folder))
 
     temp_output = os.path.join(results_folder, "cleaned_spectra.mgf")
     if os.path.exists(temp_output):
         os.remove(temp_output)
+        
+    ### DEBUG
+    print("New directory contents:", os.listdir())
+    print(os.listdir(results_folder))
 
     pipeline.run(args.input_mgf_path, cleaned_query_file=temp_output)
     
