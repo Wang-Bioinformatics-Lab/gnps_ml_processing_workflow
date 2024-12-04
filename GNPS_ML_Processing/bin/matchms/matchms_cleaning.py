@@ -72,17 +72,11 @@ def main():
                         logging_file=os.path.join(results_folder, "library_cleaning_log.log"),
                         logging_level="WARNING")
     
-    ## DEBUG
-    print("Current directory contents:", os.listdir())
-    print(os.listdir(results_folder))
 
     temp_output = os.path.join(results_folder, "cleaned_spectra.mgf")
     if os.path.exists(temp_output):
         os.remove(temp_output)
         
-    ### DEBUG
-    print("New directory contents:", os.listdir())
-    print(os.listdir(results_folder))
 
     pipeline.run(args.input_mgf_path, cleaned_query_file=temp_output)
     
