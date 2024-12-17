@@ -33,11 +33,16 @@ tqdm.pandas()
 # os.environ['JOBLIB_TEMP_FOLDER'] = '/tmp'
 
 def extract_berkley_colision_energy(name):
-    energies = name.split("CollisionEnergy:")[1]
-    # break every two characters
-    energies = [energies[i:i+2] for i in range(0, len(energies), 2)]
-    energies = [int(e) for e in energies if e.isdigit()]
-    new_energy = round(np.mean(energies))
+    try:
+        energies = name.split("CollisionEnergy:")[1]
+        # break every two characters
+        energies = [energies[i:i+2] for i in range(0, len(energies), 2)]
+        energies = [int(e) for e in energies if e.isdigit()]
+        new_energy = round(np.mean(energies))
+    except Exception as e:
+        print(f"Error in extract_berkley_colision_energy: {e}")
+        print(f"Error in extract_berkley_colision_energy: {name}")
+        new_energy = None
     return new_energy
 
 def basic_cleaning(summary):
