@@ -45,6 +45,18 @@ def extract_berkley_colision_energy(name):
         new_energy = None
     return new_energy
 
+def extract_birmingham_colision_energy(name):
+    try:
+        parts = name.rsplit(" - ", maxsplit=1)
+        _, energy_str = parts
+        new_energy = int(float(energy_str.replace(" eV", "").strip()))
+
+    except Exception as e:
+        print(f"Error in extract_birmingham_colision_energy: {e}")
+        print(f"Error in extract_birmingham_colision_energy: {name}")
+        new_energy = None
+    return new_energy
+
 def basic_cleaning(summary):
     # scan
     summary.scan = summary.scan.astype('int')
@@ -171,11 +183,24 @@ def basic_cleaning(summary):
         mask = mask.fillna(False)
 
         if sum(mask) > 0:
-            print(f"Imputing {sum(mask)} collision energies using the Compund_Name field")
+            print(f"Imputing {sum(mask)} collision energies from BERKELEY-LAB using the Compund_Name field")
             summary.loc[mask, 'collision_energy'] = summary.Compund_Name.loc[mask].apply(lambda x: extract_berkley_colision_energy(x))
             summary.loc[fixable_BERKELEY, 'Compund_Name'] = summary.Compund_Name.loc[fixable_BERKELEY].apply(lambda x: x.split("CollisionEnergy:")[0].strip())
     except:
         pass
+
+    try:
+        fixable_birmingham = (summary.Compund_Name.str.contains('eV')) & ((summary.GNPS_library_membership == "BIRMINGHAM-UHPLC-MS-NEG") | (summary.GNPS_library_membership == "BIRMINGHAM-UHPLC-MS-POS"))
+    
+        mask = fixable_birmingham & (summary.collision_energy.isna())
+
+        if sum(mask) > 0:
+            print(f"Imputing {sum(mask)} collision energies from BIRMINGHAM-UHPLC-MS using the Compund_Name field")
+            summary.loc[mask, 'collision_energy'] = summary.Compund_Name.loc[mask].apply(lambda x: extract_birmingham_colision_energy(x))
+            summary.loc[fixable_birmingham, 'Compund_Name'] = summary.Compund_Name.loc[fixable_birmingham].apply(lambda x: x.split(" - ")[0].strip())
+    except:
+        pass
+    
     print(f"Lost {org_len - len(summary)} entries due to Compund_Name collision energy imputation.")
     
     # Sometimes the collision energy is in the GNPS_inst field
