@@ -31,51 +31,59 @@ def integrate_Classyfire(df:pd.DataFrame, cache_path:Path) -> pd.DataFrame:
     # Read the JSON files and create a DataFrame
     for file in classyfire_dirs:
         with open(file, 'r') as f:
-            d = json.load(f)
-            o = {}
-            o['InChIKey_14'] = file.stem[:14]
-            _kingdom = d.get('kingdom', None)
-            _superclass = d.get('superclass', None)
-            _class = d.get('class', None)
-            _subclass = d.get('subclass', None)
-            _direct_parent = d.get('direct_parent', None)
+            try:
+                d = json.load(f)
+                o = {}
+                o['InChIKey_14'] = file.stem[:14]
+                _kingdom = d.get('kingdom', None)
+                _superclass = d.get('superclass', None)
+                _class = d.get('class', None)
+                _subclass = d.get('subclass', None)
+                _direct_parent = d.get('direct_parent', None)
 
-            o['kingdom'] = None
-            if _kingdom is not None:
-                o['kingdom'] = _kingdom.get('name', '')
-                o['kingdom'] = o['kingdom'].replace('"', '')
-                o['kingdom'] = o['kingdom'].replace("'", '')
-                o['kingdom'] = o['kingdom'].replace(",", '')
+                o['kingdom'] = None
+                if _kingdom is not None:
+                    o['kingdom'] = _kingdom.get('name', '')
+                    o['kingdom'] = o['kingdom'].replace('"', '')
+                    o['kingdom'] = o['kingdom'].replace("'", '')
+                    o['kingdom'] = o['kingdom'].replace(",", '')
 
-            o['superclass'] = None
-            if _superclass is not None:
-                o['superclass'] = _superclass.get('name', '')
-                o['superclass'] = o['superclass'].replace('"', '')
-                o['superclass'] = o['superclass'].replace("'", '')
-                o['kingdom'] = o['kingdom'].replace(",", '')
+                o['superclass'] = None
+                if _superclass is not None:
+                    o['superclass'] = _superclass.get('name', '')
+                    o['superclass'] = o['superclass'].replace('"', '')
+                    o['superclass'] = o['superclass'].replace("'", '')
+                    o['kingdom'] = o['kingdom'].replace(",", '')
 
-            o['class'] = None
-            if _class is not None:
-                o['class'] = _class.get('name', '')
-                o['class'] = o['class'].replace('"', '')
-                o['class'] = o['class'].replace("'", '')
-                o['kingdom'] = o['kingdom'].replace(",", '')
+                o['class'] = None
+                if _class is not None:
+                    o['class'] = _class.get('name', '')
+                    o['class'] = o['class'].replace('"', '')
+                    o['class'] = o['class'].replace("'", '')
+                    o['kingdom'] = o['kingdom'].replace(",", '')
 
-            o['subclass'] = None
-            if _subclass is not None:
-                o['subclass'] = _subclass.get('name', '')
-                o['subclass'] = o['subclass'].replace('"', '')
-                o['subclass'] = o['subclass'].replace("'", '')
-                o['kingdom'] = o['kingdom'].replace(",", '')
+                o['subclass'] = None
+                if _subclass is not None:
+                    o['subclass'] = _subclass.get('name', '')
+                    o['subclass'] = o['subclass'].replace('"', '')
+                    o['subclass'] = o['subclass'].replace("'", '')
+                    o['kingdom'] = o['kingdom'].replace(",", '')
 
-            o['direct_parent'] = None
-            if _direct_parent is not None:
-                o['direct_parent'] = _direct_parent.get('name', '')
-                o['direct_parent'] = o['direct_parent'].replace('"', '')
-                o['direct_parent'] = o['direct_parent'].replace("'", '')
-                o['kingdom'] = o['kingdom'].replace(",", '')
+                o['direct_parent'] = None
+                if _direct_parent is not None:
+                    o['direct_parent'] = _direct_parent.get('name', '')
+                    o['direct_parent'] = o['direct_parent'].replace('"', '')
+                    o['direct_parent'] = o['direct_parent'].replace("'", '')
+                    o['kingdom'] = o['kingdom'].replace(",", '')
 
-            data.append(o)
+                data.append(o)
+            except json.JSONDecodeError as e:
+                logging.error(f"Error decoding JSON from file {file}: {e}")
+                continue
+
+            except Exception as e:
+                logging.error(f"Error processing file {file}: {e}")
+                continue
 
     # Create a DataFrame from the list of dictionaries
     classyfire_df = pd.DataFrame(data)
