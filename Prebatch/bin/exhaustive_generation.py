@@ -320,6 +320,11 @@ def main():
                                                                                 Unless set, pairs with NaN collision energy will be included.')
     args = parser.parse_args()
 
+    if args.temp_file_dir == '':
+        temp_file_dir = None
+    else:
+        temp_file_dir = args.temp_file_dir
+
     metadata_path = Path(args.metadata_path)
     assert metadata_path.exists(), f"Metadata file {metadata_path} does not exist."
     pairwise_similarities_path = Path(args.pairwise_similarities_path)    
@@ -339,7 +344,7 @@ def main():
                           mass_analyzer_lst=args.mass_analyzer_lst,
                           collision_energy_thresh=args.collision_energy_thresh,
                           filter=args.filter,
-                          temp_file_dir=args.temp_file_dir,
+                          temp_file_dir=temp_file_dir,
                           inital_index=args.inital_index,
                           skip_merge=args.skip_merge,
                           strict_collision_energy=args.strict_collision_energy)
