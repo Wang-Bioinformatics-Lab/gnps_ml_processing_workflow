@@ -14,7 +14,7 @@ params.strict_collision_energy = false
 params.mode = 'standard' // choices=['standard', 'filter', 'triplet']
 
 params.save_dir = './nf_output'
-params.temp_file_dir = '/home/user/LabData/michael_s/temp_work_dir/'
+params.temp_file_dir = ''
 params.output_name = 'my_data.hdf5'
 params.num_epochs = 1800
 
@@ -165,6 +165,7 @@ process exhaustivePairEnumeration {
 
     conda "$TOOL_FOLDER/conda_env.yml"
 
+    maxForks 1
     memory '75GB'
     cpus params.parallelism
 
