@@ -547,14 +547,15 @@ def basic_sampling_scheme(summary,
 
 def sample_structures_smart_inchikey(summary,
                                     similarity_matrix,
-                                    num_test_roots=500,
-                                    test_path_len=3,
+                                    num_test_roots=750,
+                                    test_path_len=4,
                                     test_edge_cutoff=0.70,
-                                    bins=(0.2, 1, 17),
+                                    bins=(0.4, 1, 13),
                                     maximum_training_set_reduction=0.80,
-                                    tail_points_per_bin=143,
-                                    datapoints_per_bin=143,
-                                    move_structures=False):
+                                    tail_points_per_bin=150,
+                                    datapoints_per_bin=350,
+                                    move_structures=False,
+                                    max_iter=1000):
     """
     Randomly sample num_test_roots structures and then iteratively remove structures from the training set
     until each bin has at least 30 structures.
@@ -578,6 +579,8 @@ def sample_structures_smart_inchikey(summary,
         The number of datapoints to have in each bin
     move_structures: bool
         Whether to move structures from the training set to the test set or remove them entirely.
+    max_iter: int
+        The maximum number of iterations to run the algorithm before stopping.
     """
     
     if  missing_structure_check(summary):
@@ -670,7 +673,12 @@ def sample_structures_smart_inchikey(summary,
 
     total_num_structures_lost = 0
     
+    iter_count = 0
     while min(current_bin_sizes) < datapoints_per_bin and len(training_set) > maximum_training_set_reduction * initial_train_size:
+            if iter_count > max_iter:
+                logging.warning("Stopped early due to reaching the maximum number of iterations.")
+                break
+            iter_count += 1
             if bin_to_optimize == len(current_bin_sizes) - 1:
                 break
                 # This needs more thinking, there may be no structures left to move to the bin
@@ -701,13 +709,16 @@ def sample_structures_smart_inchikey(summary,
             logging.debug('Moving %i structures from %s to %s', len(to_move), bin_to_sample_from, bin_to_optimize)
             
             # "Move the structures"
-            # Remove all of it's neighbors greater than the upper_bound from the trianing set
-            structures_to_remove = ((train_test_similarity >= upper_bound).loc[to_move] >= upper_bound).any(axis='index')
+            # Remove all of it's neighbors greater than the upper_bound from the trainings set
+            structures_to_remove = ((train_test_similarity >= upper_bound - 1e-3).loc[to_move] >= upper_bound - 1e-3).any(axis='index')
             structures_to_remove = structures_to_remove[structures_to_remove].index.values
+            ### DBEUG
             if not move_structures:
                 training_set = list(set(training_set) - set(structures_to_remove))
                 total_num_structures_lost += len(set(structures_to_remove))
                 logging.debug("Removing %i structures", len(set(structures_to_remove)))
+                if len(structures_to_remove) == 0:
+                    raise ValueError("Cannot remove any structures to further differentiate test-train points.")
             else:
                 test_set.extend(structures_to_remove)
                 training_set = list(set(training_set) - set(structures_to_remove))

@@ -18,8 +18,10 @@ params.input_mgf = "../GNPS_ML_Processing/nf_output/ML_ready_subset_positive/sel
 // Which task subset to use
 params.subset = "Structural_Similarity_Prediction"
 params.split_type = "sample_structures_smart_inchikey"//"structure_smart"  // 'basic_sampling_scheme', 'structure_smart', 'random' (random spectra), or 'structure' (random inchi14)
+// params.split_type = "structure"
+params.test_set_num = 4891
 
-params.test_set_num = 500//2300 // random structure=16154  // An integer (or float) representing the number (or percentage of) data points to use as a test set
+// params.test_set_num = 500//2300 // random structure=16154  // An integer (or float) representing the number (or percentage of) data points to use as a test set
 
 params.lowest_spectral_threshold = '0.6' 
 params.lowest_structural_threshold = '0.2' 
@@ -44,7 +46,7 @@ params.save_dir = "./nf_output/${params.subset}/${params.split_type}/"
 params.mass_analyzer_lst = "" // Default is "", which is all mass analyzers. Otherwise, a semicolon delimited list of mass analyzers to include
 
 // Paralellism for test set creation
-params.parallelism = 15
+params.parallelism = 5
 
 
 // Submodule for batch generation
@@ -68,6 +70,10 @@ include { sampleSeveralEpochs as filtered_strict_ce_train_sampler } from '../Pre
 include { assembleEpochs      as filtered_strict_ce_train_assembler } from '../Prebatch/presample_and_assemble_data.nf'
 include { sampleSeveralEpochs as filtered_strict_ce_val_sampler } from '../Prebatch/presample_and_assemble_data.nf'
 include { assembleEpochs      as filtered_strict_ce_val_assembler } from '../Prebatch/presample_and_assemble_data.nf'
+include { sampleSeveralEpochs as filtered_strict_ce_biased_train_sampler } from '../Prebatch/presample_and_assemble_data.nf'
+include { assembleEpochs      as filtered_strict_ce_biased_train_assembler } from '../Prebatch/presample_and_assemble_data.nf'
+include { sampleSeveralEpochs as filtered_strict_ce_biased_val_sampler } from '../Prebatch/presample_and_assemble_data.nf'
+include { assembleEpochs      as filtered_strict_ce_biased_val_assembler } from '../Prebatch/presample_and_assemble_data.nf'
 
 
 include { exhaustivePairEnumeration as unfiltered_test_enumerator } from '../Prebatch/presample_and_assemble_data.nf'
@@ -145,7 +151,7 @@ process generate_test_set {
   conda "$TOOL_FOLDER_LS/conda_env.yml"
   publishDir "./nf_output/${params.subset}/${params.split_type}", mode: 'copy'
 
-  cache false
+  cache true
 
   input:
   path csv_file
@@ -176,6 +182,28 @@ process generate_test_set {
           --sampling_strategy "$params.split_type" \
           --threshold 0.5 \
           --debug
+  """
+}
+
+process plot_data {
+  conda "$TOOL_FOLDER_LS/conda_env.yml"
+  publishDir "./nf_output/${params.subset}/${params.split_type}/plots", mode: 'copy'
+
+  cache false
+
+  input:
+  path test_rows_csv
+  path train_test_similarities_csv
+  path test_pairwise_similarities_csv
+
+  output:
+  path '*.png'
+
+  """
+  python3 $TOOL_FOLDER_LS/plot_data.py \
+          --test_csv "$test_rows_csv" \
+          --train_test_similarities "$train_test_similarities_csv" \
+          --test_pairwise_similarites "$test_pairwise_similarities_csv"
   """
 }
 
@@ -338,6 +366,9 @@ workflow {
   calculate_pairwise_similarity(generate_subset.out.output_summary)
   generate_test_set(generate_subset.out.output_summary, calculate_pairwise_similarity.out.pairwise_similarities, generate_subset.out.output_mgf)  
 
+  // Generate Plot(s)
+  plot_data(generate_test_set.out.test_rows_csv, generate_test_set.out.train_test_similarities_csv, generate_test_set.out.test_similarities_csv)
+
   // To split the epochs
   epoch_ch = Channel.of(1..params.num_epochs/params.split_size)
   val_epoch_ch = Channel.of(1,)
@@ -377,6 +408,7 @@ workflow {
   unfiltered_val_assembler(unfiltered_val_sampler.out.prebatched_files.collect(), 
                             unfiltered_val_sampler.out.name_file.take(1))
 
+  
   // Filtered
   filtered_train_sampler(
                       epoch_ch,
@@ -519,13 +551,50 @@ workflow {
   filtered_strict_ce_val_assembler(filtered_strict_ce_val_sampler.out.prebatched_files.collect(),
                           filtered_strict_ce_val_sampler.out.name_file.take(1))
 
+  // Filtered Strict CE Biased
+  filtered_strict_ce_biased_train_sampler(
+                      epoch_ch,
+                      generate_test_set.out.train_rows_csv, 
+                      generate_test_set.out.train_similarities_csv, 
+                      tuple(  params.batch_size,
+                              params.num_turns,
+                              "filter",  // mode
+                              params.mass_analyzer_lst,
+                              20,  // num_bins
+                              0.3, // exponential_bins
+                              true, // strict_collision_energy
+                              false, // force_one_epoch
+                              "train_filtered_strict_collision_energy_biased.hdf5", // output_name
+                          ))
+  filtered_strict_ce_biased_train_assembler(filtered_strict_ce_biased_train_sampler.out.prebatched_files.collect(), 
+                            filtered_strict_ce_biased_train_sampler.out.name_file.take(1))
+
+  filtered_strict_ce_biased_val_sampler(
+                      val_epoch_ch,
+                      generate_test_set.out.val_rows_csv,
+                      generate_test_set.out.val_similarities_csv, 
+                      tuple(  params.batch_size,
+                              params.num_turns,
+                              "filter",  // mode
+                              params.mass_analyzer_lst,
+                              20,  // num_bins
+                              0.3, // exponential_bins
+                              true, // strict_collision_energy
+                              true, // force_one_epoch
+                              "val_filtered_strict_collision_energy_biased.hdf5", // output_name
+                          ))
+
+  filtered_strict_ce_biased_val_assembler(filtered_strict_ce_biased_val_sampler.out.prebatched_files.collect(),
+                          filtered_strict_ce_biased_val_sampler.out.name_file.take(1))
+
   // Unfiltered Test
   unfiltered_test_enumerator(generate_test_set.out.test_rows_csv, 
                              generate_test_set.out.test_similarities_csv,
                              generate_test_set.out.train_test_similarities_csv,
                              tuple( false, // mode
                                     "", // mass_analyzer_lst
-                                    false // strict_collision_energy
+                                    false, // strict_collision_energy
+                                    "test_rows_pairs_unfiltered.parquet"
                              )
                             )
 
@@ -535,7 +604,8 @@ workflow {
                            generate_test_set.out.train_test_similarities_csv,
                            tuple( true, // mode
                                   params.mass_analyzer_lst, // mass_analyzer_lst
-                                  false // strict_collision_energy
+                                  false, // strict_collision_energy
+                                  "test_rows_pairs_filtered.parquet"
                            )
                           )
 
@@ -545,26 +615,27 @@ workflow {
                            generate_test_set.out.train_test_similarities_csv,
                            tuple( true, // mode
                                   params.mass_analyzer_lst, // mass_analyzer_lst
-                                  true // strict_collision_energy
+                                  true, // strict_collision_energy
+                                  "test_rows_pairs_filtered_strict_ce.parquet"
                            )
                           )
 
-  // build_library(generate_test_set.out.test_rows_mgf)
+  build_library(generate_test_set.out.test_rows_mgf)
 
-  // spectral_similarity_calculation(build_library.out.libraries, generate_test_set.out.train_rows_mgf)
+  spectral_similarity_calculation(build_library.out.libraries, generate_test_set.out.train_rows_mgf)
 
-  // structural_similarity_calculation(generate_test_set.out.train_rows_csv, 
-                                    // generate_test_set.out.test_rows_csv)
+  structural_similarity_calculation(generate_test_set.out.train_rows_csv, 
+                                     generate_test_set.out.test_rows_csv)
 
-  // split_data(generate_test_set.out.train_rows_csv, 
-  //           generate_test_set.out.test_rows_csv, 
-  //           generate_test_set.out.train_rows_mgf, 
-  //           generate_test_set.out.test_rows_mgf,
-  //           spectral_similarity_calculation.out.spectral_similarities,
-  //           structural_similarity_calculation.out.structural_similarities)
+  split_data(generate_test_set.out.train_rows_csv, 
+            generate_test_set.out.test_rows_csv, 
+            generate_test_set.out.train_rows_mgf, 
+            generate_test_set.out.test_rows_mgf,
+            spectral_similarity_calculation.out.spectral_similarities,
+            structural_similarity_calculation.out.structural_similarities)
 
-  // output_handler(split_data.out.train_rows_csv_spectral, 
-  //               split_data.out.test_rows_csv_spectral, 
-  //               split_data.out.train_rows_mgf_spectral, 
-  //               split_data.out.test_rows_mgf_spectral)
+  output_handler(split_data.out.train_rows_csv_spectral, 
+                split_data.out.test_rows_csv_spectral, 
+                split_data.out.train_rows_mgf_spectral, 
+                split_data.out.test_rows_mgf_spectral)
 }
