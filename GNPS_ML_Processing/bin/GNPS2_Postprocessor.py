@@ -353,6 +353,7 @@ def clean_smiles(summary, smiles_mapping_cache=None):
     
     print("\t Begining SMILES cleaning", flush=True)
     # Create a smiles to tautomerized smiles mapping
+    cached_smiles_mapping = None
     if smiles_mapping_cache is not None and os.path.exists(smiles_mapping_cache):
         try:
             with open(smiles_mapping_cache, 'r', encoding="utf-8") as f:
@@ -790,6 +791,16 @@ def main():
     cleaned_parquet_path    = str(args.output_parquet_path)
     cleaned_mgf_path        = str(args.output_mgf_path)
     smiles_mapping_cache   = str(args.smiles_mapping_cache)
+
+    # Dump all args
+    print(f"Input CSV Path: {csv_path}")
+    print(f"Input MGF Path: {mgf_path}")
+    print(f"Output CSV Path: {cleaned_csv_path}")
+    print(f"Output Parquet Path: {cleaned_parquet_path}")
+    print(f"Output MGF Path: {cleaned_mgf_path}")
+    print(f"Includes MassBank: {args.includes_massbank}")
+    print(f"Includes Riken: {args.includes_riken}")
+    print(f"Smiles Mapping Cache: {smiles_mapping_cache}")
 
     if not os.path.isfile(cleaned_csv_path):
         if not os.path.isfile(cleaned_parquet_path):
