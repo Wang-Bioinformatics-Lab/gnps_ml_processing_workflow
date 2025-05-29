@@ -55,6 +55,19 @@ process environment_creation {
   path "dummy.text", emit: dummy
   
   """
+  # If it doesn't exist, create the conda environment
+  if [ ! -d "$params.conda_path" ]; then
+    mamba env create --prefix $params.conda_path --file $TOOL_FOLDER/conda_env.yml
+  else
+    echo "Conda environment already exists at $params.conda_path"
+  fi
+
+  if [ ! -d "$params.matchms_conda_path" ]; then
+    mamba env create --prefix $params.matchms_conda_path --file $TOOL_FOLDER/gnps_ml_processing_matchms.yml
+  else
+    echo "MatchMS conda environment already exists at $params.matchms_conda_path"
+  fi
+  # Update the conda environment with the latest packages
   mamba env update --file $TOOL_FOLDER/conda_env.yml --prefix $params.conda_path 
   mamba env update --file $TOOL_FOLDER/gnps_ml_processing_matchms.yml --prefix $params.matchms_conda_path
 
@@ -231,6 +244,7 @@ process postprocess {
     """
   else
     """
+    cp $TOOL_FOLDER/smiles_mapping_cache.json ./smiles_mapping_cache.json --smiles_mapping_cache "smiles_mapping_cache.json"
     python3 $TOOL_FOLDER/GNPS2_Postprocessor.py
     """
 }
