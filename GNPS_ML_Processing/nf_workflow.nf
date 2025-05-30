@@ -244,8 +244,8 @@ process postprocess {
     """
   else
     """
-    cp $TOOL_FOLDER/smiles_mapping_cache.json ./smiles_mapping_cache.json --smiles_mapping_cache "smiles_mapping_cache.json"
-    python3 $TOOL_FOLDER/GNPS2_Postprocessor.py
+    cp $TOOL_FOLDER/smiles_mapping_cache.json ./smiles_mapping_cache.json
+    python3 $TOOL_FOLDER/GNPS2_Postprocessor.py --smiles_mapping_cache "smiles_mapping_cache.json"
     """
 }
 
