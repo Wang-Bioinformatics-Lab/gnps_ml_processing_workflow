@@ -88,6 +88,9 @@ def generate_json_mgf(mgf_path:str, csv_path:str, output_path:str, progress_bar=
         if per_library:
             all_libraries = summary.GNPS_library_membership.unique()
             per_library_jsons = {library_name: open(os.path.join(output_path, library_name+"_cleaned.json"), 'w') for library_name in all_libraries}
+
+        # Precompute rows as dicts
+        summary = summary.set_index("spectrum_id").to_dict(orient="index")
         
         print("Writing JSON")
         start_time = time()
@@ -104,10 +107,12 @@ def generate_json_mgf(mgf_path:str, csv_path:str, output_path:str, progress_bar=
             
             for _, spectra in enumerate(mgf_file):
                 ccms_id = spectra['params']['title']
-                row = summary.loc[summary['spectrum_id'] == ccms_id].iloc[0]
-                if len(row) == 0:
+                row = summary.get(ccms_id)
+                
+                if row is None:
                     continue
-                row = row.to_dict()
+
+                row["spectrum_id"] = ccms_id
                 
                 # A list of peaks: [(mz, i), (mz, i), ...]
                 row['peaks_json'] = list(zip(spectra['m/z array'], spectra['intensity array']))
