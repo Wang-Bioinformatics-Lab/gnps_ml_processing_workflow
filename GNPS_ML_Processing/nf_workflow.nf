@@ -23,6 +23,9 @@ params.spectra_parallelism = 10000
 
 params.path_to_provenance = "/home/user/LabData/data/GNPS_Library_Provenance/GNPS_Library_Provenance/"
 
+// API Cache path
+params.api_cache = ""
+
 params.path_to_nist = ""
 
 // If true, will download and reparse massbank, additionally removing all massbank entires from GNPS
@@ -52,6 +55,19 @@ process environment_creation {
   path "dummy.text", emit: dummy
   
   """
+  # If it doesn't exist, create the conda environment
+  if [ ! -d "$params.conda_path" ]; then
+    mamba env create --prefix $params.conda_path --file $TOOL_FOLDER/conda_env.yml
+  else
+    echo "Conda environment already exists at $params.conda_path"
+  fi
+
+  if [ ! -d "$params.matchms_conda_path" ]; then
+    mamba env create --prefix $params.matchms_conda_path --file $TOOL_FOLDER/gnps_ml_processing_matchms.yml
+  else
+    echo "MatchMS conda environment already exists at $params.matchms_conda_path"
+  fi
+  # Update the conda environment with the latest packages
   mamba env update --file $TOOL_FOLDER/conda_env.yml --prefix $params.conda_path 
   mamba env update --file $TOOL_FOLDER/gnps_ml_processing_matchms.yml --prefix $params.matchms_conda_path
 
@@ -200,7 +216,7 @@ process postprocess {
   publishDir "$params.output_dir", mode: 'copy'
   publishDir "$TOOL_FOLDER", mode: 'copy', pattern: "smiles_mapping_cache.json", saveAs: { filename -> "smiles_mapping_cache.json" } // The script will create this file and copy it back
 
-  cache false
+  cache true
 
   input:
   path merged_csv
@@ -228,9 +244,34 @@ process postprocess {
     """
   else
     """
-    python3 $TOOL_FOLDER/GNPS2_Postprocessor.py
+    cp $TOOL_FOLDER/smiles_mapping_cache.json ./smiles_mapping_cache.json
+    python3 $TOOL_FOLDER/GNPS2_Postprocessor.py --smiles_mapping_cache "smiles_mapping_cache.json"
     """
 }
+
+process integrate_api_info {
+  conda "$params.conda_path"
+
+  publishDir "$params.output_dir", mode: 'copy'
+
+  cache false
+
+  input:
+  path cleaned_csv
+  path chem_info_service_api_cache, stageAs: 'api_cache/ChemInfoService/*'
+  path classyfire_api_cache, stageAs: 'api_cache/Classyfire/*'
+  path npclassifier_api_cache, stageAs: 'api_cache/Npclassifier/*'
+
+  output:
+  path "ALL_GNPS_cleaned_enriched.csv", emit: cleaned_csv
+  
+  """
+  python3 $TOOL_FOLDER/integrate_API_info.py   --input_csv_path ${cleaned_csv} \
+                                               --output_csv_path "./ALL_GNPS_cleaned_enriched.csv" \
+                                               --api_cache_path "./api_cache"
+  """
+}
+
 // Incoperate MatchMS Filtering into the Pipeline
 process matchms_filtering {
   conda "$params.matchms_conda_path"
@@ -384,29 +425,6 @@ process calculate_similarities {
   """
 }
 
-process split_subsets {
-  conda "$params.conda_path"
-
-  publishDir "$params.output_dir", mode: 'copy'
-
-  input:
-  path spectral_similarities
-
-  // output: 
-  // path "subsets/*"
-
-  // exec:
-  // println "$spectral_similarities"
-
-  // Want to split CSV, parquet
-  // Requires CSV, parquet, similarities
-  """
-  python3 $TOOL_FOLDER/GNPS2_Subset_Split.py  ${spectral_similarities}/merged_pairs.tsv \
-                                              $baseDir/nf_output/spectra/${spectral_similarities}.parquet \
-                                              $baseDir/nf_output/summary/${spectral_similarities}.csv
-  """
-}
-
 process publish_similarities_for_prediction {
   // I'm not sure if there's a better way to skip the files we don't need, for now we'll just ignore the errors
   publishDir "./nf_output/", mode: 'copy'
@@ -465,8 +483,21 @@ workflow {
 
   postprocess(merged_csv, merged_mgf, adduct_mapping_ch)
 
+  if (params.api_cache != "") {
+    chem_info_service_api_cache = Channel.fromPath(params.api_cache + "/ChemInfoService/**/*.json")
+    classyfire_api_cache        = Channel.fromPath(params.api_cache + "/Classyfire/**/*.json")
+    npclassifier_api_cache      = Channel.fromPath(params.api_cache + "/Npclassifier/**/*.json")
+    api_info_csv = integrate_api_info(  postprocess.out.cleaned_csv, 
+                                        chem_info_service_api_cache.collect(),
+                                        classyfire_api_cache.collect(),
+                                        npclassifier_api_cache.collect()
+                                      )
+  } else{
+    api_info_csv = postprocess.out.cleaned_csv
+  }
+
   if (params.export_json) {
-    export_full_json(postprocess.out.cleaned_csv, postprocess.out.cleaned_mgf)
+    export_full_json(api_info_csv, postprocess.out.cleaned_mgf)
   }
 
   if (params.matchms_pipeline) {
@@ -480,7 +511,7 @@ workflow {
 
   if (params.select_clean_subset) {
     // Perform basic data selection and cleaning for ML
-    select_data_for_ml(postprocess.out.cleaned_csv, postprocess.out.cleaned_mgf)
+    select_data_for_ml(api_info_csv, postprocess.out.cleaned_mgf)
 
   }
 }

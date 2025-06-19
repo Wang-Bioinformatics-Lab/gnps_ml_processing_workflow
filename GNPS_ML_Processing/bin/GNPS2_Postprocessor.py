@@ -33,11 +33,28 @@ tqdm.pandas()
 # os.environ['JOBLIB_TEMP_FOLDER'] = '/tmp'
 
 def extract_berkley_colision_energy(name):
-    energies = name.split("CollisionEnergy:")[1]
-    # break every two characters
-    energies = [energies[i:i+2] for i in range(0, len(energies), 2)]
-    energies = [int(e) for e in energies if e.isdigit()]
-    new_energy = round(np.mean(energies))
+    try:
+        energies = name.split("CollisionEnergy:")[1]
+        # break every two characters
+        energies = [energies[i:i+2] for i in range(0, len(energies), 2)]
+        energies = [int(e) for e in energies if e.isdigit()]
+        new_energy = round(np.mean(energies))
+    except Exception as e:
+        print(f"Error in extract_berkley_colision_energy: {e}")
+        print(f"Error in extract_berkley_colision_energy: {name}")
+        new_energy = None
+    return new_energy
+
+def extract_birmingham_colision_energy(name):
+    try:
+        parts = name.rsplit(" - ", maxsplit=1)
+        _, energy_str = parts
+        new_energy = int(float(energy_str.replace(" eV", "").strip()))
+
+    except Exception as e:
+        print(f"Error in extract_birmingham_colision_energy: {e}")
+        print(f"Error in extract_birmingham_colision_energy: {name}")
+        new_energy = None
     return new_energy
 
 def basic_cleaning(summary):
@@ -166,11 +183,24 @@ def basic_cleaning(summary):
         mask = mask.fillna(False)
 
         if sum(mask) > 0:
-            print(f"Imputing {sum(mask)} collision energies using the Compund_Name field")
+            print(f"Imputing {sum(mask)} collision energies from BERKELEY-LAB using the Compund_Name field")
             summary.loc[mask, 'collision_energy'] = summary.Compund_Name.loc[mask].apply(lambda x: extract_berkley_colision_energy(x))
             summary.loc[fixable_BERKELEY, 'Compund_Name'] = summary.Compund_Name.loc[fixable_BERKELEY].apply(lambda x: x.split("CollisionEnergy:")[0].strip())
     except:
         pass
+
+    try:
+        fixable_birmingham = (summary.Compund_Name.str.contains('eV')) & ((summary.GNPS_library_membership == "BIRMINGHAM-UHPLC-MS-NEG") | (summary.GNPS_library_membership == "BIRMINGHAM-UHPLC-MS-POS"))
+    
+        mask = fixable_birmingham & (summary.collision_energy.isna())
+
+        if sum(mask) > 0:
+            print(f"Imputing {sum(mask)} collision energies from BIRMINGHAM-UHPLC-MS using the Compund_Name field")
+            summary.loc[mask, 'collision_energy'] = summary.Compund_Name.loc[mask].apply(lambda x: extract_birmingham_colision_energy(x))
+            summary.loc[fixable_birmingham, 'Compund_Name'] = summary.Compund_Name.loc[fixable_birmingham].apply(lambda x: x.split(" - ")[0].strip())
+    except:
+        pass
+    
     print(f"Lost {org_len - len(summary)} entries due to Compund_Name collision energy imputation.")
     
     # Sometimes the collision energy is in the GNPS_inst field
@@ -323,6 +353,7 @@ def clean_smiles(summary, smiles_mapping_cache=None):
     
     print("\t Begining SMILES cleaning", flush=True)
     # Create a smiles to tautomerized smiles mapping
+    cached_smiles_mapping = None
     if smiles_mapping_cache is not None and os.path.exists(smiles_mapping_cache):
         try:
             with open(smiles_mapping_cache, 'r', encoding="utf-8") as f:
@@ -760,6 +791,16 @@ def main():
     cleaned_parquet_path    = str(args.output_parquet_path)
     cleaned_mgf_path        = str(args.output_mgf_path)
     smiles_mapping_cache   = str(args.smiles_mapping_cache)
+
+    # Dump all args
+    print(f"Input CSV Path: {csv_path}")
+    print(f"Input MGF Path: {mgf_path}")
+    print(f"Output CSV Path: {cleaned_csv_path}")
+    print(f"Output Parquet Path: {cleaned_parquet_path}")
+    print(f"Output MGF Path: {cleaned_mgf_path}")
+    print(f"Includes MassBank: {args.includes_massbank}")
+    print(f"Includes Riken: {args.includes_riken}")
+    print(f"Smiles Mapping Cache: {smiles_mapping_cache}")
 
     if not os.path.isfile(cleaned_csv_path):
         if not os.path.isfile(cleaned_parquet_path):
