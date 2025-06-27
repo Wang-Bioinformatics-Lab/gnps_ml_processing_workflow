@@ -6,7 +6,6 @@ params.OMETALINKING_YAML = "flow_filelinking.yaml"
 params.OMETAPARAM_YAML = "job_parameters.yaml"
 
 TOOL_FOLDER_LS = "$moduleDir/bin"
-FAST_SEARCH_LIBRARY_BIN = "$TOOL_FOLDER_LS/GNPS_FastSearch_Library/bin"
 
 // Input data
 params.input_csv = "https://fileserver.wanglab.science/p_ml_cleanup/to_upload/cleaning_outputs/ML_ready_subset_positive/selected_summary.csv"
@@ -176,80 +175,6 @@ process plot_data {
           --test_csv "$test_rows_csv" \
           --train_test_similarities "$train_test_similarities_csv" \
           --test_pairwise_similarites "$test_pairwise_similarities_csv"
-  """
-}
-
-// Build a library for the test set to search against
-process build_library {
-  conda "$TOOL_FOLDER_LS/conda_env.yml"
-
-  input:
-  path mgf_file
-
-  output:
-  path 'libraries', emit: libraries
-
-  """
-  ret_value=(\$(python3 $TOOL_FOLDER_LS/build_library.py --input_mgf "$mgf_file" --output_folder "./libraries"))
-  build_input_folder=\${ret_value[0]}
-  build_index_folder=\${ret_value[1]}
-  spectrum_level_metadata_path=\${ret_value[2]}
-  file_level_metadata_path=\${ret_value[3]}
-
-  echo "Build Input Folder: " \$build_input_folder
-  echo "Build Index Folder: " \$build_index_folder
-  echo "Spectrum Level Metadata Path: " \$spectrum_level_metadata_path
-  echo "File Level Metadata Path: " \$file_level_metadata_path
-
-  $FAST_SEARCH_LIBRARY_BIN/main_execmodule ExecIndex $FAST_SEARCH_LIBRARY_BIN/generic_params \
-  -autoINDEX_TYPE mxc \
-  -autoINPUT_SPECS  \$build_input_folder \
-  -autoOUTPUT_INDEX  \$build_index_folder \
-  -autoSNR 0 \
-  -autoMIN_MZ_PEAK 0 \
-  -autoWINDOW_FILTER_RANK 6 \
-  -autoWINDOW_FILTER_SIZE 50 \
-  -autoMIN_PEAKS_AFTER_PROCESSING 1 \
-
-  $FAST_SEARCH_LIBRARY_BIN/main_execmodule ExecIndex $FAST_SEARCH_LIBRARY_BIN/generic_params \
-  -autoINPUT_INDEX  \$build_index_folder \
-  -autoINPUT_METADATA_ANNOTATIONS \$spectrum_level_metadata_path \
-  -autoINPUT_METADATA_FILENAMES \$file_level_metadata_path
-  """
-}
-
-// Perform search against the library for similarities
-process spectral_similarity_calculation {
-  conda "$TOOL_FOLDER_LS/conda_env.yml"
-
-  input:
-  path library_dir
-  path comparison_mgf
-
-  output:
-  path 'output.tsv', emit: spectral_similarities
-
-  """
-  ret_value=(\$(python3 $TOOL_FOLDER_LS/build_query_file.py --input_mgf "$comparison_mgf"))
-  temp_query_mgf=\${ret_value[0]}
-
-  echo "Query MGF File Path: " \$temp_query_mgf
-  echo "Minimum Cosine Threshold: " $params.lowest_spectral_threshold
-
- $FAST_SEARCH_LIBRARY_BIN/main_execmodule ExecIndex $FAST_SEARCH_LIBRARY_BIN/generic_params \
-  -autoINPUT_INDEX ${library_dir}/build_index \
-  -autoOUTPUT_RESULTS output.tsv  \
-  -autoINPUT_SPECS \$temp_query_mgf \
-  -autoPM_TOLERANCE $params.pm_tolerance  \
-  -autoFRAG_TOLERANCE $params.fragment_tolerance  \
-  -autoDELTA_MZ_ABOVE $params.lower_delta \
-  -autoDELTA_MZ_BELOW $params.upper_delta \
-  -autoTHETA $params.lowest_spectral_threshold \
-  -autoSPECTRUM_DISK_ACCESS_POLICY DISK   \
-  -autoINDEX_DISK_ACCESS_POLICY DISK  \
-  -autoOUTPUT_FILTERED_QUERIES_JSON_FOLDER temp_results_json_folder \
-  -autoDELTA_F 0.4 \
-  -autoVALIDATE 0
   """
 }
 
