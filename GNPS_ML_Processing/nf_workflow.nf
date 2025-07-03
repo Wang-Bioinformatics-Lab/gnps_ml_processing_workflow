@@ -98,7 +98,7 @@ process prep_params {
 process export {
     conda "$params.conda_path"
 
-    maxForks 4
+    maxForks 1
     errorStrategy { sleep(Math.pow(2, task.attempt) * 200 as long); return 'retry' }
     maxRetries 5
 
