@@ -19,7 +19,7 @@ import datetime
 import argparse
 
 PARALLEL_WORKERS = 1
-TAUTOMERIZATION_PARALLEL_WORKERS = min(os.cpu_count(), 16)
+TAUTOMERIZATION_PARALLEL_WORKERS = min(os.cpu_count(), 4)
 
 import sys
 
