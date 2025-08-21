@@ -436,6 +436,11 @@ def validate_monoisotopic_masses(summary:pd.DataFrame):
     # Anything uparsable should have an ExactMass of np.nan
     summary.loc[~parsable_mask, 'ExactMass'] = np.nan
     
+    if sum(parsable_mask) == 0:
+        # Nothing to do 
+        print("No parsable SMILES found, skipping ExactMass validation.")
+        return summary
+
     correct_masses = summary.loc[parsable_mask, 'Smiles'].parallel_apply(lambda x: Descriptors.ExactMolWt(Chem.MolFromSmiles(x)))
     correct_mask = summary.loc[parsable_mask, 'ExactMass'] != correct_masses
     
@@ -458,6 +463,9 @@ def validate_monoisotopic_masses(summary:pd.DataFrame):
 def check_M_H_adducts(summary):
     # Verify that there are no protonated or unprotonated smiles strings
     mask = (summary.Smiles != '')
+    if sum(mask) == 0:
+        print("No SMILES found, skipping M-H adduct check.")
+        return summary
     result = summary.loc[mask, 'Smiles'].parallel_apply(neutralize_atoms)   # Returns num_removed_charges, pos_and_neg, sum_of_charges, smiles
     
     num_removed_charges = result.apply(lambda x: x[0]).astype(int)
