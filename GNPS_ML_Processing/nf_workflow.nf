@@ -258,7 +258,7 @@ process integrate_api_info {
 
   input:
   path cleaned_csv
-  path chem_info_service_api_cache, stageAs: 'api_cache/ChemInfoService/*'
+  path chem_info_service_api_cache, stageAs: 'api_cache/ChemInfoService/*'  // TODO: Can we symlink the directory rather than the files to save time?
   path classyfire_api_cache, stageAs: 'api_cache/Classyfire/*'
   path npclassifier_api_cache, stageAs: 'api_cache/Npclassifier/*'
 

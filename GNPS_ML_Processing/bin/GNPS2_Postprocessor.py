@@ -399,23 +399,25 @@ def clean_smiles(summary, smiles_mapping_cache=None):
     
     # Check the INCHI and SMILES are equivalent
     mask = (summary.Smiles != '') & (summary.INCHI != '')
-    inchi_from_smiles = summary.loc[mask].apply(lambda x: Chem.inchi.MolToInchi(Chem.MolFromSmiles(x['Smiles'])), axis=1)
-    equivalency_mask = (inchi_from_smiles != summary.loc[mask, 'INCHI'])
-    if sum(equivalency_mask) > 0 :
-        print(f"Warning: {sum(equivalency_mask)} entries have INCHI and SMILES that are not equivalent, SMILES values will be used to replace INCHI")
-        summary.loc[mask & equivalency_mask, 'INCHI'] = inchi_from_smiles.loc[equivalency_mask]
+    if sum(mask) > 0:
+        inchi_from_smiles = summary.loc[mask].apply(lambda x: Chem.inchi.MolToInchi(Chem.MolFromSmiles(x['Smiles'])), axis=1)
+        equivalency_mask = (inchi_from_smiles != summary.loc[mask, 'INCHI'])
+        if sum(equivalency_mask) > 0 :
+            print(f"Warning: {sum(equivalency_mask)} entries have INCHI and SMILES that are not equivalent, SMILES values will be used to replace INCHI")
+            summary.loc[mask & equivalency_mask, 'INCHI'] = inchi_from_smiles.loc[equivalency_mask]
     
     # If no INCHI but we have SMILES, convert it to INCHI
     mask = (summary.Smiles != '') & (summary.INCHI == '')
-    summary.loc[mask, 'INCHI'] = summary.loc[mask, 'Smiles'].apply(lambda x: Chem.inchi.MolToInchi(Chem.MolFromSmiles(x)))
-    # Fill in INCHI key
-    # Generate all inchi keys
-    all_keys = summary.loc[:, 'INCHI'].apply(lambda x: Chem.inchi.InchiToInchiKey(x) if x != '' else '')
-    # Check existing keys
-    incorrect_mask = (summary.InChIKey_smiles != all_keys)
-    if sum(incorrect_mask) > 0 :
-        print(f"Warning: {sum(incorrect_mask)} entries have INCHI and INCHIKey that are not equivalent, new INCHIKeys will be generated based on INCHI")
-        summary.loc[incorrect_mask, 'InChIKey_smiles'] = summary.loc[incorrect_mask, 'INCHI'].apply(lambda x: Chem.inchi.InchiToInchiKey(x))
+    if sum(mask) > 0:
+        summary.loc[mask, 'INCHI'] = summary.loc[mask, 'Smiles'].apply(lambda x: Chem.inchi.MolToInchi(Chem.MolFromSmiles(x)))
+        # Fill in INCHI key
+        # Generate all inchi keys
+        all_keys = summary.loc[:, 'INCHI'].apply(lambda x: Chem.inchi.InchiToInchiKey(x) if x != '' else '')
+        # Check existing keys
+        incorrect_mask = (summary.InChIKey_smiles != all_keys)
+        if sum(incorrect_mask) > 0 :
+            print(f"Warning: {sum(incorrect_mask)} entries have INCHI and INCHIKey that are not equivalent, new INCHIKeys will be generated based on INCHI")
+            summary.loc[incorrect_mask, 'InChIKey_smiles'] = summary.loc[incorrect_mask, 'INCHI'].apply(lambda x: Chem.inchi.InchiToInchiKey(x))
        
     return summary
 
