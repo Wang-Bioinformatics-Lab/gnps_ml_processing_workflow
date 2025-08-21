@@ -290,6 +290,8 @@ process matchms_filtering {
   path "compound_name_annotation.csv"
 
   """
+  mkdir -p ./matchms_output/
+  
   python3 $TOOL_FOLDER/matchms/matchms_cleaning.py  --input_mgf_path ${cleaned_mgf_chunk}\
                                                     --cached_compound_name_annotation_path "$TOOL_FOLDER/matchms/pubchem_names.csv" \
                                                     --output_path "./matchms_output/" \
