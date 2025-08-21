@@ -32,6 +32,10 @@ def main():
     processors_numbers = args.p
     print("Recommended Parallelism:", max(1, int(len(all_spectra_list)/1000)))
     num_sections = max(1, processors_numbers)
+    # If num_sections is larger than the number of spectra, only use num_spectra/100 parallel workers
+    if num_sections > len(all_spectra_list) / 100:
+        num_sections = max(1, int(len(all_spectra_list) / 100))
+
     indices = np.array_split(np.arange(1,len(all_spectra_list)+1), num_sections)
     scan_start = [x[0] for x in indices]
     splits = np.array_split(all_spectra_list, num_sections)
