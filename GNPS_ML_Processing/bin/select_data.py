@@ -176,7 +176,7 @@ def basic_spectral_filter(summary:pd.DataFrame, spectra:list,
         summary = summary.loc[summary.ppmBetweenExpAndThMass <= max_precursor_ppm_error]
     logging.info("Filtered by precursor_mz error in %s seconds", time() - time_start)
     logging.info("New Summary Count: %s Length difference: %s", len(summary), org_len - len(summary))
-    logging.info("New Number of Unique Structures: %s", len(summary.InChIKey_smiles.astype(str).str[:14]..unique()))
+    logging.info("New Number of Unique Structures: %s", len(summary.InChIKey_smiles.astype(str).str[:14].unique()))
 
     allowed_ids = set(summary.loc[:, "spectrum_id"].values)
 
@@ -213,7 +213,7 @@ def select_data(input_csv_path:str, input_mgf_path:str, ion_mode:str):
     summary = summary.loc[summary['GNPS_library_membership'] != 'GNPS-LIBRARY']
     logging.info("Original Summary Count: %s", original_len)
     logging.info("Number of Spectra not in GNPS-LIBRARY: %s", len(summary))
-    logging.info("New Number of Unique Structures: %s", len(summary.InChIKey_smiles.astype(str).str[:14]..unique()))
+    logging.info("New Number of Unique Structures: %s", len(summary.InChIKey_smiles.astype(str).str[:14].unique()))
 
     # Remove BMDMS from the train/test data
     logging.info("Removing BMDMS from the data")
@@ -222,7 +222,7 @@ def select_data(input_csv_path:str, input_mgf_path:str, ion_mode:str):
     summary = summary.loc[summary['GNPS_library_membership'] != 'MSMS-Pos-bmdms-np_20200811'] # If RIKEN is imported
     logging.info("Original Summary Count: %s", original_len)
     logging.info("Number of Spectra not in BMDMS: %s", len(summary))
-    logging.info("New Number of Unique Structures: %s", len(summary.InChIKey_smiles.astype(str).str[:14]..unique()))
+    logging.info("New Number of Unique Structures: %s", len(summary.InChIKey_smiles.astype(str).str[:14].unique()))
     
     # Split based on ion mode
     logging.info('Selected Ion Mode: %s', ion_mode)
@@ -230,7 +230,7 @@ def select_data(input_csv_path:str, input_mgf_path:str, ion_mode:str):
     selected_summary = summary.loc[summary['Ion_Mode'] == ion_mode]
     logging.info("Original Summary Count: %s", original_len)
     logging.info("Number of Spectra With Correct Ion Mode: %s", len(selected_summary))
-    logging.info("New Number of Unique Structures: %s", len(summary.InChIKey_smiles.astype(str).str[:14]..unique()))
+    logging.info("New Number of Unique Structures: %s", len(summary.InChIKey_smiles.astype(str).str[:14].unique()))
     
     # Filter spectra by metadata requirements
     logging.info("Filtering Spectra")
@@ -241,7 +241,7 @@ def select_data(input_csv_path:str, input_mgf_path:str, ion_mode:str):
     logging.info("Filtered Spectra in %s seconds", time() - start_time)
     logging.info("Original Spectra Count: %s", orignal_count)
     logging.info("New Spectra Count: %s", len(selected_summary))
-    logging.info("New Number of Unique Structures: %s", len(summary.InChIKey_smiles.astype(str).str[:14]..unique()))
+    logging.info("New Number of Unique Structures: %s", len(summary.InChIKey_smiles.astype(str).str[:14].unique()))
     
     logging.info("Cleaning Spectra")
     start_time = time()
