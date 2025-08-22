@@ -92,7 +92,7 @@ def integrate_Classyfire(df:pd.DataFrame, cache_path:Path) -> pd.DataFrame:
     classyfire_df.rename(columns={col: f"classyfire_{col}" for col in DESIRED_COLUMNS}, inplace=True)
 
     # InChIKey_smiles is the full InChIKey in df
-    df['InChIKey_14'] = df['InChIKey_smiles'].str[:14]
+    df['InChIKey_14'] = df['InChIKey_smiles'].astype(str).str[:14]
     logging.info(f"Found {len(df['InChIKey_14'].unique())} unique InChIKey_14 in the input DataFrame.")
     logging.info(f"Found {len(classyfire_df['InChIKey_14'].unique())} unique InChIKey_14 in the Classyfire cache.")
     # Merge the DataFrames on the InChIKey_14 column
@@ -145,7 +145,7 @@ def integrate_ChemInfoService(df:pd.DataFrame, cache_path:Path) -> pd.DataFrame:
 
     # InChIKey_smiles is the full InChIKey in df
     
-    df['InChIKey_14'] = df['InChIKey_smiles'].str[:14]
+    df['InChIKey_14'] = df['InChIKey_smiles'].astype(str).str[:14]
     logging.info(f"Found {len(df['InChIKey_14'].unique())} unique InChIKey_14 in the input DataFrame.")
     logging.info(f"Found {len(np_classifier_df['InChIKey_14'].unique())} unique InChIKey_14 in the ChemInfoService cache.")
     # Merge the DataFrames on the InChIKey_14 column
