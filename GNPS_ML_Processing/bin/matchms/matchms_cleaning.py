@@ -81,7 +81,12 @@ def main():
     pipeline.run(args.input_mgf_path, cleaned_query_file=temp_output)
     
     # Move the temporary output to the final position
-    shutil.move(temp_output, os.path.join(results_folder, "cleaned_spectra.mgf"))
+    # Check if exists
+    if os.path.exists(temp_output):
+        print(f"Library cleaning completed. Cleaned spectra saved to {temp_output}")
+        shutil.move(temp_output, os.path.join(results_folder, "cleaned_spectra.mgf"))
+    else:
+        print("No cleaned spectra were generated.")
     
 if __name__ == "__main__":
     main()

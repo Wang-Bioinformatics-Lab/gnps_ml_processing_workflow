@@ -286,12 +286,12 @@ process matchms_filtering {
   // file cache_dummy // See TODO: in workflow
   
   output:
-  path "matchms_output/*"
-  path "compound_name_annotation.csv"
+  path "matchms_output/*", optional: true
+  path "compound_name_annotation.csv", optional: true
 
   """
   mkdir -p ./matchms_output/
-  
+
   python3 $TOOL_FOLDER/matchms/matchms_cleaning.py  --input_mgf_path ${cleaned_mgf_chunk}\
                                                     --cached_compound_name_annotation_path "$TOOL_FOLDER/matchms/pubchem_names.csv" \
                                                     --output_path "./matchms_output/" \
