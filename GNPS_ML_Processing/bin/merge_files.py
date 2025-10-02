@@ -4,7 +4,7 @@ from glob import glob
 from pathlib import Path
 import re
 
-def merge(include_massbank=False, include_riken=False, include_mgf_exports=False):
+def merge(include_massbank=False, include_riken=False, include_mona=False, include_mgf_exports=False):
     """A simple script to combine csv and mgf files for our pipleline.
     """
     merged_csv_path = "ALL_GNPS_merged.csv"
@@ -18,6 +18,7 @@ def merge(include_massbank=False, include_riken=False, include_mgf_exports=False
     else:
         massbank_csv = []
         massbank_mgf = []
+
     if include_riken:
         riken_csv = list(glob('./RIKEN-*.csv'))
         riken_mgf = list(glob('./RIKEN-*.mgf'))
@@ -27,6 +28,17 @@ def merge(include_massbank=False, include_riken=False, include_mgf_exports=False
     else:
         riken_csv = []
         riken_mgf = []
+
+    if include_mona:
+        mona_csv = list(glob('./MONA-*.csv'))
+        mona_mgf = list(glob('./MONA-*.mgf'))
+        # Sort so we know the order is the same
+        mona_csv.sort()
+        mona_mgf.sort()
+    else:
+        mona_csv = []
+        mona_mgf = []
+
     if include_mgf_exports:
         mgf_exports_csv = list(glob('MGF-Export-*.csv'))
         mgf_exports_mgf = list(glob('MGF-Export-*.mgf'))
@@ -43,8 +55,8 @@ def merge(include_massbank=False, include_riken=False, include_mgf_exports=False
                 match = file_pattern.match(Path(file).name)
                 return int(match.groups()[0])
 
-            sorted_csv_files = sorted(glob('./temp_*.csv'), key=get_order) + massbank_csv + riken_csv + mgf_exports_csv
-            sorted_mgf_files = sorted(glob('./temp_*.mgf'), key=get_order) + massbank_mgf + riken_mgf + mgf_exports_mgf
+            sorted_csv_files = sorted(glob('./temp_*.csv'), key=get_order) + massbank_csv + riken_csv + mona_csv + mgf_exports_csv
+            sorted_mgf_files = sorted(glob('./temp_*.mgf'), key=get_order) + massbank_mgf + riken_mgf + mona_mgf + mgf_exports_mgf
 
             print(f"Concatenating {len(sorted_csv_files)} csv files")
             print(f"Concatenating {len(sorted_mgf_files)} mgf files")
@@ -61,11 +73,12 @@ def main():
     parser = argparse.ArgumentParser(description='Merge csv and mgf files.')
     parser.add_argument('--include_massbank', help='Include MassBank files.', action='store_true')
     parser.add_argument('--include_riken', help='Include Riken files.', action='store_true')
+    parser.add_argument('--include_mona', help='Include MONA files.', action='store_true')
     parser.add_argument('--include_mgf_exports', help='Include MGF exports.', action='store_true')
     args = parser.parse_args()
-    
-    merge(args.include_massbank, args.include_riken, args.include_mgf_exports)
-    
+
+    merge(args.include_massbank, args.include_riken, args.include_mona, args.include_mgf_exports)
+
     
     
 if __name__ == '__main__':

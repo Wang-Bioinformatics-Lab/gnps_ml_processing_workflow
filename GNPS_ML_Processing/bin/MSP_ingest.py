@@ -8,6 +8,19 @@ from matchms.importing import load_from_msp
 # Import headers from main processor
 from GNPS2_Processor import csv_headers
 
+
+def safe_iter(iterable):
+    iterator = iter(iterable)
+    while True:
+        try:
+            yield next(iterator)
+        except StopIteration:
+            break
+        except Exception as e:
+            print(f"Skipping item due to error: {e}")
+            continue
+
+
 def parse_msp(msp_path:Path, summary_output_path:Path, spectra_output_path:Path)->None:
     """
     Parse an MSP file and generate summary and spectra output files.
@@ -33,7 +46,7 @@ def parse_msp(msp_path:Path, summary_output_path:Path, spectra_output_path:Path)
         
         with open(spectra_output_path, 'w', encoding='utf-8') as output_mgf:
             
-            for idx, spectrum in enumerate(tqdm(spectra_generator)):
+            for idx, spectrum in enumerate(tqdm(safe_iter(spectra_generator))):
                 summary_dict = {}
                 
                 if spectrum.metadata.get('ms_level') is not None:
@@ -48,6 +61,9 @@ def parse_msp(msp_path:Path, summary_output_path:Path, spectra_output_path:Path)
                 if summary_dict['Adduct'] is None:
                     # Fall back to precursortype
                     summary_dict['Adduct'] = spectrum.metadata.get('precursortype')
+                    if summary_dict['Adduct'] is None:
+                        # Fall back again to ion_type
+                        summary_dict['Adduct'] = spectrum.metadata.get('ion_type')
                 if summary_dict['Adduct'] is None:
                     print(f"Warning: Failed to get adduct for scan {idx+1} in {msp_path.stem}")
                     print(f"Metadata: {spectrum.metadata}")

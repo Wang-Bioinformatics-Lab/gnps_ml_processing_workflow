@@ -31,6 +31,7 @@ params.path_to_nist = ""
 // If true, will download and reparse massbank, additionally removing all massbank entires from GNPS
 params.include_massbank = true
 params.include_riken = false
+params.include_mona = true
 
 // Workflow Boiler Plate
 params.OMETALINKING_YAML = "flow_filelinking.yaml"
@@ -146,6 +147,32 @@ process export_riken {
   """
 }
 
+process export_mona {
+  conda "$params.conda_path"
+
+  maxForks 8
+
+  cache true
+
+  input:
+  each download_url
+  val dummy
+
+  output:
+  path 'temp/*'
+
+  """
+  wget -qO- "$download_url" | funzip > "MONA_ML_Export.msp"
+
+  mkdir -p "./temp/"
+
+  python3 $TOOL_FOLDER/MSP_ingest.py \
+          --msp_path "MONA_ML_Export.msp" \
+          --summary_output_path "./temp/MONA-Export.csv" \
+          --spectra_output_path "./temp/MONA-Export.mgf"
+  """
+}
+
 process export_nist {
   conda "$params.conda_path"
 
@@ -196,6 +223,12 @@ process merge_export {
     massbank_flag=""
   fi
 
+  if [ -n "$params.include_mona" ]; then
+    mona_flag="--include_mona"
+  else
+    mona_flag=""
+  fi
+
   if [ -n "$params.path_to_nist" ]; then
     mgf_export_flag="--include_mgf_exports"
   else
@@ -203,7 +236,7 @@ process merge_export {
   fi
 
   # Run the python script with the constructed flags
-  python3 $TOOL_FOLDER/merge_files.py \$riken_flag \$massbank_flag \$mgf_export_flag
+  python3 $TOOL_FOLDER/merge_files.py \$riken_flag \$massbank_flag \$mgf_export_flag \$mona_flag
 
   """
 }
@@ -239,8 +272,14 @@ process postprocess {
       riken_flag=""
     fi
 
+    if [ -n "$params.include_mona" ]; then
+      mona_flag="--includes_mona"
+    else
+      mona_flag=""
+    fi
+
     cp $TOOL_FOLDER/smiles_mapping_cache.json ./smiles_mapping_cache.json
-    python3 $TOOL_FOLDER/GNPS2_Postprocessor.py --includes_massbank --smiles_mapping_cache "smiles_mapping_cache.json" \$riken_flag
+    python3 $TOOL_FOLDER/GNPS2_Postprocessor.py --includes_massbank --smiles_mapping_cache "smiles_mapping_cache.json" \$riken_flag \$mona_flag
     """
   else
     """
@@ -468,6 +507,12 @@ workflow {
     riken_files = export_riken(riken_urls)
     temp_files = temp_files.concat(riken_files)
 
+  }
+
+  if (params.include_mona) {
+    mona_urls = Channel.of("https://mona.fiehnlab.ucdavis.edu/rest/downloads/retrieve/4ebf9d78-f0d4-470c-b8cb-afc5f6241584")
+    mona_files = export_mona(mona_urls, environment_creation.out.dummy)
+    temp_files = temp_files.concat(mona_files)
   }
 
   if (params.path_to_nist != "") {

@@ -679,7 +679,7 @@ def add_explained_intensity(summary, spectra):
     summary.loc[mask, column_name_ppmBetweenExpAndThMass] = summary.loc[mask].progress_apply(helper, axis=1)
     return summary
             
-def postprocess_files(csv_path, mgf_path, output_csv_path, output_parquet_path, cleaned_mgf_path, includes_massbank=False, includes_riken=False, smiles_mapping_cache=None):
+def postprocess_files(csv_path, mgf_path, output_csv_path, output_parquet_path, cleaned_mgf_path, includes_massbank=False, includes_riken=False, includes_mona=True, smiles_mapping_cache=None):
     pandarallel.initialize(progress_bar=False, nb_workers=PARALLEL_WORKERS, use_memory_fs = False)
     
     summary = pd.read_csv(csv_path)
@@ -692,6 +692,11 @@ def postprocess_files(csv_path, mgf_path, output_csv_path, output_parquet_path, 
     if includes_riken:
         print("Droppping BMDMS-NP in favor of the Riken Verion")
         summary = summary.loc[(summary.GNPS_library_membership != 'BMDMS-NP')]
+
+    # The MONA import includes a full version of MONA with more spectra, so we'll drop the GNPS import
+    if includes_mona:
+        print("Droppping MONA in favor of the MONA Verion")
+        summary = summary.loc[(summary.GNPS_library_membership != 'MONA')]
 
     # Cleaning up files:
     print("Performing basic cleaning", flush=True)
@@ -792,6 +797,7 @@ def main():
     parser.add_argument('--output_mgf_path', type=str, default="ALL_GNPS_cleaned.mgf", help='Path to the output mgf file')
     parser.add_argument('--includes_massbank', action='store_true', help='Whether the merged files include reparsed massbank entries.')
     parser.add_argument('--includes_riken', action='store_true', help='Whether the merged files include reparsed riken (specifically BMDMS) entries.')
+    parser.add_argument('--includes_mona', action='store_true', help='Whether the merged files include reparsed MONA entries.')
     parser.add_argument('--smiles_mapping_cache', type=str, default=None, required=False, help='Path to the smiles cache file')
     args= parser.parse_args()
     
@@ -810,13 +816,14 @@ def main():
     print(f"Output MGF Path: {cleaned_mgf_path}")
     print(f"Includes MassBank: {args.includes_massbank}")
     print(f"Includes Riken: {args.includes_riken}")
+    print(f"Includes MONA: {args.includes_mona}")
     print(f"Smiles Mapping Cache: {smiles_mapping_cache}")
 
     if not os.path.isfile(cleaned_csv_path):
         if not os.path.isfile(cleaned_parquet_path):
             postprocess_files(csv_path, mgf_path, 
                               cleaned_csv_path, cleaned_parquet_path, cleaned_mgf_path, 
-                              args.includes_massbank, args.includes_riken, smiles_mapping_cache=smiles_mapping_cache)
+                              args.includes_massbank, args.includes_riken, args.includes_mona, smiles_mapping_cache=smiles_mapping_cache)
             
 if __name__ == '__main__':
     main()
