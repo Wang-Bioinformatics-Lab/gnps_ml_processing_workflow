@@ -55,6 +55,9 @@ def parse_msp(msp_path:Path, summary_output_path:Path, spectra_output_path:Path)
                     
                 summary_dict['scan']                    = idx+1
                 summary_dict['spectrum_id']             = f"{msp_path.stem}_scan_{idx+1}"
+                mona_ref = spectrum.metadata.get('db#')
+                if mona_ref:
+                    summary_dict['spectrum_id'] = str(mona_ref)
                 summary_dict['collision_energy']        = spectrum.metadata.get('collision_energy')
                 summary_dict['retention_time']          = spectrum.metadata.get('retention_time')
                 summary_dict['Adduct']                  = spectrum.metadata.get('adduct')

@@ -697,6 +697,11 @@ def postprocess_files(csv_path, mgf_path, output_csv_path, output_parquet_path, 
     if includes_mona:
         print("Droppping MONA in favor of the MONA Verion")
         summary = summary.loc[(summary.GNPS_library_membership != 'MONA')]
+        # We also need to drop MONA_ML_Export records that refer to massbank records using ^\w\w\d{6}$
+        if includes_massbank:
+            start_len = len(summary)
+            summary = summary.loc[~((summary.GNPS_library_membership == 'MONA_ML_Export') & (summary.spectrum_id.str.match(r'^\w\w\d{6}$')))]
+            print(f"Dropped {start_len - len(summary)} MONA_ML_Export records that referred to massbank records by old identifiers")
 
     # Cleaning up files:
     print("Performing basic cleaning", flush=True)
