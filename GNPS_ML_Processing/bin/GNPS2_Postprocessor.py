@@ -703,6 +703,19 @@ def postprocess_files(csv_path, mgf_path, output_csv_path, output_parquet_path, 
             summary = summary.loc[~((summary.GNPS_library_membership == 'MONA_ML_Export') & (summary.spectrum_id.str.match(r'^\w\w\d{6}$')))]
             print(f"Dropped {start_len - len(summary)} MONA_ML_Export records that referred to massbank records by old identifiers")
 
+    # Deduplicate based on spectrum_id (prefer to drop Compound_Source == 'msp import')
+    start_len = len(summary)
+    msp_import_ids = summary.loc[summary.Compound_Source == 'msp import', 'spectrum_id'].unique()
+    standard_ids = summary.loc[summary.Compound_Source != 'msp import', 'spectrum_id'].unique()
+    ids_to_drop = set(msp_import_ids) & set(standard_ids)
+    summary = summary.loc[~((summary.Compound_Source == 'msp import') & (summary.spectrum_id.isin(ids_to_drop)))]
+    print(f"Dropped {start_len - len(summary)} entries due to deduplication of msp import records")
+
+    # Remove any other duplicates
+    start_len = len(summary)
+    summary = summary.drop_duplicates(subset=['spectrum_id'], keep='first')
+    print(f"Dropped {start_len - len(summary)} entries due to deduplication of spectrum_id")
+
     # Cleaning up files:
     print("Performing basic cleaning", flush=True)
     start = time.time()
