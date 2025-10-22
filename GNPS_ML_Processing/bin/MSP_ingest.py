@@ -88,6 +88,16 @@ def parse_msp(msp_path:Path, summary_output_path:Path, spectra_output_path:Path)
                 summary_dict['msDissociationMethod']    = None
                 summary_dict['GNPS_library_membership'] = msp_path.stem
                 summary_dict['GNPS_Inst']               = spectrum.metadata.get('instrument_type')
+
+                if summary_dict['Smiles'] is None:
+                    # Try to fall back to MONA-style comment field (parsed by matchms)
+                    summary_dict['Smiles'] = spectrum.metadata.get('computed_smiles')
+                if summary_dict['INCHI'] is None:
+                    # Try to fall back to MONA-style comment field (parsed by matchms)
+                    summary_dict['INCHI'] = spectrum.metadata.get('computed_inchi')
+                if summary_dict['InChIKey_smiles'] is None:
+                    # Try to fall back to MONA-style comment field (parsed by matchms)
+                    summary_dict['InChIKey_smiles'] = spectrum.metadata.get('computed_inchikey')
                 
                 output_summary_writer.writerow(summary_dict)
                 
